@@ -1,9 +1,10 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Loan, LoanStatus, Client } from '../types';
+import { Loan, LoanStatus, FilterStatus } from '../types';
 import { getFinancialTip } from '../services/geminiService';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, Lightbulb, RefreshCw, UserCheck, FileWarning } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, Lightbulb, RefreshCw, FileWarning } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
+import { formatCurrency } from '../services/utils';
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; change?: string; changeType?: 'increase' | 'decrease' }> = ({ title, value, icon, change, changeType }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center justify-between transition-transform hover:scale-105">
@@ -28,6 +29,7 @@ const Dashboard: React.FC = () => {
     const { loans, handleRegisterPayment } = useDataContext();
     const [tip, setTip] = useState<string>('');
     const [isLoadingTip, setIsLoadingTip] = useState<boolean>(true);
+    const [filterStatus, setFilterStatus] = useState<FilterStatus>('Todos');
     
     const fetchTip = useCallback(async (forceRefresh = false) => {
         setIsLoadingTip(true);
@@ -100,22 +102,35 @@ const Dashboard: React.FC = () => {
         }
     };
     
-    const recentActiveLoans = loans.filter(l => l.status !== LoanStatus.PAID).slice(0, 5);
+    const filteredLoans = useMemo(() => {
+        const recentLoans = [...loans].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+        if (filterStatus === 'Todos') {
+            return recentLoans.slice(0, 10);
+        }
+        return recentLoans.filter(l => l.status === filterStatus);
+    }, [loans, filterStatus]);
+    
+    const handleLegendClick = (e: any) => {
+        const clickedStatus = e.payload.name as LoanStatus;
+        setFilterStatus(prev => prev === clickedStatus ? 'Todos' : clickedStatus);
+    };
 
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Dashboard</h1>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <StatCard title="Total Prestado" value={stats.totalLoaned.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} icon={<Banknote />} />
-                <StatCard title="Saldo Pendiente" value={stats.totalOutstanding.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} icon={<Banknote />} />
+                <StatCard title="Total Prestado" value={formatCurrency(stats.totalLoaned)} icon={<Banknote />} />
+                <StatCard title="Saldo Pendiente" value={formatCurrency(stats.totalOutstanding)} icon={<Banknote />} />
                 <StatCard title="Préstamos Activos" value={stats.activeLoans.toString()} icon={<Clock />} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                  <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
-                    <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Préstamos Recientes</h2>
-                     {recentActiveLoans.length > 0 ? (
+                    <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">
+                        Préstamos Recientes {filterStatus !== 'Todos' && <span className="text-sm font-normal text-gray-500 dark:text-gray-400">- Filtrado por: {filterStatus}</span>}
+                    </h2>
+                     {filteredLoans.length > 0 ? (
                         <div className="overflow-x-auto">
                              <table className="w-full text-left">
                                 <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-gray-700">
@@ -127,18 +142,19 @@ const Dashboard: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {recentActiveLoans.map(loan => (
+                                    {filteredLoans.map(loan => (
                                         <tr key={loan.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                                             <td className="p-3 font-medium text-gray-800 dark:text-gray-100">{loan.clientName}</td>
-                                            <td className="p-3 text-gray-700 dark:text-gray-300">{loan.amount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</td>
+                                            <td className="p-3 text-gray-700 dark:text-gray-300">{formatCurrency(loan.amount)}</td>
                                             <td className="p-3"><StatusBadge status={loan.status} /></td>
                                             <td className="p-3 text-right">
+                                                {loan.status !== LoanStatus.PAID &&
                                                 <button 
                                                     onClick={() => handleRegisterPayment(loan.id)}
                                                     className="bg-green-500 text-white px-3 py-1 rounded-md text-xs font-semibold hover:bg-green-600 transition-colors"
                                                 >
                                                     Registrar Pago
-                                                </button>
+                                                </button>}
                                             </td>
                                         </tr>
                                     ))}
@@ -148,8 +164,8 @@ const Dashboard: React.FC = () => {
                     ) : (
                         <div className="text-center py-10">
                             <FileWarning size={40} className="mx-auto text-gray-400" />
-                            <h3 className="mt-4 font-semibold text-gray-700 dark:text-gray-200">No hay préstamos activos</h3>
-                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Aprueba una solicitud para ver los préstamos aquí.</p>
+                            <h3 className="mt-4 font-semibold text-gray-700 dark:text-gray-200">No hay préstamos que coincidan</h3>
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Prueba con otro filtro o aprueba una solicitud.</p>
                         </div>
                     )}
                 </div>
@@ -160,11 +176,11 @@ const Dashboard: React.FC = () => {
                             <PieChart>
                                 <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8" label={loans.length > 0}>
                                     {pieChartData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[entry.name]} />
+                                        <Cell key={`cell-${index}`} fill={COLORS[entry.name]} cursor="pointer"/>
                                     ))}
                                 </Pie>
-                                <Tooltip contentStyle={{ backgroundColor: '#334155', border: 'none', borderRadius: '0.5rem' }} itemStyle={{ color: '#e2e8f0' }} />
-                                {loans.length > 0 && <Legend wrapperStyle={{fontSize: '12px'}}/>}
+                                <Tooltip contentStyle={{ backgroundColor: '#334155', border: 'none', borderRadius: '0.5rem' }} itemStyle={{ color: '#e2e8f0' }} formatter={(value) => `${value} Préstamo(s)`}/>
+                                {loans.length > 0 && <Legend wrapperStyle={{fontSize: '12px', cursor: 'pointer'}} onClick={handleLegendClick}/>}
                             </PieChart>
                          </ResponsiveContainer>
                     </div>

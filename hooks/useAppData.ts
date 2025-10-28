@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
 import { db } from '../services/dbService';
 import { generateWelcomeMessage } from '../services/geminiService';
+import { INTEREST_RATE_CONFIG } from '../config';
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -12,6 +13,36 @@ export const useAppData = (
     const [requests, setRequests] = useState<LoanRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    
+    const updateOverdueLoans = useCallback(async (loansData: Loan[]): Promise<Loan[]> => {
+        const today = new Date();
+        const loansToUpdate: { key: string, changes: { status: LoanStatus } }[] = [];
+        
+        const updatedLoans = loansData.map(loan => {
+            if (loan.status === LoanStatus.PENDING) {
+                const dueDate = new Date(loan.startDate);
+                // The due date for the *next* payment is after the month of the last payment made
+                dueDate.setMonth(dueDate.getMonth() + loan.paymentsMade + 1);
+                
+                if (today > dueDate) {
+                    loansToUpdate.push({ key: loan.id, changes: { status: LoanStatus.OVERDUE } });
+                    return { ...loan, status: LoanStatus.OVERDUE };
+                }
+            }
+            return loan;
+        });
+
+        if (loansToUpdate.length > 0) {
+            try {
+                await db.loans.bulkUpdate(loansToUpdate);
+                console.log(`${loansToUpdate.length} loan(s) updated to Overdue.`);
+            } catch (err) {
+                console.error("Failed to bulk update overdue loans:", err);
+                // Don't block UI for this, just log the error
+            }
+        }
+        return updatedLoans;
+    }, []);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -22,8 +53,11 @@ export const useAppData = (
                     db.loans.toArray(),
                     db.requests.toArray(),
                 ]);
+
+                const updatedLoans = await updateOverdueLoans(loansData);
+                
                 setClients(clientsData);
-                setLoans(loansData);
+                setLoans(updatedLoans);
                 setRequests(requestsData);
                 setError(null);
             } catch (err) {
@@ -35,7 +69,7 @@ export const useAppData = (
         };
 
         fetchData();
-    }, []);
+    }, [updateOverdueLoans]);
 
     const handleLoanRequestSubmit = async (request: Omit<LoanRequest, 'id' | 'requestDate' | 'status'>) => {
         const newRequest: LoanRequest = {
@@ -67,9 +101,9 @@ export const useAppData = (
             isTestData: request.isTestData,
         };
 
-        const interestRate = 96; // 8% monthly = 96% annual
+        const interestRate = INTEREST_RATE_CONFIG.ANNUAL;
         const principal = loanAmount;
-        const rate = interestRate / 100 / 12;
+        const rate = INTEREST_RATE_CONFIG.MONTHLY / 100;
         const n = loanTerm;
         const monthlyPayment = rate > 0 ? (principal * rate * Math.pow(1 + rate, n)) / (Math.pow(1 + rate, n) - 1) : principal / n;
         const totalRepayment = monthlyPayment * n;
@@ -139,7 +173,7 @@ export const useAppData = (
         
         const newPaymentsMade = loan.paymentsMade + 1;
         const isPaidOff = newPaymentsMade >= loan.term;
-        const newStatus = isPaidOff ? LoanStatus.PAID : loan.status;
+        const newStatus = isPaidOff ? LoanStatus.PAID : LoanStatus.PENDING; // Reset to pending after payment
 
         try {
             await db.loans.update(loanId, { paymentsMade: newPaymentsMade, status: newStatus });
@@ -159,14 +193,18 @@ export const useAppData = (
     }, [clients, loans]);
 
     const generateDummyData = async () => {
+        const today = new Date();
+        const oneMonthAgo = new Date(new Date().setMonth(today.getMonth() - 1));
+        const fourMonthsAgo = new Date(new Date().setMonth(today.getMonth() - 4));
+
         const dummyClients: Client[] = [
             { id: 'client-1', name: 'Juan Pérez (Prueba)', joinDate: '2023-01-15T10:00:00Z', isTestData: true },
             { id: 'client-2', name: 'María García (Prueba)', joinDate: '2023-03-22T11:30:00Z', isTestData: true },
         ];
         const dummyLoans: Loan[] = [
-            { id: 'loan-1', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 500, interestRate: 96, term: 6, startDate: '2023-10-01T10:00:00Z', status: LoanStatus.PENDING, monthlyPayment: 99.56, totalRepayment: 597.36, paymentsMade: 3, isTestData: true },
+            { id: 'loan-1', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 500, interestRate: 96, term: 6, startDate: oneMonthAgo.toISOString(), status: LoanStatus.PENDING, monthlyPayment: 99.56, totalRepayment: 597.36, paymentsMade: 0, isTestData: true },
             { id: 'loan-2', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 300, interestRate: 96, term: 3, startDate: '2023-05-01T10:00:00Z', status: LoanStatus.PAID, monthlyPayment: 112.98, totalRepayment: 338.94, paymentsMade: 3, isTestData: true },
-            { id: 'loan-3', clientId: 'client-2', clientName: 'María García (Prueba)', amount: 1200, interestRate: 96, term: 12, startDate: '2023-11-05T11:30:00Z', status: LoanStatus.PENDING, monthlyPayment: 154.55, totalRepayment: 1854.6, paymentsMade: 2, isTestData: true },
+            { id: 'loan-3', clientId: 'client-2', clientName: 'María García (Prueba)', amount: 1200, interestRate: 96, term: 12, startDate: fourMonthsAgo.toISOString(), status: LoanStatus.PENDING, monthlyPayment: 154.55, totalRepayment: 1854.6, paymentsMade: 2, isTestData: true },
         ];
         const dummyRequests: LoanRequest[] = [
             { id: 'req-1', fullName: 'Carlos Sanchez (Prueba)', idNumber: 'Z1234567X', address: 'Calle Falsa 123', phone: '600112233', email: 'carlos@example.com', loanAmount: 800, loanReason: 'Mejoras Hogar', employmentStatus: 'Empleado', contractType: 'Indefinido', frontId: new Blob(), backId: new Blob(), requestDate: new Date().toISOString(), status: RequestStatus.PENDING, isTestData: true, signature: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', contractPdf: new Blob() },
@@ -178,9 +216,18 @@ export const useAppData = (
                 await db.loans.bulkPut(dummyLoans);
                 await db.requests.bulkPut(dummyRequests);
             });
-            setClients(prev => [...prev.filter(c => !c.isTestData), ...dummyClients]);
-            setLoans(prev => [...prev.filter(l => !l.isTestData), ...dummyLoans]);
-            setRequests(prev => [...prev.filter(r => !r.isTestData), ...dummyRequests]);
+            // Refetch all data to ensure consistency and apply overdue logic
+            const [clientsData, loansData, requestsData] = await Promise.all([
+                db.clients.toArray(),
+                db.loans.toArray(),
+                db.requests.toArray(),
+            ]);
+
+            const updatedLoans = await updateOverdueLoans(loansData);
+                
+            setClients(clientsData);
+            setLoans(updatedLoans);
+            setRequests(requestsData);
             showToast('Datos de prueba generados.', 'success');
         } catch (err) {
             console.error("Failed to generate dummy data:", err);

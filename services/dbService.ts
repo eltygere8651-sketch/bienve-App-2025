@@ -8,25 +8,20 @@ export class AppDatabase extends Dexie {
 
     constructor() {
         super('bmContigoDatabase');
-        this.version(2).stores({
+
+        // Version 1: Initial schema
+        this.version(1).stores({
             clients: 'id, name, isTestData',
             loans: 'id, clientId, status, isTestData',
             requests: 'id, status, isTestData',
-        }).upgrade(tx => {
-            // This upgrade function is empty because we are just adding non-indexed properties.
-            // Dexie handles adding new properties to existing objects automatically.
-            // This version bump is to ensure schema awareness for new properties like signature and contractPdf.
-            return tx.table('requests').toCollection().modify(req => {
-                if (!req.signature) req.signature = undefined;
-                if (!req.contractPdf) req.contractPdf = undefined;
-            });
         });
-        
-        // Fallback for initial creation
-        this.version(1).stores({
-            clients: 'id, name, joinDate, isTestData',
-            loans: 'id, clientId, clientName, status, startDate, isTestData',
-            requests: 'id, fullName, requestDate, status, isTestData',
+
+        // Version 2: Added signature and contractPdf to requests and loans.
+        // Dexie handles adding new properties automatically, but we bump the version
+        // to make the schema aware of these new, non-indexed properties.
+        this.version(2).stores({
+             // No schema changes for indexed fields, just declaring the new version.
+             // This is correct as we only need to add non-indexed properties.
         });
     }
 }

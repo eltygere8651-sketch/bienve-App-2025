@@ -14,7 +14,7 @@ export interface Loan {
     clientId: string;
     clientName: string;
     amount: number;
-    interestRate: number;
+    interestRate: number; // Annual percentage rate
     term: number; // in months
     startDate: string;
     status: LoanStatus;
@@ -46,7 +46,6 @@ export interface LoanRequest {
     contractType?: string;
     frontId: File | Blob;
     backId: File | Blob;
-    referredBy?: string;
     requestDate: string;
     status: RequestStatus;
     isTestData?: boolean;
@@ -55,4 +54,6 @@ export interface LoanRequest {
 }
 
 
-export type AppView = 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'referrals' | 'adminLogin';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin';
+
+export type FilterStatus = LoanStatus | 'Todos';

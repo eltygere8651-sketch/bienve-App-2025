@@ -1,10 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { AppView } from '../types';
-
-// --- Admin Credentials ---
-const ADMIN_USER = 'domipro';
-const ADMIN_PASS = 'Hy82788278?';
-// -------------------------
+import { ADMIN_CREDENTIALS } from '../config';
 
 type Theme = 'light' | 'dark';
 
@@ -52,7 +48,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [toast, setToast] = useState<ToastMessage>({ message: '', type: 'info' });
     const [isAdmin, setIsAdmin] = useState<boolean>(() => sessionStorage.getItem('isAdmin') === 'true');
     const [currentView, setCurrentView] = useState<AppView>(() => (
-        sessionStorage.getItem('isAdmin') === 'true' ? 'dashboard' : 'loanRequest'
+        sessionStorage.getItem('isAdmin') === 'true' ? 'dashboard' : 'welcome'
     ));
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [confirmState, setConfirmState] = useState<ConfirmState>({
@@ -75,7 +71,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     useEffect(() => {
         const adminOnlyViews: AppView[] = ['dashboard', 'clients', 'requests'];
         if (!isAdmin && adminOnlyViews.includes(currentView)) {
-            setCurrentView('loanRequest');
+            setCurrentView('welcome');
         }
     }, [isAdmin, currentView]);
 
@@ -88,7 +84,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const handleLogin = (user: string, pass: string): boolean => {
-        if (user === ADMIN_USER && pass === ADMIN_PASS) {
+        if (user === ADMIN_CREDENTIALS.USER && pass === ADMIN_CREDENTIALS.PASS) {
             sessionStorage.setItem('isAdmin', 'true');
             setIsAdmin(true);
             setCurrentView('dashboard');
@@ -101,7 +97,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const handleLogout = () => {
         sessionStorage.removeItem('isAdmin');
         setIsAdmin(false);
-        setCurrentView('loanRequest');
+        setCurrentView('welcome');
         showToast('Sesión cerrada.', 'info');
     };
 

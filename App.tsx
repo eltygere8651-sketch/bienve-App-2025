@@ -4,11 +4,12 @@ import Dashboard from './components/Dashboard';
 import ClientList from './components/ClientList';
 import LoanRequestForm from './components/LoanRequestForm';
 import RequestList from './components/RequestList';
-import ReferralProgram from './components/ReferralProgram';
 import Login from './components/Login';
+import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
-import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Gift, Loader2, FlaskConical, Trash2, TestTubeDiagonal, LogOut, LogIn, ChevronLeft, ChevronRight } from 'lucide-react';
+import NavItem from './components/NavItem';
+import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, FlaskConical, Trash2, TestTubeDiagonal, LogOut, LogIn, ChevronLeft, ChevronRight, Home } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 
@@ -30,6 +31,10 @@ const App: React.FC = () => {
     
     const { requests, isLoading, error, generateDummyData, clearAllData } = useDataContext();
 
+    const handleLogoClick = () => {
+        setCurrentView(isAdmin ? 'dashboard' : 'welcome');
+    };
+
     const renderContent = () => {
         if (isLoading) {
             return (
@@ -49,47 +54,15 @@ const App: React.FC = () => {
         }
         
         switch (currentView) {
+            case 'welcome': return <Welcome />;
             case 'dashboard': return <Dashboard />;
             case 'clients': return <ClientList />;
             case 'loanRequest': return <LoanRequestForm />;
             case 'requests': return <RequestList />;
-            case 'referrals': return <ReferralProgram />;
             case 'adminLogin': return <Login />;
-            default: return isAdmin ? <Dashboard /> : <LoanRequestForm />;
+            default: return isAdmin ? <Dashboard /> : <Welcome />;
         }
     };
-    
-    interface NavItemProps {
-      icon: React.ReactNode;
-      label: string;
-      view?: AppView;
-      onClick: (view?: AppView) => void;
-      currentView?: AppView;
-      isSidebarOpen: boolean;
-      badge?: number;
-      isTestButton?: boolean;
-    }
-
-    const NavItem: React.FC<NavItemProps> = ({ icon, label, view, currentView, onClick, isSidebarOpen, badge, isTestButton }) => (
-        <li
-            onClick={() => onClick(view)}
-            className={`flex items-center justify-between p-3 my-1 rounded-lg cursor-pointer transition-all duration-200 ${
-                currentView === view && !isTestButton
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : isTestButton ? 'text-amber-300 hover:bg-amber-700/50 hover:text-amber-200' :'text-gray-300 hover:bg-gray-700 hover:text-white'
-            }`}
-        >
-            <div className="flex items-center">
-                {icon}
-                <span className={`ml-4 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 h-0 w-0'}`}>{label}</span>
-            </div>
-            {isSidebarOpen && badge && badge > 0 && (
-                <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                    {badge}
-                </span>
-            )}
-        </li>
-    );
 
     return (
         <>
@@ -103,17 +76,21 @@ const App: React.FC = () => {
             />
             <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
                  <aside className={`bg-gray-800 dark:bg-black text-white flex flex-col transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
-                    <div className="flex items-center justify-center p-4 border-b border-gray-700 dark:border-gray-800 h-16">
+                    <div 
+                        className="flex items-center justify-center p-4 border-b border-gray-700 dark:border-gray-800 h-16 cursor-pointer"
+                        onClick={handleLogoClick}
+                        title="Ir al inicio"
+                    >
                          <Handshake className="text-blue-400 h-8 w-8" />
                          {isSidebarOpen && <h1 className="text-xl font-bold ml-2">B.M Contigo</h1>}
                     </div>
                     <nav className="flex-1 p-4">
                         <ul>
                             {isAdmin && <NavItem icon={<LayoutDashboard />} label="Dashboard" view="dashboard" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
+                            {!isAdmin && <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
                             <NavItem icon={<FileText />} label="Solicitud de Préstamo" view="loanRequest" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />
                             {isAdmin && <NavItem icon={<GitPullRequest />} label="Gestión de Solicitudes" view="requests" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} badge={requests.length} />}
                             {isAdmin && <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
-                            <NavItem icon={<Gift />} label="Recomienda y Gana" view="referrals" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />
                         </ul>
                          {isAdmin && isSidebarOpen && (
                             <div className="mt-4 pt-4 border-t border-gray-700">

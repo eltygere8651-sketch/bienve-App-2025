@@ -3,6 +3,7 @@ import { Loan, LoanStatus } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { Users, Download } from 'lucide-react';
 import { generateClientReport } from '../services/pdfService';
+import { formatCurrency } from '../services/utils';
 
 interface ClientWithData {
     id: string;
@@ -32,11 +33,11 @@ const ClientCard: React.FC<{ client: ClientWithData & { loans: Loan[] } }> = ({ 
             <div className="mt-6 grid grid-cols-2 gap-4 text-center">
                 <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Total Prestado</p>
-                    <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{totalLoaned.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+                    <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{formatCurrency(totalLoaned)}</p>
                 </div>
                  <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Saldo Pendiente</p>
-                    <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{outstandingBalance.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</p>
+                    <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{formatCurrency(outstandingBalance)}</p>
                 </div>
             </div>
              <div className="mt-6 flex-grow">
@@ -45,7 +46,7 @@ const ClientCard: React.FC<{ client: ClientWithData & { loans: Loan[] } }> = ({ 
                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
                         {client.loans.map(loan => (
                             <div key={loan.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md text-sm">
-                                <span className="text-gray-700 dark:text-gray-300">{new Date(loan.startDate).toLocaleDateString()} - {loan.amount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span>
+                                <span className="text-gray-700 dark:text-gray-300">{new Date(loan.startDate).toLocaleDateString()} - {formatCurrency(loan.amount)}</span>
                                 <span className={`px-2 py-0.5 text-xs rounded-full ${
                                     loan.status === LoanStatus.PAID ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 
                                     loan.status === LoanStatus.PENDING ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'

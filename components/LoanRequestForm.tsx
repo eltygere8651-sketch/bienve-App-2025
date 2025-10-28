@@ -1,38 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { UploadCloud, CheckCircle, Loader2, Pen, X, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Loader2, Pen, ArrowLeft } from 'lucide-react';
 import { LoanRequest } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
 import SignaturePad from './SignaturePad';
 import { generateContractPDF, getContractText } from '../services/pdfService';
+import { InputField, SelectField, FileUploadField } from './FormFields';
+import { verifyLoanRequestData } from '../services/geminiService';
 
 const LoanRequestForm: React.FC = () => {
     const { handleLoanRequestSubmit } = useDataContext();
-    const { showToast } = useAppContext();
+    const { showToast, isAdmin } = useAppContext();
     
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState({
         fullName: '', idNumber: '', address: '', phone: '', email: '',
         loanAmount: '1000', loanReason: '', employmentStatus: '', contractType: '',
-        referredBy: '',
     });
     const [frontId, setFrontId] = useState<File | null>(null);
     const [backId, setBackId] = useState<File | null>(null);
     const [frontIdPreview, setFrontIdPreview] = useState<string | null>(null);
     const [backIdPreview, setBackIdPreview] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [signatureError, setSignatureError] = useState(false);
 
     const signaturePadRef = useRef<{ clear: () => void; getSignature: () => string | null }>(null);
-
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const referrer = params.get('ref');
-        if (referrer) {
-            setFormData(prev => ({ ...prev, referredBy: decodeURIComponent(referrer) }));
-        }
-    }, []);
 
     useEffect(() => {
         return () => {
@@ -62,13 +56,41 @@ const LoanRequestForm: React.FC = () => {
         }
     };
 
-    const handleNextStep = (e: React.FormEvent) => {
+    const handleNextStep = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!frontId || !backId) {
             showToast('Por favor, sube ambas imágenes del documento.', 'error');
             return;
         }
-        setStep(2);
+        
+        if (isAdmin) {
+            setStep(2);
+            return;
+        }
+
+        setIsVerifying(true);
+        try {
+            const { contractType, ...restData } = formData;
+            const verificationData = {
+                ...restData,
+                loanAmount: parseFloat(formData.loanAmount) || 0,
+            };
+            if (formData.employmentStatus === 'Empleado') {
+                (verificationData as any).contractType = contractType;
+            }
+
+            const verification = await verifyLoanRequestData(verificationData as any);
+            if (!verification.isValid) {
+                showToast(`Por favor, revisa tus datos: ${verification.reason}`, 'error');
+                return;
+            }
+            setStep(2);
+        } catch (error) {
+            console.error("Error during AI verification:", error);
+            showToast("Hubo un error al verificar los datos. Por favor, intenta de nuevo.", 'error');
+        } finally {
+            setIsVerifying(false);
+        }
     };
 
     const handleSubmit = async () => {
@@ -128,8 +150,6 @@ const LoanRequestForm: React.FC = () => {
             </p>
             {step === 1 && (
                  <form onSubmit={handleNextStep} className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-md space-y-8">
-                    {/* Form Fields */}
-                    {/* ... (InputField, SelectField, FileUploadField components would be here) ... */}
                     <div>
                         <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4 border-b dark:border-gray-700 pb-2">Información Personal</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -166,13 +186,10 @@ const LoanRequestForm: React.FC = () => {
                             <FileUploadField label="Foto del Reverso" id="back-id-upload" onChange={(e) => handleFileChange(e, 'back')} previewUrl={backIdPreview} fileName={backId?.name} />
                         </div>
                     </div>
-                    <div>
-                        <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4 border-b dark:border-gray-700 pb-2">Programa de Referidos</h2>
-                        <InputField label="¿Alguien te recomendó? Escribe su nombre" name="referredBy" type="text" value={formData.referredBy} onChange={handleInputChange} isOptional />
-                    </div>
                     <div className="text-right">
-                        <button type="submit" className="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105">
-                            Siguiente: Firmar Contrato
+                        <button type="submit" className="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center" disabled={isVerifying}>
+                             {isVerifying ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+                             {isVerifying ? 'Verificando...' : 'Siguiente: Firmar Contrato'}
                         </button>
                     </div>
                 </form>
@@ -212,29 +229,5 @@ const LoanRequestForm: React.FC = () => {
         </div>
     );
 };
-
-
-// Helper components to avoid re-renders inside main component
-const InputField: React.FC<{label: string, name: string, type: string, value: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, required?: boolean, isOptional?: boolean, min?: string | number}> = ({ label, name, type, value, onChange, required, isOptional, min }) => (
-    <div><label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label} {isOptional && <span className="text-xs text-gray-500">(Opcional)</span>}</label><input id={name} name={name} type={type} value={value} onChange={onChange} required={required} min={min} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" /></div>
-);
-const SelectField: React.FC<{label: string, name: string, value: string, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void, required?: boolean, children: React.ReactNode}> = ({ label, name, value, onChange, required, children }) => (
-    <div><label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label><select id={name} name={name} value={value} onChange={onChange} required={required} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">{children}</select></div>
-);
-const FileUploadField: React.FC<{label: string, id: string, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, previewUrl: string | null, fileName: string | undefined}> = ({ label, id, onChange, previewUrl, fileName }) => (
-    <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
-        <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-md">
-            <div className="space-y-1 text-center">
-                 {previewUrl ? <img src={previewUrl} alt="Preview" className="mx-auto h-24 w-auto rounded-md" /> : <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />}
-                <div className="flex text-sm text-gray-600 dark:text-gray-400">
-                    <label htmlFor={id} className="relative cursor-pointer bg-white dark:bg-gray-700 rounded-md font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500"><span>{fileName ? 'Cambiar archivo' : 'Sube un archivo'}</span><input id={id} name={id} type="file" className="sr-only" onChange={onChange} accept="image/*" /></label>
-                    <p className="pl-1">{fileName ? '' : 'o arrastra y suelta'}</p>
-                </div>
-                 <p className="text-xs text-gray-500 dark:text-gray-500">{fileName || 'PNG, JPG, GIF hasta 10MB'}</p>
-            </div>
-        </div>
-    </div>
-);
 
 export default LoanRequestForm;

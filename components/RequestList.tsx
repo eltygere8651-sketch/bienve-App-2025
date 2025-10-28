@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { LoanRequest, RequestStatus } from '../types';
 import { ChevronDown, ChevronUp, User, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Download, Printer } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { downloadPdf } from '../services/pdfService';
+import { downloadPdf, generateIdPdf } from '../services/pdfService';
+import ImageViewer from './ImageViewer';
+import { formatCurrency } from '../services/utils';
 
 
 const InfoRow: React.FC<{ icon: React.ReactNode, label: string, value?: string | number }> = ({ icon, label, value }) => (
@@ -26,22 +28,6 @@ const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
     return null;
 };
 
-const ImageViewer: React.FC<{ imageBlob: File | Blob, alt: string }> = ({ imageBlob, alt }) => {
-    const [imageUrl, setImageUrl] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (imageBlob instanceof Blob && imageBlob.size > 0) {
-            const url = URL.createObjectURL(imageBlob);
-            setImageUrl(url);
-            return () => URL.revokeObjectURL(url);
-        }
-    }, [imageBlob]);
-
-    if (!imageUrl) return <div className="rounded-lg w-full h-32 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs text-gray-500">Sin Imagen</div>;
-
-    return <img src={imageUrl} alt={alt} className="rounded-lg w-full h-auto object-cover" />;
-};
-
 const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
     const { handleApproveRequest, handleDenyRequest, handleUpdateRequestStatus } = useDataContext();
     const { showToast, showConfirmModal } = useAppContext();
@@ -54,7 +40,7 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
         if (amount > 0 && term > 0) {
             showConfirmModal({
                 title: 'Confirmar Aprobación',
-                message: `¿Estás seguro de que quieres aprobar un préstamo de ${amount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} a ${term} meses para ${request.fullName}?`,
+                message: `¿Estás seguro de que quieres aprobar un préstamo de ${formatCurrency(amount)} a ${term} meses para ${request.fullName}?`,
                 onConfirm: () => handleApproveRequest(request.id, amount, term),
             });
         } else {
@@ -82,58 +68,16 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
         }
     };
 
-    const handlePrintId = () => {
-        const frontUrl = request.frontId instanceof Blob ? URL.createObjectURL(request.frontId) : '';
-        const backUrl = request.backId instanceof Blob ? URL.createObjectURL(request.backId) : '';
-    
-        if (!frontUrl || !backUrl) {
+    const handlePrintId = async () => {
+        if (!(request.frontId instanceof Blob) || !(request.backId instanceof Blob)) {
             showToast('No se encontraron las imágenes del DNI.', 'error');
             return;
         }
-    
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-            printWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Documento de Identidad - ${request.fullName}</title>
-                        <style>
-                            body { font-family: sans-serif; margin: 20px; }
-                            h1 { font-size: 1.2em; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
-                            .id-container { display: flex; flex-direction: column; gap: 20px; }
-                            .id-image { max-width: 100%; border: 1px solid #eee; padding: 5px; border-radius: 5px; }
-                            h2 { font-size: 1em; margin-bottom: 5px; }
-                            @media print {
-                                body { margin: 0; }
-                                .id-image { page-break-inside: avoid; max-width: 80%; }
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <h1>Documento de Identidad: ${request.fullName}</h1>
-                        <div class="id-container">
-                            <div>
-                                <h2>Anverso</h2>
-                                <img src="${frontUrl}" class="id-image" alt="Anverso DNI" />
-                            </div>
-                            <div>
-                                <h2>Reverso</h2>
-                                <img src="${backUrl}" class="id-image" alt="Reverso DNI" />
-                            </div>
-                        </div>
-                        <script>
-                            window.onload = function() {
-                                setTimeout(function() {
-                                    window.print();
-                                    window.close();
-                                }, 100);
-                            };
-                        </script>
-                    </body>
-                </html>
-            `);
-            printWindow.document.close();
-            // URLs will be revoked when the ImageViewer component unmounts, or by the browser when the tab closes.
+        try {
+            await generateIdPdf(request.frontId, request.backId, request.fullName);
+        } catch (error) {
+            console.error("Error generating ID PDF:", error);
+            showToast('No se pudo generar el PDF del DNI.', 'error');
         }
     };
 
@@ -149,7 +93,7 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                 </div>
                 <div className="flex items-center">
                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400 mr-4">
-                        {request.loanAmount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                        {formatCurrency(request.loanAmount)}
                     </span>
                     {isExpanded ? <ChevronUp className="text-gray-500" /> : <ChevronDown className="text-gray-500" />}
                 </div>
@@ -157,14 +101,13 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
             {isExpanded && (
                 <div className="p-4 border-t border-gray-200 dark:border-gray-700">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 mb-4">
-                        <InfoRow icon={<Banknote size={16} />} label="Monto Solicitado" value={request.loanAmount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} />
+                        <InfoRow icon={<Banknote size={16} />} label="Monto Solicitado" value={formatCurrency(request.loanAmount)} />
                         <InfoRow icon={<FileText size={16} />} label="Motivo" value={request.loanReason} />
                         <InfoRow icon={<Hash size={16} />} label="DNI/NIE" value={request.idNumber} />
                         <InfoRow icon={<Briefcase size={16} />} label="Situación Laboral" value={request.employmentStatus} />
                         <InfoRow icon={<Phone size={16} />} label="Teléfono" value={request.phone} />
                          {request.contractType && <InfoRow icon={<Calendar size={16} />} label="Contrato" value={request.contractType} />}
                         <InfoRow icon={<Mail size={16} />} label="Email" value={request.email} />
-                        {request.referredBy && <InfoRow icon={<User size={16} />} label="Referido por" value={request.referredBy} />}
                         <div className="md:col-span-2">
                              <InfoRow icon={<MapPin size={16} />} label="Dirección" value={request.address} />
                         </div>
@@ -172,11 +115,11 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                         <div>
                             <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Anverso DNI</p>
-                            <ImageViewer imageBlob={request.frontId} alt="Front ID" />
+                            <ImageViewer imageBlob={request.frontId} alt="Front ID" isTestData={request.isTestData} />
                         </div>
                         <div>
                             <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Reverso DNI</p>
-                            <ImageViewer imageBlob={request.backId} alt="Back ID" />
+                            <ImageViewer imageBlob={request.backId} alt="Back ID" isTestData={request.isTestData} />
                         </div>
                         <div className="md:col-span-2 lg:col-span-1">
                             <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Firma</p>
