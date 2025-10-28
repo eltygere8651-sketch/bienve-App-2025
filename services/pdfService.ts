@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { Loan, Client, LoanRequest } from '../types';
+import { Loan, Client } from '../types';
 import { INTEREST_RATE_CONFIG } from '../config';
 
 interface ContractData {
@@ -44,12 +44,12 @@ CLÁUSULAS:
 
 4. INCUMPLIMIENTO: La falta de pago de una de las cuotas en la fecha pactada dará lugar a la aplicación de intereses de demora y facultará a EL PRESTAMISTA a exigir la devolución total del saldo pendiente.
 
-5. ACEPTACIÓN: EL PRESTATARIO declara haber leído y comprendido todas las cláusulas del presente contrato, y lo acepta de plena conformidad, comprometiéndose a su estricto cumplimiento. La firma digital en este documento tiene la misma validez que una firma manuscrita.
+5. ACEPTACIÓN: EL PRESTATARIO declara haber leído y comprendido todas las cláusulas del presente contrato, y lo acepta de plena conformidad, comprometiéndose a su estricto cumplimiento. La aceptación digital de este documento tiene la misma validez que una firma manuscrita.
 `;
 };
 
 
-export const generateContractPDF = async (data: ContractData, signatureImage: string): Promise<Blob> => {
+export const generateContractPDF = async (data: ContractData, signatureText: string): Promise<Blob> => {
     const doc = new jsPDF();
     const contractText = getContractText(data);
 
@@ -60,15 +60,17 @@ export const generateContractPDF = async (data: ContractData, signatureImage: st
     const splitText = doc.splitTextToSize(contractText, 180);
     doc.text(splitText, 15, 35);
 
-    const lastTextY = 35 + (splitText.length * 5); // Approximate position after text
-    const signatureY = Math.max(lastTextY + 10, 200); // Ensure signature is not too high
+    const lastTextY = 35 + (splitText.length * 5.5); // Approximate position after text
+    const signatureY = Math.max(lastTextY + 15, 220); // Ensure signature is not too high
 
-    doc.text("Firma del Prestatario:", 15, signatureY);
-    if (signatureImage) {
-        doc.addImage(signatureImage, 'PNG', 15, signatureY + 5, 60, 30);
-    }
-    doc.line(15, signatureY + 40, 75, signatureY + 40); // Line under signature
-    doc.text(data.fullName, 15, signatureY + 45);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text("Aceptación Digital:", 15, signatureY);
+    
+    doc.setFont('courier', 'normal');
+    const signatureLines = doc.splitTextToSize(signatureText, 180);
+    doc.text(signatureLines, 15, signatureY + 6);
+    
 
     return doc.output('blob');
 };
@@ -111,13 +113,13 @@ export const generateClientReport = (client: Client, loans: Loan[]) => {
     doc.save(`Informe_${client.name.replace(/\s/g, '_')}.pdf`);
 };
 
-export const generateIdPdf = async (frontIdBlob: Blob, backIdBlob: Blob, clientName: string) => {
+export const generateIdPdf = async (frontIdBlob: Blob, backIdBlob: Blob) => {
     const doc = new jsPDF();
     const frontUrl = await blobToDataURL(frontIdBlob);
     const backUrl = await blobToDataURL(backIdBlob);
 
     doc.setFontSize(16);
-    doc.text(`Documento de Identidad: ${clientName}`, 105, 20, { align: 'center' });
+    doc.text(`Documento de Identidad`, 105, 20, { align: 'center' });
     
     doc.setFontSize(12);
     doc.text('Anverso', 15, 40);
@@ -125,6 +127,10 @@ export const generateIdPdf = async (frontIdBlob: Blob, backIdBlob: Blob, clientN
     
     doc.text('Reverso', 15, 115);
     doc.addImage(backUrl, 'PNG', 15, 120, 90, 55);
-
-    doc.save(`DNI_${clientName.replace(/\s/g, '_')}.pdf`);
+    
+    // Open in new tab instead of forcing download
+    const pdfBlob = doc.output('blob');
+    const pdfUrl = URL.createObjectURL(pdfBlob);
+    window.open(pdfUrl, '_blank');
+    // No need to revoke immediately if window.open is used
 };

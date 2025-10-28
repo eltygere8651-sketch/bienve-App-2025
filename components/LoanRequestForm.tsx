@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle, Loader2, Pen, ArrowLeft } from 'lucide-react';
 import { LoanRequest } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
-import SignaturePad from './SignaturePad';
 import { generateContractPDF, getContractText } from '../services/pdfService';
 import { InputField, SelectField, FileUploadField } from './FormFields';
 import { verifyLoanRequestData } from '../services/geminiService';
@@ -24,9 +23,8 @@ const LoanRequestForm: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
-    const [signatureError, setSignatureError] = useState(false);
-
-    const signaturePadRef = useRef<{ clear: () => void; getSignature: () => string | null }>(null);
+    const [isTermsAccepted, setIsTermsAccepted] = useState(false);
+    const [termsError, setTermsError] = useState(false);
 
     useEffect(() => {
         return () => {
@@ -94,19 +92,22 @@ const LoanRequestForm: React.FC = () => {
     };
 
     const handleSubmit = async () => {
-        const signature = signaturePadRef.current?.getSignature();
-        if (!signature) {
-            showToast('La firma es obligatoria para continuar.', 'error');
-            setSignatureError(true);
+        if (!isTermsAccepted) {
+            showToast('Debes aceptar los términos para continuar.', 'error');
+            setTermsError(true);
             return;
         }
+        setTermsError(false);
 
         setIsSubmitting(true);
         try {
+            // Generate a digital text signature
+            const digitalSignature = `Firmado digitalmente por: ${formData.fullName}\nFecha: ${new Date().toLocaleString('es-ES')}`;
+
             const contractPdf = await generateContractPDF({
                 ...formData,
                 loanAmount: parseFloat(formData.loanAmount) || 0,
-            }, signature);
+            }, digitalSignature);
 
             const { contractType, ...restData } = formData;
             const submissionData: Omit<LoanRequest, 'id' | 'requestDate' | 'status'> = {
@@ -114,7 +115,7 @@ const LoanRequestForm: React.FC = () => {
                 loanAmount: parseFloat(formData.loanAmount) || 0,
                 frontId: frontId!,
                 backId: backId!,
-                signature,
+                signature: digitalSignature,
                 contractPdf,
             };
 
@@ -146,7 +147,7 @@ const LoanRequestForm: React.FC = () => {
         <div className="max-w-4xl mx-auto">
             <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-2">Solicitud de Préstamo</h1>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Paso {step} de 2: {step === 1 ? "Completa tus datos" : "Firma el contrato"}
+                Paso {step} de 2: {step === 1 ? "Completa tus datos" : "Aceptación del Contrato"}
             </p>
             {step === 1 && (
                  <form onSubmit={handleNextStep} className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-md space-y-8">
@@ -189,7 +190,7 @@ const LoanRequestForm: React.FC = () => {
                     <div className="text-right">
                         <button type="submit" className="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center" disabled={isVerifying}>
                              {isVerifying ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
-                             {isVerifying ? 'Verificando...' : 'Siguiente: Firmar Contrato'}
+                             {isVerifying ? 'Verificando...' : 'Siguiente: Aceptar Contrato'}
                         </button>
                     </div>
                 </form>
@@ -198,7 +199,7 @@ const LoanRequestForm: React.FC = () => {
             {step === 2 && (
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-md space-y-8">
                      <div>
-                        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">Revisión y Firma del Contrato</h2>
+                        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">Revisión y Aceptación del Contrato</h2>
                         <div className="prose prose-sm dark:prose-invert max-w-none p-4 border dark:border-gray-700 rounded-md h-64 overflow-y-auto bg-gray-50 dark:bg-gray-900/50">
                             <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'sans-serif' }}>
                                 {getContractText({ ...formData, loanAmount: parseFloat(formData.loanAmount) || 0 })}
@@ -206,21 +207,32 @@ const LoanRequestForm: React.FC = () => {
                         </div>
                     </div>
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">Firma Digital</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Por favor, firma en el siguiente recuadro para aceptar los términos del contrato.</p>
-                        <SignaturePad 
-                            ref={signaturePadRef} 
-                            isError={signatureError}
-                            onDrawStart={() => setSignatureError(false)}
-                        />
+                        <div className="flex items-start p-3 rounded-md transition-colors ${termsError ? 'bg-red-50 dark:bg-red-900/20' : ''}">
+                            <input
+                                id="terms"
+                                name="terms"
+                                type="checkbox"
+                                checked={isTermsAccepted}
+                                onChange={(e) => {
+                                    setIsTermsAccepted(e.target.checked);
+                                    if (e.target.checked) {
+                                        setTermsError(false);
+                                    }
+                                }}
+                                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1"
+                            />
+                            <label htmlFor="terms" className={`ml-3 block text-sm ${termsError ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-300'}`}>
+                                He leído y acepto los términos y condiciones del contrato. Entiendo que esta acción equivale a una firma digital.
+                            </label>
+                        </div>
                     </div>
                     <div className="flex justify-between items-center">
                          <button onClick={() => setStep(1)} className="flex items-center text-gray-600 dark:text-gray-300 hover:text-blue-600 font-semibold py-2 px-4 rounded-lg">
                             <ArrowLeft size={18} className="mr-2" />
                             Volver
                         </button>
-                        <button onClick={handleSubmit} disabled={isSubmitting} className="bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform hover:scale-105 disabled:bg-green-400 disabled:cursor-not-allowed flex items-center justify-center">
-                            {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Pen className="mr-2 h-5 w-5" />}
+                        <button onClick={handleSubmit} disabled={isSubmitting || !isTermsAccepted} className="bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform hover:scale-105 disabled:bg-green-400 disabled:cursor-not-allowed flex items-center justify-center">
+                            {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle className="mr-2 h-5 w-5" />}
                             {isSubmitting ? 'Procesando...' : 'Aceptar y Enviar Solicitud'}
                         </button>
                     </div>
