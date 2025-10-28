@@ -8,8 +8,7 @@ import ReferralProgram from './components/ReferralProgram';
 import Login from './components/Login';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
-import DataExplorer from './components/DataExplorer';
-import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Gift, Loader2, FlaskConical, Trash2, TestTubeDiagonal, LogOut, LogIn, ChevronLeft, ChevronRight, FileSearch, Link } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Gift, Loader2, FlaskConical, Trash2, TestTubeDiagonal, LogOut, LogIn, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 
@@ -56,7 +55,6 @@ const App: React.FC = () => {
             case 'requests': return <RequestList />;
             case 'referrals': return <ReferralProgram />;
             case 'adminLogin': return <Login />;
-            case 'dataExplorer': return <DataExplorer />;
             default: return isAdmin ? <Dashboard /> : <LoanRequestForm />;
         }
     };
@@ -92,11 +90,6 @@ const App: React.FC = () => {
             )}
         </li>
     );
-    
-    const copyAppLink = () => {
-        navigator.clipboard.writeText(window.location.href);
-        showToast('¡Enlace de la aplicación copiado!', 'success');
-    };
 
     return (
         <>
@@ -128,8 +121,6 @@ const App: React.FC = () => {
                                  <ul>
                                     <NavItem icon={<TestTubeDiagonal />} label="Generar Datos Falsos" onClick={generateDummyData} isSidebarOpen={isSidebarOpen} isTestButton/>
                                     <NavItem icon={<Trash2 />} label="Limpiar Datos de Prueba" onClick={clearAllData} isSidebarOpen={isSidebarOpen} isTestButton/>
-                                    <NavItem icon={<FileSearch />} label="Explorador de Datos" view="dataExplorer" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} isTestButton />
-                                    <NavItem icon={<Link />} label="Copiar Enlace" onClick={copyAppLink} isSidebarOpen={isSidebarOpen} isTestButton/>
                                 </ul>
                             </div>
                         )}

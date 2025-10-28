@@ -55,4 +55,4 @@ export interface LoanRequest {
 }
 
 
-export type AppView = 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'referrals' | 'adminLogin' | 'dataExplorer';
+export type AppView = 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'referrals' | 'adminLogin';

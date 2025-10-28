@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LoanRequest, RequestStatus } from '../types';
-import { ChevronDown, ChevronUp, User, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Download, Pen } from 'lucide-react';
+import { ChevronDown, ChevronUp, User, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Download, Printer } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { downloadPdf } from '../services/pdfService';
@@ -82,6 +82,61 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
         }
     };
 
+    const handlePrintId = () => {
+        const frontUrl = request.frontId instanceof Blob ? URL.createObjectURL(request.frontId) : '';
+        const backUrl = request.backId instanceof Blob ? URL.createObjectURL(request.backId) : '';
+    
+        if (!frontUrl || !backUrl) {
+            showToast('No se encontraron las imágenes del DNI.', 'error');
+            return;
+        }
+    
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Documento de Identidad - ${request.fullName}</title>
+                        <style>
+                            body { font-family: sans-serif; margin: 20px; }
+                            h1 { font-size: 1.2em; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
+                            .id-container { display: flex; flex-direction: column; gap: 20px; }
+                            .id-image { max-width: 100%; border: 1px solid #eee; padding: 5px; border-radius: 5px; }
+                            h2 { font-size: 1em; margin-bottom: 5px; }
+                            @media print {
+                                body { margin: 0; }
+                                .id-image { page-break-inside: avoid; max-width: 80%; }
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Documento de Identidad: ${request.fullName}</h1>
+                        <div class="id-container">
+                            <div>
+                                <h2>Anverso</h2>
+                                <img src="${frontUrl}" class="id-image" alt="Anverso DNI" />
+                            </div>
+                            <div>
+                                <h2>Reverso</h2>
+                                <img src="${backUrl}" class="id-image" alt="Reverso DNI" />
+                            </div>
+                        </div>
+                        <script>
+                            window.onload = function() {
+                                setTimeout(function() {
+                                    window.print();
+                                    window.close();
+                                }, 100);
+                            };
+                        </script>
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            // URLs will be revoked when the ImageViewer component unmounts, or by the browser when the tab closes.
+        }
+    };
+
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
             <div className="p-4 flex justify-between items-center cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
@@ -132,11 +187,16 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                             ) : (
                                 <p className="text-xs text-gray-500">No se proporcionó firma.</p>
                             )}
-                            {request.contractPdf && (
-                                <button onClick={handleDownloadContract} className="w-full mt-4 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold py-2 px-4 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 flex items-center justify-center text-sm">
-                                    <Download size={16} className="mr-2" /> Descargar Contrato
+                             <div className="flex flex-col gap-2 mt-4">
+                                {request.contractPdf && (
+                                    <button onClick={handleDownloadContract} className="w-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold py-2 px-4 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 flex items-center justify-center text-sm">
+                                        <Download size={16} className="mr-2" /> Descargar Contrato
+                                    </button>
+                                )}
+                                 <button onClick={handlePrintId} className="w-full bg-gray-100 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 font-bold py-2 px-4 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 flex items-center justify-center text-sm">
+                                    <Printer size={16} className="mr-2" /> Imprimir/Descargar DNI
                                 </button>
-                            )}
+                             </div>
                         </div>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg space-y-4">
