@@ -34,7 +34,7 @@ export interface Client {
 }
 
 export interface LoanRequest {
-    id: string;
+    id:string;
     fullName: string;
     idNumber: string;
     address: string;
@@ -54,6 +54,6 @@ export interface LoanRequest {
 }
 
 
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings';
 
 export type FilterStatus = LoanStatus | 'Todos';

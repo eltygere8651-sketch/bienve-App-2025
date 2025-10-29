@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { AppView } from '../types';
 import { ADMIN_CREDENTIALS } from '../config';
+import { LOCAL_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../constants';
 
 type Theme = 'light' | 'dark';
 
@@ -36,7 +37,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const getInitialTheme = (): Theme => {
-  const storedTheme = localStorage.getItem('theme');
+  const storedTheme = localStorage.getItem(LOCAL_STORAGE_KEYS.THEME);
   if (storedTheme === 'dark' || storedTheme === 'light') {
     return storedTheme;
   }
@@ -46,9 +47,9 @@ const getInitialTheme = (): Theme => {
 export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [theme, setTheme] = useState<Theme>(getInitialTheme);
     const [toast, setToast] = useState<ToastMessage>({ message: '', type: 'info' });
-    const [isAdmin, setIsAdmin] = useState<boolean>(() => sessionStorage.getItem('isAdmin') === 'true');
+    const [isAdmin, setIsAdmin] = useState<boolean>(() => sessionStorage.getItem(SESSION_STORAGE_KEYS.IS_ADMIN) === 'true');
     const [currentView, setCurrentView] = useState<AppView>(() => (
-        sessionStorage.getItem('isAdmin') === 'true' ? 'dashboard' : 'welcome'
+        sessionStorage.getItem(SESSION_STORAGE_KEYS.IS_ADMIN) === 'true' ? 'dashboard' : 'welcome'
     ));
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [confirmState, setConfirmState] = useState<ConfirmState>({
@@ -61,15 +62,15 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     useEffect(() => {
         if (theme === 'dark') {
             document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
+            localStorage.setItem(LOCAL_STORAGE_KEYS.THEME, 'dark');
         } else {
             document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
+            localStorage.setItem(LOCAL_STORAGE_KEYS.THEME, 'light');
         }
     }, [theme]);
     
     useEffect(() => {
-        const adminOnlyViews: AppView[] = ['dashboard', 'clients', 'requests'];
+        const adminOnlyViews: AppView[] = ['dashboard', 'clients', 'requests', 'receiptGenerator'];
         if (!isAdmin && adminOnlyViews.includes(currentView)) {
             setCurrentView('welcome');
         }
@@ -85,9 +86,8 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const handleLogin = (user: string, pass: string): boolean => {
         if (user === ADMIN_CREDENTIALS.USER && pass === ADMIN_CREDENTIALS.PASS) {
-            sessionStorage.setItem('isAdmin', 'true');
+            sessionStorage.setItem(SESSION_STORAGE_KEYS.IS_ADMIN, 'true');
             setIsAdmin(true);
-            setCurrentView('dashboard');
             showToast('Sesión de administrador iniciada.', 'success');
             return true;
         }
@@ -95,7 +95,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const handleLogout = () => {
-        sessionStorage.removeItem('isAdmin');
+        sessionStorage.removeItem(SESSION_STORAGE_KEYS.IS_ADMIN);
         setIsAdmin(false);
         setCurrentView('welcome');
         showToast('Sesión cerrada.', 'info');

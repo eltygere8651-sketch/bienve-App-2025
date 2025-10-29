@@ -73,7 +73,7 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
             return;
         }
         try {
-            await generateIdPdf(request.frontId, request.backId);
+            await generateIdPdf(request.frontId, request.backId, request.fullName);
         } catch (error) {
             console.error("Error generating ID PDF:", error);
             showToast('No se pudo generar el PDF del DNI.', 'error');
@@ -123,13 +123,13 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                     </div>
                      <div className="space-y-4 mb-6">
                         <div>
-                            <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Aceptación del Contrato</p>
+                            <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Firma del Solicitante</p>
                             {request.signature ? (
-                                 <div className="bg-gray-100 dark:bg-gray-700/50 p-3 rounded-lg border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300 italic">
-                                    <pre className="whitespace-pre-wrap font-sans">{request.signature}</pre>
+                                 <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+                                    <img src={request.signature} alt="Firma del solicitante" className="mx-auto bg-white dark:bg-gray-200 rounded" style={{ maxHeight: '100px' }} />
                                  </div>
                             ) : (
-                                <p className="text-xs text-gray-500">No se proporcionó aceptación.</p>
+                                <p className="text-xs text-gray-500">No se proporcionó firma.</p>
                             )}
                         </div>
                         <div className="flex flex-col sm:flex-row gap-2">

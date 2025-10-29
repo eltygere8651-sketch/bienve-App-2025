@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { LoanRequest } from '../types';
 
 const API_KEY = process.env.API_KEY;
@@ -90,16 +90,22 @@ export const verifyLoanRequestData = async (
     `;
 
     try {
-        // This model and config is fictional, but represents the idea
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: prompt,
             config: {
                 responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        isValid: { type: Type.BOOLEAN },
+                        reason: { type: Type.STRING },
+                    },
+                    required: ['isValid', 'reason'],
+                },
             }
         });
         
-        // In a real scenario, you'd parse the JSON response
         const jsonResponse = JSON.parse(response.text);
         return jsonResponse;
 

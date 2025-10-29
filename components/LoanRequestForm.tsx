@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { CheckCircle, Loader2, Pen, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { CheckCircle, Loader2, ArrowLeft } from 'lucide-react';
 import { LoanRequest } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
-import { generateContractPDF, getContractText } from '../services/pdfService';
+import { generateContractPDF } from '../services/pdfService';
 import { InputField, SelectField, FileUploadField } from './FormFields';
 import { verifyLoanRequestData } from '../services/geminiService';
+import SignaturePad, { SignaturePadRef } from './SignaturePad';
 
 const LoanRequestForm: React.FC = () => {
     const { handleLoanRequestSubmit } = useDataContext();
@@ -23,8 +24,8 @@ const LoanRequestForm: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
-    const [isTermsAccepted, setIsTermsAccepted] = useState(false);
-    const [termsError, setTermsError] = useState(false);
+    const [signatureError, setSignatureError] = useState(false);
+    const signaturePadRef = useRef<SignaturePadRef>(null);
 
     useEffect(() => {
         return () => {
@@ -92,22 +93,20 @@ const LoanRequestForm: React.FC = () => {
     };
 
     const handleSubmit = async () => {
-        if (!isTermsAccepted) {
-            showToast('Debes aceptar los términos para continuar.', 'error');
-            setTermsError(true);
+        const signatureImage = signaturePadRef.current?.toDataURL();
+        if (!signatureImage) {
+            showToast('Por favor, firma el contrato para continuar.', 'error');
+            setSignatureError(true);
             return;
         }
-        setTermsError(false);
+        setSignatureError(false);
 
         setIsSubmitting(true);
         try {
-            // Generate a digital text signature
-            const digitalSignature = `Firmado digitalmente por: ${formData.fullName}\nFecha: ${new Date().toLocaleString('es-ES')}`;
-
             const contractPdf = await generateContractPDF({
                 ...formData,
                 loanAmount: parseFloat(formData.loanAmount) || 0,
-            }, digitalSignature);
+            }, signatureImage);
 
             const { contractType, ...restData } = formData;
             const submissionData: Omit<LoanRequest, 'id' | 'requestDate' | 'status'> = {
@@ -115,7 +114,7 @@ const LoanRequestForm: React.FC = () => {
                 loanAmount: parseFloat(formData.loanAmount) || 0,
                 frontId: frontId!,
                 backId: backId!,
-                signature: digitalSignature,
+                signature: signatureImage,
                 contractPdf,
             };
 
@@ -201,37 +200,22 @@ const LoanRequestForm: React.FC = () => {
                      <div>
                         <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">Revisión y Aceptación del Contrato</h2>
                         <div className="prose prose-sm dark:prose-invert max-w-none p-4 border dark:border-gray-700 rounded-md h-64 overflow-y-auto bg-gray-50 dark:bg-gray-900/50">
-                            <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'sans-serif' }}>
-                                {getContractText({ ...formData, loanAmount: parseFloat(formData.loanAmount) || 0 })}
-                            </pre>
+                             <p className="text-gray-600 dark:text-gray-300">El texto completo del contrato se generará en el PDF final. Puedes revisar la plantilla actual en la sección de "Ajustes" si eres administrador. Al firmar a continuación, aceptas los términos y condiciones.</p>
                         </div>
                     </div>
-                    <div>
-                        <div className="flex items-start p-3 rounded-md transition-colors ${termsError ? 'bg-red-50 dark:bg-red-900/20' : ''}">
-                            <input
-                                id="terms"
-                                name="terms"
-                                type="checkbox"
-                                checked={isTermsAccepted}
-                                onChange={(e) => {
-                                    setIsTermsAccepted(e.target.checked);
-                                    if (e.target.checked) {
-                                        setTermsError(false);
-                                    }
-                                }}
-                                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1"
-                            />
-                            <label htmlFor="terms" className={`ml-3 block text-sm ${termsError ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-300'}`}>
-                                He leído y acepto los términos y condiciones del contrato. Entiendo que esta acción equivale a una firma digital.
+                    <div className={`p-3 rounded-md transition-colors ${signatureError ? 'bg-red-50 dark:bg-red-900/20 ring-1 ring-red-500' : ''}`}>
+                         <label className={`block text-sm font-semibold mb-2 ${signatureError ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                                Firma del Prestatario
                             </label>
-                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Dibuja tu firma en el recuadro. Al firmar, aceptas los términos del contrato.</p>
+                        <SignaturePad ref={signaturePadRef} width={450} height={150} onDrawEnd={() => setSignatureError(false)}/>
                     </div>
                     <div className="flex justify-between items-center">
                          <button onClick={() => setStep(1)} className="flex items-center text-gray-600 dark:text-gray-300 hover:text-blue-600 font-semibold py-2 px-4 rounded-lg">
                             <ArrowLeft size={18} className="mr-2" />
                             Volver
                         </button>
-                        <button onClick={handleSubmit} disabled={isSubmitting || !isTermsAccepted} className="bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform hover:scale-105 disabled:bg-green-400 disabled:cursor-not-allowed flex items-center justify-center">
+                        <button onClick={handleSubmit} disabled={isSubmitting} className="bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform hover:scale-105 disabled:bg-green-400 disabled:cursor-not-allowed flex items-center justify-center">
                             {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle className="mr-2 h-5 w-5" />}
                             {isSubmitting ? 'Procesando...' : 'Aceptar y Enviar Solicitud'}
                         </button>

@@ -9,9 +9,11 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, FlaskConical, Trash2, TestTubeDiagonal, LogOut, LogIn, ChevronLeft, ChevronRight, Home } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, FlaskConical, Trash2, TestTubeDiagonal, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
+import ReceiptGenerator from './components/ReceiptGenerator';
+import SettingsComponent from './components/Settings';
 
 const App: React.FC = () => {
     const { 
@@ -60,6 +62,8 @@ const App: React.FC = () => {
             case 'loanRequest': return <LoanRequestForm />;
             case 'requests': return <RequestList />;
             case 'adminLogin': return <Login />;
+            case 'receiptGenerator': return <ReceiptGenerator />;
+            case 'settings': return <SettingsComponent />;
             default: return isAdmin ? <Dashboard /> : <Welcome />;
         }
     };
@@ -93,13 +97,22 @@ const App: React.FC = () => {
                             {isAdmin && <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
                         </ul>
                          {isAdmin && isSidebarOpen && (
-                            <div className="mt-4 pt-4 border-t border-gray-700">
-                                <h3 className="px-3 text-xs font-semibold text-amber-400 uppercase tracking-wider">Herramientas de Admin</h3>
-                                 <ul>
-                                    <NavItem icon={<TestTubeDiagonal />} label="Generar Datos Falsos" onClick={generateDummyData} isSidebarOpen={isSidebarOpen} isTestButton/>
-                                    <NavItem icon={<Trash2 />} label="Limpiar Datos de Prueba" onClick={clearAllData} isSidebarOpen={isSidebarOpen} isTestButton/>
-                                </ul>
-                            </div>
+                            <>
+                                <div className="mt-4 pt-4 border-t border-gray-700">
+                                    <h3 className="px-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Herramientas</h3>
+                                     <ul>
+                                        <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />
+                                        <NavItem icon={<ReceiptText />} label="Generar Recibo" view="receiptGenerator" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />
+                                    </ul>
+                                </div>
+                                <div className="mt-4 pt-4 border-t border-gray-700">
+                                    <h3 className="px-3 text-xs font-semibold text-amber-500 uppercase tracking-wider">Desarrollo</h3>
+                                    <ul>
+                                        <NavItem icon={<TestTubeDiagonal />} label="Generar Datos Falsos" onClick={generateDummyData} isSidebarOpen={isSidebarOpen} isTestButton/>
+                                        <NavItem icon={<Trash2 />} label="Limpiar Datos de Prueba" onClick={clearAllData} isSidebarOpen={isSidebarOpen} isTestButton/>
+                                    </ul>
+                                </div>
+                            </>
                         )}
                     </nav>
                      <div className="p-4 border-t border-gray-700 dark:border-gray-800">

@@ -5,6 +5,7 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, Lightbulb, RefreshCw, FileWarning } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { formatCurrency } from '../services/utils';
+import { LOCAL_STORAGE_KEYS } from '../constants';
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; change?: string; changeType?: 'increase' | 'decrease' }> = ({ title, value, icon, change, changeType }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center justify-between transition-transform hover:scale-105">
@@ -34,7 +35,7 @@ const Dashboard: React.FC = () => {
     const fetchTip = useCallback(async (forceRefresh = false) => {
         setIsLoadingTip(true);
         const today = new Date().toISOString().split('T')[0];
-        const storedTipData = localStorage.getItem('financialTip');
+        const storedTipData = localStorage.getItem(LOCAL_STORAGE_KEYS.FINANCIAL_TIP);
 
         if (storedTipData && !forceRefresh) {
             try {
@@ -46,13 +47,13 @@ const Dashboard: React.FC = () => {
                 }
             } catch (error) {
                 console.error("Failed to parse stored financial tip", error);
-                localStorage.removeItem('financialTip');
+                localStorage.removeItem(LOCAL_STORAGE_KEYS.FINANCIAL_TIP);
             }
         }
 
         const newTip = await getFinancialTip();
         setTip(newTip);
-        localStorage.setItem('financialTip', JSON.stringify({ date: today, tip: newTip }));
+        localStorage.setItem(LOCAL_STORAGE_KEYS.FINANCIAL_TIP, JSON.stringify({ date: today, tip: newTip }));
         setIsLoadingTip(false);
     }, []);
 
@@ -172,17 +173,25 @@ const Dashboard: React.FC = () => {
                 <div className="space-y-6">
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
                          <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Estado de Préstamos</h2>
-                         <ResponsiveContainer width="100%" height={200}>
-                            <PieChart>
-                                <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8" label={loans.length > 0}>
-                                    {pieChartData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[entry.name]} cursor="pointer"/>
-                                    ))}
-                                </Pie>
-                                <Tooltip contentStyle={{ backgroundColor: '#334155', border: 'none', borderRadius: '0.5rem' }} itemStyle={{ color: '#e2e8f0' }} formatter={(value) => `${value} Préstamo(s)`}/>
-                                {loans.length > 0 && <Legend wrapperStyle={{fontSize: '12px', cursor: 'pointer'}} onClick={handleLegendClick}/>}
-                            </PieChart>
-                         </ResponsiveContainer>
+                         {loans.length > 0 ? (
+                             <ResponsiveContainer width="100%" height={200}>
+                                <PieChart>
+                                    <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8" label>
+                                        {pieChartData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[entry.name]} cursor="pointer"/>
+                                        ))}
+                                    </Pie>
+                                    <Tooltip contentStyle={{ backgroundColor: '#334155', border: 'none', borderRadius: '0.5rem' }} itemStyle={{ color: '#e2e8f0' }} formatter={(value) => `${value} Préstamo(s)`}/>
+                                    <Legend wrapperStyle={{fontSize: '12px', cursor: 'pointer'}} onClick={handleLegendClick}/>
+                                </PieChart>
+                             </ResponsiveContainer>
+                         ) : (
+                            <div className="h-[200px] flex flex-col justify-center items-center text-center">
+                                <FileWarning size={40} className="text-gray-400" />
+                                <h3 className="mt-4 font-semibold text-gray-700 dark:text-gray-200">Sin Datos de Préstamos</h3>
+                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">No hay préstamos para mostrar en el gráfico.</p>
+                            </div>
+                         )}
                     </div>
                 </div>
             </div>

@@ -3,6 +3,7 @@ import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
 import { db } from '../services/dbService';
 import { generateWelcomeMessage } from '../services/geminiService';
 import { INTEREST_RATE_CONFIG } from '../config';
+import { LOCAL_STORAGE_KEYS } from '../constants';
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -14,34 +15,33 @@ export const useAppData = (
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
-    const updateOverdueLoans = useCallback(async (loansData: Loan[]): Promise<Loan[]> => {
+    const updateOverdueLoans = useCallback(async (allLoans: Loan[]): Promise<Loan[]> => {
         const today = new Date();
         const loansToUpdate: { key: string, changes: { status: LoanStatus } }[] = [];
+        const pendingLoans = allLoans.filter(loan => loan.status === LoanStatus.PENDING);
         
-        const updatedLoans = loansData.map(loan => {
-            if (loan.status === LoanStatus.PENDING) {
-                const dueDate = new Date(loan.startDate);
-                // The due date for the *next* payment is after the month of the last payment made
-                dueDate.setMonth(dueDate.getMonth() + loan.paymentsMade + 1);
-                
-                if (today > dueDate) {
-                    loansToUpdate.push({ key: loan.id, changes: { status: LoanStatus.OVERDUE } });
-                    return { ...loan, status: LoanStatus.OVERDUE };
-                }
+        pendingLoans.forEach(loan => {
+            const dueDate = new Date(loan.startDate);
+            dueDate.setMonth(dueDate.getMonth() + loan.paymentsMade + 1);
+            
+            if (today > dueDate) {
+                loansToUpdate.push({ key: loan.id, changes: { status: LoanStatus.OVERDUE } });
             }
-            return loan;
         });
 
         if (loansToUpdate.length > 0) {
             try {
                 await db.loans.bulkUpdate(loansToUpdate);
                 console.log(`${loansToUpdate.length} loan(s) updated to Overdue.`);
+                return allLoans.map(loan => {
+                    const update = loansToUpdate.find(u => u.key === loan.id);
+                    return update ? { ...loan, ...update.changes } : loan;
+                });
             } catch (err) {
                 console.error("Failed to bulk update overdue loans:", err);
-                // Don't block UI for this, just log the error
             }
         }
-        return updatedLoans;
+        return allLoans;
     }, []);
 
     useEffect(() => {
@@ -82,11 +82,10 @@ export const useAppData = (
         try {
             await db.requests.add(newRequest);
             setRequests(prev => [...prev, newRequest]);
-            // No need for a toast here, the form shows a success screen.
         } catch (err) {
             console.error("Failed to submit loan request:", err);
             showToast('Error al enviar la solicitud.', 'error');
-            throw err; // Re-throw to be caught by the form
+            throw err;
         }
     };
 
@@ -173,7 +172,7 @@ export const useAppData = (
         
         const newPaymentsMade = loan.paymentsMade + 1;
         const isPaidOff = newPaymentsMade >= loan.term;
-        const newStatus = isPaidOff ? LoanStatus.PAID : LoanStatus.PENDING; // Reset to pending after payment
+        const newStatus = isPaidOff ? LoanStatus.PAID : LoanStatus.PENDING;
 
         try {
             await db.loans.update(loanId, { paymentsMade: newPaymentsMade, status: newStatus });
@@ -186,10 +185,20 @@ export const useAppData = (
     };
     
     const clientLoanData = useMemo(() => {
-        return clients.map(client => {
-            const clientLoans = loans.filter(loan => loan.clientId === client.id);
-            return { ...client, loans: clientLoans };
-        });
+        // Optimization: Create a map of loans by clientId for efficient lookup.
+        // This avoids iterating through the entire loans array for each client.
+        const loansByClientId = new Map<string, Loan[]>();
+        for (const loan of loans) {
+            if (!loansByClientId.has(loan.clientId)) {
+                loansByClientId.set(loan.clientId, []);
+            }
+            loansByClientId.get(loan.clientId)!.push(loan);
+        }
+
+        return clients.map(client => ({
+            ...client,
+            loans: loansByClientId.get(client.id) || [],
+        }));
     }, [clients, loans]);
 
     const generateDummyData = async () => {
@@ -216,7 +225,6 @@ export const useAppData = (
                 await db.loans.bulkPut(dummyLoans);
                 await db.requests.bulkPut(dummyRequests);
             });
-            // Refetch all data to ensure consistency and apply overdue logic
             const [clientsData, loansData, requestsData] = await Promise.all([
                 db.clients.toArray(),
                 db.loans.toArray(),
@@ -241,14 +249,10 @@ export const useAppData = (
             message: '¿Estás seguro de que quieres borrar TODOS los datos de prueba? Los datos de usuarios reales no se verán afectados.',
             onConfirm: async () => {
                 try {
-                    const clientsToDelete = await db.clients.where({ isTestData: true }).primaryKeys();
-                    const loansToDelete = await db.loans.where({ isTestData: true }).primaryKeys();
-                    const requestsToDelete = await db.requests.where({ isTestData: true }).primaryKeys();
-
                     await db.transaction('rw', db.clients, db.loans, db.requests, async () => {
-                        await db.clients.bulkDelete(clientsToDelete as any);
-                        await db.loans.bulkDelete(loansToDelete as any);
-                        await db.requests.bulkDelete(requestsToDelete as any);
+                        await db.clients.where('isTestData').equals(1).delete();
+                        await db.loans.where('isTestData').equals(1).delete();
+                        await db.requests.where('isTestData').equals(1).delete();
                     });
                     
                     setClients(prev => prev.filter(c => !c.isTestData));
@@ -257,7 +261,8 @@ export const useAppData = (
                     showToast('Todos los datos de prueba han sido borrados.', 'info');
                 } catch (err) {
                     console.error("Failed to clear test data:", err);
-                    showToast('Error al limpiar los datos de prueba.', 'error');
+                    const errorMessage = err instanceof Error ? err.message : String(err);
+                    showToast(`Error al limpiar los datos de prueba: ${errorMessage}`, 'error');
                 }
             }
         });
