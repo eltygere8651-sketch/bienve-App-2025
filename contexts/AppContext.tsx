@@ -1,6 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { AppView } from '../types';
-import { ADMIN_CREDENTIALS } from '../config';
 import { LOCAL_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../constants';
 
 type Theme = 'light' | 'dark';
@@ -70,7 +69,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }, [theme]);
     
     useEffect(() => {
-        const adminOnlyViews: AppView[] = ['dashboard', 'clients', 'requests', 'receiptGenerator'];
+        const adminOnlyViews: AppView[] = ['dashboard', 'clients', 'requests', 'receiptGenerator', 'settings'];
         if (!isAdmin && adminOnlyViews.includes(currentView)) {
             setCurrentView('welcome');
         }
@@ -85,7 +84,16 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const handleLogin = (user: string, pass: string): boolean => {
-        if (user === ADMIN_CREDENTIALS.USER && pass === ADMIN_CREDENTIALS.PASS) {
+        const adminUser = process.env.ADMIN_USER;
+        const adminPass = process.env.ADMIN_PASS;
+
+        if (!adminUser || !adminPass) {
+            console.error("Error: ADMIN_USER and ADMIN_PASS environment variables are not set.");
+            showToast('La configuración de inicio de sesión del administrador no está disponible.', 'error');
+            return false;
+        }
+
+        if (user === adminUser && pass === adminPass) {
             sessionStorage.setItem(SESSION_STORAGE_KEYS.IS_ADMIN, 'true');
             setIsAdmin(true);
             showToast('Sesión de administrador iniciada.', 'success');

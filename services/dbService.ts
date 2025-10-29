@@ -1,5 +1,7 @@
-// Fix: Changed Dexie import to a default import to ensure proper type inheritance for subclassing.
-import Dexie from 'dexie';
+
+// FIX: Switched to a named import for Dexie to resolve class inheritance issues.
+// This ensures that `this.version` and other Dexie methods are available on the extended class.
+import { Dexie } from 'dexie';
 import type { Table } from 'dexie';
 import { Client, Loan, LoanRequest } from '../types';
 

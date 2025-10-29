@@ -1,3 +1,4 @@
+
 export enum LoanStatus {
     PENDING = 'Pendiente',
     PAID = 'Pagado',
@@ -7,6 +8,13 @@ export enum LoanStatus {
 export enum RequestStatus {
     PENDING = 'Pendiente',
     UNDER_REVIEW = 'En Estudio',
+}
+
+// FIX: Added LoyaltyStatus enum for the loyalty program feature.
+export enum LoyaltyStatus {
+    BRONZE = 'Bronce',
+    SILVER = 'Plata',
+    GOLD = 'Oro',
 }
 
 export interface Loan {

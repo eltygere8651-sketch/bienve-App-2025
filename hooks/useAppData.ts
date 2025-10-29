@@ -3,7 +3,6 @@ import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
 import { db } from '../services/dbService';
 import { generateWelcomeMessage } from '../services/geminiService';
 import { INTEREST_RATE_CONFIG } from '../config';
-import { LOCAL_STORAGE_KEYS } from '../constants';
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -185,8 +184,6 @@ export const useAppData = (
     };
     
     const clientLoanData = useMemo(() => {
-        // Optimization: Create a map of loans by clientId for efficient lookup.
-        // This avoids iterating through the entire loans array for each client.
         const loansByClientId = new Map<string, Loan[]>();
         for (const loan of loans) {
             if (!loansByClientId.has(loan.clientId)) {
@@ -203,17 +200,16 @@ export const useAppData = (
 
     const generateDummyData = async () => {
         const today = new Date();
-        const oneMonthAgo = new Date(new Date().setMonth(today.getMonth() - 1));
-        const fourMonthsAgo = new Date(new Date().setMonth(today.getMonth() - 4));
+        const createDate = (monthsAgo: number) => new Date(new Date().setMonth(today.getMonth() - monthsAgo)).toISOString();
 
         const dummyClients: Client[] = [
-            { id: 'client-1', name: 'Juan Pérez (Prueba)', joinDate: '2023-01-15T10:00:00Z', isTestData: true },
-            { id: 'client-2', name: 'María García (Prueba)', joinDate: '2023-03-22T11:30:00Z', isTestData: true },
+            { id: 'client-1', name: 'Juan Pérez (Prueba)', joinDate: createDate(12), isTestData: true },
+            { id: 'client-2', name: 'María García (Prueba)', joinDate: createDate(9), isTestData: true },
         ];
         const dummyLoans: Loan[] = [
-            { id: 'loan-1', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 500, interestRate: 96, term: 6, startDate: oneMonthAgo.toISOString(), status: LoanStatus.PENDING, monthlyPayment: 99.56, totalRepayment: 597.36, paymentsMade: 0, isTestData: true },
-            { id: 'loan-2', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 300, interestRate: 96, term: 3, startDate: '2023-05-01T10:00:00Z', status: LoanStatus.PAID, monthlyPayment: 112.98, totalRepayment: 338.94, paymentsMade: 3, isTestData: true },
-            { id: 'loan-3', clientId: 'client-2', clientName: 'María García (Prueba)', amount: 1200, interestRate: 96, term: 12, startDate: fourMonthsAgo.toISOString(), status: LoanStatus.PENDING, monthlyPayment: 154.55, totalRepayment: 1854.6, paymentsMade: 2, isTestData: true },
+            { id: 'loan-1', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 500, interestRate: 96, term: 6, startDate: createDate(1), status: LoanStatus.PENDING, monthlyPayment: 99.56, totalRepayment: 597.36, paymentsMade: 0, isTestData: true },
+            { id: 'loan-2', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 300, interestRate: 96, term: 3, startDate: createDate(7), status: LoanStatus.PAID, monthlyPayment: 112.98, totalRepayment: 338.94, paymentsMade: 3, isTestData: true },
+            { id: 'loan-3', clientId: 'client-2', clientName: 'María García (Prueba)', amount: 1200, interestRate: 96, term: 12, startDate: createDate(4), status: LoanStatus.PENDING, monthlyPayment: 154.55, totalRepayment: 1854.6, paymentsMade: 2, isTestData: true },
         ];
         const dummyRequests: LoanRequest[] = [
             { id: 'req-1', fullName: 'Carlos Sanchez (Prueba)', idNumber: 'Z1234567X', address: 'Calle Falsa 123', phone: '600112233', email: 'carlos@example.com', loanAmount: 800, loanReason: 'Mejoras Hogar', employmentStatus: 'Empleado', contractType: 'Indefinido', frontId: new Blob(), backId: new Blob(), requestDate: new Date().toISOString(), status: RequestStatus.PENDING, isTestData: true, signature: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', contractPdf: new Blob() },

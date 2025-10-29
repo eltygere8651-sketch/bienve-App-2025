@@ -1,14 +1,11 @@
-import React from 'react';
-import { Loan, LoanStatus } from '../types';
+import React, { useMemo, useState } from 'react';
+import { Loan, LoanStatus, Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
-import { Users, Download } from 'lucide-react';
+import { Users, Download, Search } from 'lucide-react';
 import { generateClientReport } from '../services/pdfService';
 import { formatCurrency } from '../services/utils';
 
-interface ClientWithData {
-    id: string;
-    name: string;
-    joinDate: string;
+interface ClientWithData extends Client {
     loans: Loan[];
 }
 
@@ -23,7 +20,7 @@ const ClientCard: React.FC<{ client: ClientWithData & { loans: Loan[] } }> = ({ 
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md transition-all hover:shadow-lg hover:scale-[1.02] flex flex-col">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md transition-all hover:shadow-lg hover:scale-[1.02] flex flex-col animate-fade-in">
             <div className="flex justify-between items-start">
                 <div>
                     <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">{client.name}</h3>
@@ -73,6 +70,16 @@ const ClientCard: React.FC<{ client: ClientWithData & { loans: Loan[] } }> = ({ 
 
 const ClientList: React.FC = () => {
     const { clientLoanData } = useDataContext();
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredClients = useMemo(() => {
+        if (!searchTerm) {
+            return clientLoanData;
+        }
+        return clientLoanData.filter(client =>
+            client.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [clientLoanData, searchTerm]);
     
     if (clientLoanData.length === 0) {
         return (
@@ -88,13 +95,31 @@ const ClientList: React.FC = () => {
     }
 
     return (
-        <div>
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Lista de Clientes</h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {clientLoanData.map(client => (
-                    <ClientCard key={client.id} client={client} />
-                ))}
+        <div className="space-y-6">
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Lista de Clientes</h1>
+            <div className="relative">
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                 <input
+                    type="text"
+                    placeholder="Buscar cliente por nombre..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-blue-500 focus:border-blue-500"
+                />
             </div>
+            {filteredClients.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredClients.map(client => (
+                        <ClientCard key={client.id} client={client} />
+                    ))}
+                </div>
+            ) : (
+                 <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+                     <Search size={48} className="mx-auto text-gray-400" />
+                     <h2 className="mt-4 text-xl font-semibold text-gray-700 dark:text-gray-200">No se encontraron clientes</h2>
+                     <p className="mt-1 text-gray-500 dark:text-gray-400">Prueba con otro término de búsqueda.</p>
+                </div>
+            )}
         </div>
     );
 };

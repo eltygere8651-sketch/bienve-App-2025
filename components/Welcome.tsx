@@ -46,6 +46,8 @@ const Welcome: React.FC = () => {
                  </button>
             </div>
 
+            <BudgetCalculator />
+
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/50 dark:to-indigo-900/50 p-6 rounded-2xl shadow-md text-gray-700 dark:text-blue-200">
                 <div className="flex items-start">
                     <Lightbulb className="h-6 w-6 mr-4 text-blue-500 flex-shrink-0 mt-1" />
@@ -62,7 +64,7 @@ const Welcome: React.FC = () => {
                 </div>
             </div>
 
-            <BudgetCalculator />
+           
         </div>
     );
 };

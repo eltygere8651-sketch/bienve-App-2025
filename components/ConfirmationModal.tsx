@@ -24,7 +24,13 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" onClick={onCancel}>
+        <div 
+            className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" 
+            onClick={onCancel}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+        >
             <div
                 className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md transform transition-all"
                 onClick={e => e.stopPropagation()}
