@@ -11,7 +11,18 @@ export let storage: Storage;
 
 export const getFirebaseConfig = () => {
     const configStr = localStorage.getItem(LOCAL_STORAGE_KEYS.FIREBASE_CONFIG);
-    return configStr ? JSON.parse(configStr) : null;
+    if (!configStr) {
+        return null;
+    }
+    try {
+        // Attempt to parse the stored string as JSON.
+        return JSON.parse(configStr);
+    } catch (error) {
+        console.error("Error parsing Firebase config from localStorage. It might be corrupted.", error);
+        // If parsing fails, the data is invalid. Remove it to prevent future errors.
+        localStorage.removeItem(LOCAL_STORAGE_KEYS.FIREBASE_CONFIG);
+        return null;
+    }
 };
 
 export const isFirebaseConfigured = (config: any): boolean => {

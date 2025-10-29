@@ -10,13 +10,20 @@ const Setup: React.FC = () => {
 
     const handleSave = () => {
         setError('');
-        if (!configJson.trim()) {
+        let configToParse = configJson.trim();
+        if (!configToParse) {
             setError('El campo de configuración no puede estar vacío.');
             return;
         }
 
+        // Attempt to extract the JSON object from common paste formats
+        const jsonMatch = configToParse.match(/(\{[\s\S]*\})/);
+        if (jsonMatch && jsonMatch[1]) {
+            configToParse = jsonMatch[1];
+        }
+
         try {
-            const config = JSON.parse(configJson);
+            const config = JSON.parse(configToParse);
             // Basic validation
             if (!config.apiKey || !config.authDomain || !config.projectId || !config.storageBucket || !config.messagingSenderId || !config.appId) {
                 throw new Error('La configuración JSON parece incompleta o tiene un formato incorrecto.');
@@ -25,7 +32,7 @@ const Setup: React.FC = () => {
             // The app will reload after setting the config
         } catch (e) {
             console.error(e);
-            setError('Error al analizar el JSON. Asegúrate de copiar el objeto de configuración completo y válido.');
+            setError('Error al procesar la configuración. Asegúrate de copiar el objeto de configuración completo y válido, que empieza con `{` y termina con `}`.');
         }
     };
 

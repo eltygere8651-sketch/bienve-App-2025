@@ -1,11 +1,13 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
 import { generateWelcomeMessage } from '../services/geminiService';
 import { INTEREST_RATE_CONFIG } from '../config';
-import { auth, db, storage } from '../services/firebaseService';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, writeBatch, query, where } from 'firebase/firestore';
+import { db, storage } from '../services/firebaseService';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, writeBatch, query } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { User } from 'firebase/auth';
+
+const getCollectionRef = (collectionName: string) => collection(db, collectionName);
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -17,17 +19,14 @@ export const useAppData = (
     const [requests, setRequests] = useState<LoanRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    const getCollectionRef = useCallback((collectionName: string) => {
-        if (!user) throw new Error("User not authenticated");
-        return collection(db, "users", user.uid, collectionName);
-    }, [user]);
     
     useEffect(() => {
         if (!user) {
             setClients([]);
             setLoans([]);
             setRequests([]);
+            // Don't set loading to false here, as unauthenticated state is not a final data state.
+            // Let's set it to false only when not logged in to avoid showing loader on welcome page.
             setIsLoading(false);
             return;
         }
@@ -59,21 +58,15 @@ export const useAppData = (
 
         return () => unsubscribes.forEach(unsub => unsub());
 
-    }, [user, getCollectionRef]);
+    }, [user]);
 
 
     const handleLoanRequestSubmit = async (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: File, backId: File }) => {
-        if (!user) {
-            showToast('Necesitas iniciar sesión para enviar una solicitud.', 'error');
-            return;
-        }
-    
         const requestId = `req-${Date.now()}`;
         const frontIdPath = `requests/${requestId}/frontId_${files.frontId.name}`;
         const backIdPath = `requests/${requestId}/backId_${files.backId.name}`;
     
         try {
-            // Subir imágenes a un path temporal o directamente al user path si se decide
             const frontIdRef = ref(storage, frontIdPath);
             await uploadBytes(frontIdRef, files.frontId);
             const frontIdUrl = await getDownloadURL(frontIdRef);
@@ -90,10 +83,7 @@ export const useAppData = (
                 status: RequestStatus.PENDING,
             };
             
-            // Asignar a un admin. En este modelo, el "admin" es el propio usuario.
             await addDoc(getCollectionRef('requests'), newRequest);
-            // No actualizamos estado local, `onSnapshot` lo hará.
-
         } catch (err) {
             console.error("Failed to submit loan request:", err);
             showToast('Error al enviar la solicitud.', 'error');
@@ -102,10 +92,12 @@ export const useAppData = (
     };
     
     const handleApproveRequest = async (request: LoanRequest, loanAmount: number, loanTerm: number) => {
-        if (!user) return;
+        if (!user) {
+            showToast('Acción no autorizada.', 'error');
+            return;
+        }
         
         try {
-            // Generar PDF y subirlo
             const { generateContractPDF } = await import('../services/pdfService');
             const contractPdfBlob = await generateContractPDF({
                 fullName: request.fullName,
@@ -121,7 +113,6 @@ export const useAppData = (
 
             const batch = writeBatch(db);
 
-            // 1. Crear nuevo cliente
             const newClient: Omit<Client, 'id'> = {
                 name: request.fullName,
                 joinDate: new Date().toISOString(),
@@ -129,7 +120,6 @@ export const useAppData = (
             const clientRef = doc(getCollectionRef('clients'));
             batch.set(clientRef, newClient);
 
-            // 2. Crear nuevo préstamo
             const interestRate = INTEREST_RATE_CONFIG.ANNUAL;
             const principal = loanAmount;
             const rate = INTEREST_RATE_CONFIG.MONTHLY / 100;
@@ -154,13 +144,11 @@ export const useAppData = (
             const loanRef = doc(getCollectionRef('loans'));
             batch.set(loanRef, newLoan);
 
-            // 3. Eliminar la solicitud
             const requestRef = doc(getCollectionRef('requests'), request.id);
             batch.delete(requestRef);
 
             await batch.commit();
 
-            // 4. Limpiar archivos de la solicitud en Storage (opcional, pero buena práctica)
             try {
                 const frontIdFileRef = ref(storage, request.frontIdUrl);
                 await deleteObject(frontIdFileRef);
@@ -181,11 +169,13 @@ export const useAppData = (
     };
     
     const handleDenyRequest = async (request: LoanRequest) => {
-        if(!user) return;
+        if(!user) {
+            showToast('Acción no autorizada.', 'error');
+            return;
+        }
         try {
             await deleteDoc(doc(getCollectionRef('requests'), request.id));
             
-             // Limpiar archivos de Storage
             try {
                 const frontIdFileRef = ref(storage, request.frontIdUrl);
                 await deleteObject(frontIdFileRef);
@@ -203,7 +193,10 @@ export const useAppData = (
     };
 
     const handleUpdateRequestStatus = async (requestId: string, status: RequestStatus) => {
-        if(!user) return;
+        if(!user) {
+            showToast('Acción no autorizada.', 'error');
+            return;
+        }
         try {
             await updateDoc(doc(getCollectionRef('requests'), requestId), { status });
             showToast(`Solicitud actualizada a "${status}".`, 'info');
@@ -214,7 +207,10 @@ export const useAppData = (
     };
     
     const handleRegisterPayment = async (loanId: string) => {
-        if(!user) return;
+        if(!user) {
+            showToast('Acción no autorizada.', 'error');
+            return;
+        }
         const loan = loans.find(l => l.id === loanId);
         if (!loan || loan.status === LoanStatus.PAID) return;
         

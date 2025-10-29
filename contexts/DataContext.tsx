@@ -27,15 +27,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { showToast, showConfirmModal, user } = useAppContext();
     const appData = useAppData(showToast, showConfirmModal, user);
 
-    const value: DataContextType = {
-        ...appData,
-        handleLoanRequestSubmit: appData.handleLoanRequestSubmit as any,
-        handleDenyRequest: appData.handleDenyRequest as any,
-    };
-
-
     return (
-        <DataContext.Provider value={value}>
+        <DataContext.Provider value={appData}>
             {children}
         </DataContext.Provider>
     );
