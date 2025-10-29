@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { useAppContext } from './AppContext';
-import { Client, Loan, LoanRequest } from '../types';
+import { Client, Loan, LoanRequest, RequestStatus } from '../types';
 
 interface ClientLoanData extends Client {
     loans: Loan[];
@@ -14,23 +14,28 @@ interface DataContextType {
     isLoading: boolean;
     error: string | null;
     clientLoanData: ClientLoanData[];
-    handleLoanRequestSubmit: (request: Omit<LoanRequest, 'id' | 'requestDate' | 'status'>) => Promise<void>;
-    handleApproveRequest: (requestId: string, loanAmount: number, loanTerm: number) => Promise<void>;
-    handleDenyRequest: (requestId: string) => Promise<void>;
-    handleUpdateRequestStatus: (requestId: string, status: any) => Promise<void>;
+    handleLoanRequestSubmit: (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: File, backId: File }) => Promise<void>;
+    handleApproveRequest: (request: LoanRequest, loanAmount: number, loanTerm: number) => Promise<void>;
+    handleDenyRequest: (request: LoanRequest) => Promise<void>;
+    handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
     handleRegisterPayment: (loanId: string) => Promise<void>;
-    generateDummyData: () => Promise<void>;
-    clearAllData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { showToast, showConfirmModal } = useAppContext();
-    const appData = useAppData(showToast, showConfirmModal);
+    const { showToast, showConfirmModal, user } = useAppContext();
+    const appData = useAppData(showToast, showConfirmModal, user);
+
+    const value: DataContextType = {
+        ...appData,
+        handleLoanRequestSubmit: appData.handleLoanRequestSubmit as any,
+        handleDenyRequest: appData.handleDenyRequest as any,
+    };
+
 
     return (
-        <DataContext.Provider value={appData as DataContextType}>
+        <DataContext.Provider value={value}>
             {children}
         </DataContext.Provider>
     );

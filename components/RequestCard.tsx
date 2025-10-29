@@ -3,7 +3,6 @@ import { LoanRequest, RequestStatus } from '../types';
 import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Download, Printer } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { downloadPdf, generateIdPdf } from '../services/pdfService';
 import ImageViewer from './ImageViewer';
 import { formatCurrency } from '../services/utils';
 
@@ -40,7 +39,7 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
             showConfirmModal({
                 title: 'Confirmar Aprobación',
                 message: `¿Estás seguro de que quieres aprobar un préstamo de ${formatCurrency(amount)} a ${term} meses para ${request.fullName}?`,
-                onConfirm: () => handleApproveRequest(request.id, amount, term),
+                onConfirm: () => handleApproveRequest(request, amount, term),
             });
         } else {
             showToast('Por favor, introduce un monto y un plazo válidos.', 'error');
@@ -51,7 +50,7 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
         showConfirmModal({
             title: 'Confirmar Denegación',
             message: `¿Estás seguro de que quieres denegar y eliminar la solicitud de ${request.fullName}? Esta acción no se puede deshacer.`,
-            onConfirm: () => handleDenyRequest(request.id),
+            onConfirm: () => handleDenyRequest(request),
         });
     };
 
@@ -59,26 +58,9 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
         handleUpdateRequestStatus(request.id, RequestStatus.UNDER_REVIEW);
     };
 
-    const handleDownloadContract = () => {
-        if (request.contractPdf) {
-            downloadPdf(request.contractPdf, `Contrato-${request.fullName.replace(/\s/g, '_')}.pdf`);
-        } else {
-            showToast('No se encontró el contrato en PDF.', 'error');
-        }
-    };
-
-    const handlePrintId = async () => {
-        if (!(request.frontId instanceof Blob) || !(request.backId instanceof Blob)) {
-            showToast('No se encontraron las imágenes del DNI.', 'error');
-            return;
-        }
-        try {
-            await generateIdPdf(request.frontId, request.backId, request.fullName);
-        } catch (error) {
-            console.error("Error generating ID PDF:", error);
-            showToast('No se pudo generar el PDF del DNI.', 'error');
-        }
-    };
+    const openUrl = (url: string) => {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
@@ -114,11 +96,11 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div>
                             <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Anverso DNI</p>
-                            <ImageViewer imageBlob={request.frontId} alt="Front ID" isTestData={request.isTestData} />
+                            <ImageViewer imageUrl={request.frontIdUrl} alt="Front ID" />
                         </div>
                         <div>
                             <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Reverso DNI</p>
-                            <ImageViewer imageBlob={request.backId} alt="Back ID" isTestData={request.isTestData} />
+                            <ImageViewer imageUrl={request.backIdUrl} alt="Back ID" />
                         </div>
                     </div>
                      <div className="space-y-4 mb-6">
@@ -132,16 +114,6 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                                 <p className="text-xs text-gray-500">No se proporcionó firma.</p>
                             )}
                         </div>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                            {request.contractPdf && (
-                                <button onClick={handleDownloadContract} className="w-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 font-bold py-2 px-4 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 flex items-center justify-center text-sm">
-                                    <Download size={16} className="mr-2" /> Descargar Contrato
-                                </button>
-                            )}
-                             <button onClick={handlePrintId} className="w-full bg-gray-100 dark:bg-gray-900/50 text-gray-700 dark:text-gray-300 font-bold py-2 px-4 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 flex items-center justify-center text-sm">
-                                <Printer size={16} className="mr-2" /> Imprimir/Descargar DNI
-                            </button>
-                         </div>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg space-y-4">
                         <div className="flex flex-col md:flex-row items-center gap-4">

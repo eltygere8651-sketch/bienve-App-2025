@@ -1,18 +1,11 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { LoanRequest } from '../types';
 
-const API_KEY = process.env.API_KEY;
-
-if (!API_KEY) {
-    console.warn("API key for Gemini is not set. AI features will not be available.");
-}
-
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+// Fix: Per coding guidelines, API_KEY is assumed to be available in process.env and should be used directly.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getFinancialTip = async (): Promise<string> => {
-    if (!API_KEY) {
-        return "La función de consejos financieros no está disponible. Configure la clave API de Gemini.";
-    }
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -26,9 +19,6 @@ export const getFinancialTip = async (): Promise<string> => {
 };
 
 export const getRandomFact = async (): Promise<string> => {
-    if (!API_KEY) {
-        return "El conocimiento es el interés más poderoso que puedes acumular.";
-    }
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -42,9 +32,6 @@ export const getRandomFact = async (): Promise<string> => {
 };
 
 export const generateWelcomeMessage = async (clientName: string): Promise<string> => {
-    if (!API_KEY) {
-        return `¡Bienvenido/a a bordo, ${clientName}! Estamos muy contentos de tenerte con nosotros.`;
-    }
     try {
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -58,12 +45,8 @@ export const generateWelcomeMessage = async (clientName: string): Promise<string
 };
 
 export const verifyLoanRequestData = async (
-    data: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontId' | 'backId'>
+    data: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>
 ): Promise<{ isValid: boolean; reason: string }> => {
-    if (!API_KEY) {
-        return { isValid: true, reason: 'Verificación de IA no disponible.' };
-    }
-
     const prompt = `
         Analiza los siguientes datos de una solicitud de préstamo como si fueras un analista de riesgos.
         Tu objetivo es detectar información que parezca obviamente falsa, inventada o de prueba.

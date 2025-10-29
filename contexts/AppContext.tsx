@@ -1,6 +1,8 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { AppView } from '../types';
-import { LOCAL_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '../constants';
+import { LOCAL_STORAGE_KEYS } from '../constants';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { auth, isFirebaseConfigured, getFirebaseConfig } from '../services/firebaseService';
 
 type Theme = 'light' | 'dark';
 
@@ -23,14 +25,17 @@ interface AppContextType {
     showToast: (message: string, type: 'success' | 'error' | 'info') => void;
     currentView: AppView;
     setCurrentView: (view: AppView) => void;
-    isAdmin: boolean;
-    handleLogin: (user: string, pass: string) => boolean;
-    handleLogout: () => void;
+    user: User | null;
+    isAuthenticated: boolean;
+    logout: () => void;
     isSidebarOpen: boolean,
     setIsSidebarOpen: (isOpen: boolean) => void;
     confirmState: ConfirmState;
     showConfirmModal: (options: Omit<ConfirmState, 'isOpen'>) => void;
     hideConfirmModal: () => void;
+    isConfigured: boolean;
+    firebaseConfig: any;
+    setFirebaseConfig: (config: any) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -46,10 +51,9 @@ const getInitialTheme = (): Theme => {
 export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [theme, setTheme] = useState<Theme>(getInitialTheme);
     const [toast, setToast] = useState<ToastMessage>({ message: '', type: 'info' });
-    const [isAdmin, setIsAdmin] = useState<boolean>(() => sessionStorage.getItem(SESSION_STORAGE_KEYS.IS_ADMIN) === 'true');
-    const [currentView, setCurrentView] = useState<AppView>(() => (
-        sessionStorage.getItem(SESSION_STORAGE_KEYS.IS_ADMIN) === 'true' ? 'dashboard' : 'welcome'
-    ));
+    const [user, setUser] = useState<User | null>(null);
+    const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+    const [currentView, setCurrentView] = useState<AppView>('welcome');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [confirmState, setConfirmState] = useState<ConfirmState>({
         isOpen: false,
@@ -57,6 +61,24 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         message: '',
         onConfirm: () => {},
     });
+    const [firebaseConfig, setFirebaseConfigState] = useState(() => getFirebaseConfig());
+    const isConfigured = isFirebaseConfigured(firebaseConfig);
+
+    useEffect(() => {
+        if (!isConfigured) return;
+
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+            setIsAuthenticated(!!currentUser);
+            if (currentUser) {
+                setCurrentView(v => (v === 'auth' || v === 'welcome' || v === 'loanRequest' || v === 'setup') ? 'dashboard' : v);
+            } else {
+                setCurrentView('welcome');
+            }
+        });
+
+        return () => unsubscribe();
+    }, [isConfigured]);
 
     useEffect(() => {
         if (theme === 'dark') {
@@ -69,11 +91,11 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }, [theme]);
     
     useEffect(() => {
-        const adminOnlyViews: AppView[] = ['dashboard', 'clients', 'requests', 'receiptGenerator', 'settings'];
-        if (!isAdmin && adminOnlyViews.includes(currentView)) {
-            setCurrentView('welcome');
+        const adminOnlyViews: AppView[] = ['dashboard', 'clients', 'requests', 'receiptGenerator', 'settings', 'dataManagement'];
+        if (!isAuthenticated && adminOnlyViews.includes(currentView)) {
+            setCurrentView('auth');
         }
-    }, [isAdmin, currentView]);
+    }, [isAuthenticated, currentView]);
 
     const handleThemeToggle = () => {
         setTheme(theme === 'light' ? 'dark' : 'light');
@@ -83,26 +105,22 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setToast({ message, type });
     };
 
-    const handleLogin = (user: string, pass: string): boolean => {
-        // Use environment variables if available, otherwise use default credentials for development.
-        const adminUser = process.env.ADMIN_USER || 'admin';
-        const adminPass = process.env.ADMIN_PASS || 'admin123';
-
-        if (user === adminUser && pass === adminPass) {
-            sessionStorage.setItem(SESSION_STORAGE_KEYS.IS_ADMIN, 'true');
-            setIsAdmin(true);
-            showToast('Sesión de administrador iniciada.', 'success');
-            return true;
+    const logout = async () => {
+        try {
+            await signOut(auth);
+            showToast('Sesión cerrada.', 'info');
+            setCurrentView('welcome');
+        } catch (error) {
+            console.error("Error signing out:", error);
+            showToast('Error al cerrar sesión.', 'error');
         }
-        return false;
     };
-
-    const handleLogout = () => {
-        sessionStorage.removeItem(SESSION_STORAGE_KEYS.IS_ADMIN);
-        setIsAdmin(false);
-        setCurrentView('welcome');
-        showToast('Sesión cerrada.', 'info');
-    };
+    
+    const setFirebaseConfig = (config: any) => {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.FIREBASE_CONFIG, JSON.stringify(config));
+        setFirebaseConfigState(config);
+        window.location.reload(); // Reload to re-initialize firebase with new config
+    }
 
     const showConfirmModal = (options: Omit<ConfirmState, 'isOpen'>) => {
         setConfirmState({ ...options, isOpen: true });
@@ -119,14 +137,17 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         showToast,
         currentView,
         setCurrentView,
-        isAdmin,
-        handleLogin,
-        handleLogout,
+        user,
+        isAuthenticated,
+        logout,
         isSidebarOpen,
         setIsSidebarOpen,
         confirmState,
         showConfirmModal,
         hideConfirmModal,
+        isConfigured,
+        firebaseConfig,
+        setFirebaseConfig
     };
 
     return (

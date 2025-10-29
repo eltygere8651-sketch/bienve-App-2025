@@ -16,7 +16,8 @@
     "@google/genai": "^1.27.0",
     "dexie": "^4.0.7",
     "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2"
+    "jspdf-autotable": "^3.8.2",
+    "firebase": "^12.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

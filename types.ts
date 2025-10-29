@@ -22,16 +22,14 @@ export interface Loan {
     monthlyPayment: number;
     totalRepayment: number;
     paymentsMade: number;
-    isTestData?: boolean;
     signature?: string;
-    contractPdf?: Blob;
+    contractPdfUrl?: string;
 }
 
 export interface Client {
     id: string;
     name: string;
     joinDate: string;
-    isTestData?: boolean;
 }
 
 export interface LoanRequest {
@@ -45,16 +43,14 @@ export interface LoanRequest {
     loanReason: string;
     employmentStatus: string;
     contractType?: string;
-    frontId: File | Blob;
-    backId: File | Blob;
+    frontIdUrl: string;
+    backIdUrl: string;
     requestDate: string;
     status: RequestStatus;
-    isTestData?: boolean;
     signature?: string;
-    contractPdf?: Blob;
 }
 
 
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'setup' | 'auth';
 
 export type FilterStatus = LoanStatus | 'Todos';

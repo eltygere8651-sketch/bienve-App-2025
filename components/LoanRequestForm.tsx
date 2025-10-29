@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Loader2, ArrowLeft, FilePlus } from 'lucide-react';
+import { CheckCircle, Loader2, ArrowLeft, FilePlus, Upload } from 'lucide-react';
 import { LoanRequest } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
-import { generateContractPDF } from '../services/pdfService';
 import { InputField, SelectField, FileUploadField } from './FormFields';
-import { verifyLoanRequestData } from '../services/geminiService';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 
 const initialFormData = {
@@ -15,7 +13,7 @@ const initialFormData = {
 
 const LoanRequestForm: React.FC = () => {
     const { handleLoanRequestSubmit } = useDataContext();
-    const { showToast, isAdmin } = useAppContext();
+    const { showToast } = useAppContext();
     
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState(initialFormData);
@@ -24,7 +22,6 @@ const LoanRequestForm: React.FC = () => {
     const [frontIdPreview, setFrontIdPreview] = useState<string | null>(null);
     const [backIdPreview, setBackIdPreview] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isVerifying, setIsVerifying] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
     const [signatureError, setSignatureError] = useState(false);
     const signaturePadRef = useRef<SignaturePadRef>(null);
@@ -57,44 +54,20 @@ const LoanRequestForm: React.FC = () => {
         }
     };
 
-    const handleNextStep = async (e: React.FormEvent) => {
+    const handleNextStep = (e: React.FormEvent) => {
         e.preventDefault();
         if (!frontId || !backId) {
             showToast('Por favor, sube ambas imágenes del documento.', 'error');
             return;
         }
-        
-        if (isAdmin) {
-            setStep(2);
-            return;
-        }
-
-        setIsVerifying(true);
-        try {
-            const { contractType, ...restData } = formData;
-            const verificationData = {
-                ...restData,
-                loanAmount: parseFloat(formData.loanAmount) || 0,
-            };
-            if (formData.employmentStatus === 'Empleado') {
-                (verificationData as any).contractType = contractType;
-            }
-
-            const verification = await verifyLoanRequestData(verificationData as any);
-            if (!verification.isValid) {
-                showToast(`Por favor, revisa tus datos: ${verification.reason}`, 'error');
-                return;
-            }
-            setStep(2);
-        } catch (error) {
-            console.error("Error during AI verification:", error);
-            showToast("Hubo un error al verificar los datos. Por favor, intenta de nuevo.", 'error');
-        } finally {
-            setIsVerifying(false);
-        }
+        setStep(2);
     };
 
     const handleSubmit = async () => {
+        if (!frontId || !backId) {
+            showToast('Faltan las imágenes del documento.', 'error');
+            return;
+        }
         const signatureImage = signaturePadRef.current?.toDataURL();
         if (!signatureImage) {
             showToast('Por favor, firma el contrato para continuar.', 'error');
@@ -102,29 +75,20 @@ const LoanRequestForm: React.FC = () => {
             return;
         }
         setSignatureError(false);
-
         setIsSubmitting(true);
         try {
-            const contractPdf = await generateContractPDF({
-                ...formData,
-                loanAmount: parseFloat(formData.loanAmount) || 0,
-            }, signatureImage);
-
             const { contractType, ...restData } = formData;
-            const submissionData: Omit<LoanRequest, 'id' | 'requestDate' | 'status'> = {
+            const submissionData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'> = {
                 ...restData,
                 loanAmount: parseFloat(formData.loanAmount) || 0,
-                frontId: frontId!,
-                backId: backId!,
                 signature: signatureImage,
-                contractPdf,
             };
 
             if (formData.employmentStatus === 'Empleado') {
                 (submissionData as any).contractType = contractType;
             }
             
-            await handleLoanRequestSubmit(submissionData);
+            await handleLoanRequestSubmit(submissionData, { frontId, backId });
             setIsSubmitted(true);
         } catch (error) {
             console.error("Error processing form:", error);
@@ -151,7 +115,7 @@ const LoanRequestForm: React.FC = () => {
             <div className="max-w-2xl mx-auto text-center py-16">
                  <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
                  <h1 className="mt-4 text-3xl font-bold text-gray-800 dark:text-gray-100">¡Solicitud Enviada!</h1>
-                 <p className="mt-2 text-gray-600 dark:text-gray-300">Gracias por tu interés. Tu solicitud ha sido registrada y será revisada.</p>
+                 <p className="mt-2 text-gray-600 dark:text-gray-300">Gracias por tu interés. Tu solicitud ha sido registrada y será revisada por un administrador.</p>
                  <button 
                     onClick={resetForm} 
                     className="mt-8 inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105"
@@ -208,9 +172,8 @@ const LoanRequestForm: React.FC = () => {
                         </div>
                     </div>
                     <div className="text-right">
-                        <button type="submit" className="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105 disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center justify-center" disabled={isVerifying}>
-                             {isVerifying ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
-                             {isVerifying ? 'Verificando...' : 'Siguiente: Aceptar Contrato'}
+                        <button type="submit" className="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105">
+                             Siguiente: Aceptar Contrato
                         </button>
                     </div>
                 </form>
@@ -237,8 +200,8 @@ const LoanRequestForm: React.FC = () => {
                             Volver
                         </button>
                         <button onClick={handleSubmit} disabled={isSubmitting} className="bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform hover:scale-105 disabled:bg-green-400 disabled:cursor-not-allowed flex items-center justify-center">
-                            {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle className="mr-2 h-5 w-5" />}
-                            {isSubmitting ? 'Procesando...' : 'Aceptar y Enviar Solicitud'}
+                            {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Upload className="mr-2 h-5 w-5" />}
+                            {isSubmitting ? 'Enviando...' : 'Aceptar y Enviar Solicitud'}
                         </button>
                     </div>
                 </div>

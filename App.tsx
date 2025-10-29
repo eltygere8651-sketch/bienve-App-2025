@@ -4,41 +4,54 @@ import Dashboard from './components/Dashboard';
 import ClientList from './components/ClientList';
 import LoanRequestForm from './components/LoanRequestForm';
 import RequestList from './components/RequestList';
-import Login from './components/Login';
+import Auth from './components/Auth';
 import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, FlaskConical, Trash2, TestTubeDiagonal, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import ReceiptGenerator from './components/ReceiptGenerator';
 import SettingsComponent from './components/Settings';
+import DataManagement from './components/DataManagement';
+import Setup from './components/Setup';
 
 const App: React.FC = () => {
     const { 
         theme, 
         currentView, 
         isSidebarOpen,
-        isAdmin,
         toast,
         confirmState,
         handleThemeToggle, 
         setCurrentView, 
         setIsSidebarOpen,
         showToast,
-        handleLogout,
-        hideConfirmModal
+        hideConfirmModal,
+        isConfigured,
+        isAuthenticated,
+        logout
     } = useAppContext();
     
-    const { requests, isLoading, error, generateDummyData, clearAllData } = useDataContext();
+    const { requests, isLoading, error } = useDataContext();
 
     const handleLogoClick = () => {
-        setCurrentView(isAdmin ? 'dashboard' : 'welcome');
+        setCurrentView(isAuthenticated ? 'dashboard' : 'welcome');
     };
 
+    if (!isConfigured) {
+        return <Setup />;
+    }
+
+    if (!isAuthenticated && currentView !== 'welcome' && currentView !== 'loanRequest' && currentView !== 'auth') {
+        return <Auth />;
+    }
+    
+    const isAdmin = isAuthenticated; // Alias for clarity in existing components
+
     const renderContent = () => {
-        if (isLoading) {
+        if (isLoading && isAuthenticated) { // Show loader only when logged in and loading data
             return (
                 <div className="flex justify-center items-center h-full">
                     <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
@@ -57,14 +70,15 @@ const App: React.FC = () => {
         
         switch (currentView) {
             case 'welcome': return <Welcome />;
-            case 'dashboard': return <Dashboard />;
-            case 'clients': return <ClientList />;
+            case 'dashboard': return isAuthenticated ? <Dashboard /> : <Auth />;
+            case 'clients': return isAuthenticated ? <ClientList /> : <Auth />;
             case 'loanRequest': return <LoanRequestForm />;
-            case 'requests': return <RequestList />;
-            case 'adminLogin': return <Login />;
-            case 'receiptGenerator': return <ReceiptGenerator />;
-            case 'settings': return <SettingsComponent />;
-            default: return isAdmin ? <Dashboard /> : <Welcome />;
+            case 'requests': return isAuthenticated ? <RequestList /> : <Auth />;
+            case 'auth': return <Auth />;
+            case 'receiptGenerator': return isAuthenticated ? <ReceiptGenerator /> : <Auth />;
+            case 'settings': return isAuthenticated ? <SettingsComponent /> : <Auth />;
+            case 'dataManagement': return isAuthenticated ? <DataManagement /> : <Auth />;
+            default: return isAuthenticated ? <Dashboard /> : <Welcome />;
         }
     };
 
@@ -103,13 +117,7 @@ const App: React.FC = () => {
                                      <ul>
                                         <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />
                                         <NavItem icon={<ReceiptText />} label="Generar Recibo" view="receiptGenerator" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />
-                                    </ul>
-                                </div>
-                                <div className="mt-4 pt-4 border-t border-gray-700">
-                                    <h3 className="px-3 text-xs font-semibold text-amber-500 uppercase tracking-wider">Desarrollo</h3>
-                                    <ul>
-                                        <NavItem icon={<TestTubeDiagonal />} label="Generar Datos Falsos" onClick={generateDummyData} isSidebarOpen={isSidebarOpen} isTestButton/>
-                                        <NavItem icon={<Trash2 />} label="Limpiar Datos de Prueba" onClick={clearAllData} isSidebarOpen={isSidebarOpen} isTestButton/>
+                                        <NavItem icon={<DatabaseBackup />} label="Gestión de Datos" view="dataManagement" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />
                                     </ul>
                                 </div>
                             </>
@@ -128,7 +136,7 @@ const App: React.FC = () => {
                         </button>
                         {isAdmin ? (
                              <button
-                                onClick={handleLogout}
+                                onClick={logout}
                                 className="w-full flex items-center justify-center p-3 my-1 rounded-lg cursor-pointer text-gray-300 hover:bg-gray-700 hover:text-white"
                                 aria-label="Cerrar sesión"
                             >
@@ -139,7 +147,7 @@ const App: React.FC = () => {
                             </button>
                         ) : (
                             <button
-                                onClick={() => setCurrentView('adminLogin')}
+                                onClick={() => setCurrentView('auth')}
                                 className="w-full flex items-center justify-center p-3 my-1 rounded-lg cursor-pointer text-gray-300 hover:bg-gray-700 hover:text-white"
                                 aria-label="Iniciar sesión de administrador"
                             >
@@ -156,9 +164,9 @@ const App: React.FC = () => {
                 </aside>
                 <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 overflow-y-auto">
                      {isAdmin && (
-                        <div className="bg-amber-100 dark:bg-amber-900/50 border-l-4 border-amber-500 text-amber-700 dark:text-amber-200 p-4 rounded-md mb-6 flex items-center shadow-md">
-                            <FlaskConical className="h-5 w-5 mr-3" />
-                            <p className="font-bold">Modo Administrador Activo.</p>
+                        <div className="bg-green-100 dark:bg-green-900/50 border-l-4 border-green-500 text-green-700 dark:text-green-200 p-4 rounded-md mb-6 flex items-center shadow-md">
+                            <Wrench className="h-5 w-5 mr-3" />
+                            <p className="font-bold">Modo Administrador Activo (Datos en la nube).</p>
                         </div>
                     )}
                     <div className="flex-grow">
