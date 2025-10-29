@@ -13,7 +13,7 @@ export const SESSION_STORAGE_KEYS = {
     IS_ADMIN: 'isAdmin',
 };
 
-// FIX: Added LOYALTY_TIERS constant for the loyalty program feature.
+// FIX: Added LOYALTY_TIERS constant which was missing and causing an error in LoyaltyProgramInfo.tsx.
 export const LOYALTY_TIERS = {
     [LoyaltyStatus.BRONZE]: {
         name: LoyaltyStatus.BRONZE,
@@ -27,7 +27,7 @@ export const LOYALTY_TIERS = {
     },
     [LoyaltyStatus.GOLD]: {
         name: LoyaltyStatus.GOLD,
-        pointsRequired: 250,
-        interestRateModifier: -0.02,
-    },
+        pointsRequired: 500,
+        interestRateModifier: -0.025,
+    }
 };

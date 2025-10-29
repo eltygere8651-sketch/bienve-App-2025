@@ -16,12 +16,14 @@ export const useAppData = (
     
     const updateOverdueLoans = useCallback(async (allLoans: Loan[]): Promise<Loan[]> => {
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize today to the start of the day
         const loansToUpdate: { key: string, changes: { status: LoanStatus } }[] = [];
         const pendingLoans = allLoans.filter(loan => loan.status === LoanStatus.PENDING);
         
         pendingLoans.forEach(loan => {
             const dueDate = new Date(loan.startDate);
             dueDate.setMonth(dueDate.getMonth() + loan.paymentsMade + 1);
+            dueDate.setHours(0, 0, 0, 0); // Normalize due date
             
             if (today > dueDate) {
                 loansToUpdate.push({ key: loan.id, changes: { status: LoanStatus.OVERDUE } });
@@ -199,20 +201,31 @@ export const useAppData = (
     }, [clients, loans]);
 
     const generateDummyData = async () => {
-        const today = new Date();
-        const createDate = (monthsAgo: number) => new Date(new Date().setMonth(today.getMonth() - monthsAgo)).toISOString();
+        const now = new Date();
+        const createDate = (months: number, days: number = 0): string => {
+            const date = new Date(now);
+            date.setMonth(date.getMonth() + months);
+            date.setDate(date.getDate() + days);
+            return date.toISOString();
+        };
 
         const dummyClients: Client[] = [
-            { id: 'client-1', name: 'Juan Pérez (Prueba)', joinDate: createDate(12), isTestData: true },
-            { id: 'client-2', name: 'María García (Prueba)', joinDate: createDate(9), isTestData: true },
+            { id: 'client-1', name: 'Juan Pérez (Prueba)', joinDate: createDate(-12), isTestData: true },
+            { id: 'client-2', name: 'María García (Prueba)', joinDate: createDate(-9), isTestData: true },
+            { id: 'client-3', name: 'Ana Torres (Prueba)', joinDate: createDate(-2), isTestData: true },
         ];
         const dummyLoans: Loan[] = [
-            { id: 'loan-1', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 500, interestRate: 96, term: 6, startDate: createDate(1), status: LoanStatus.PENDING, monthlyPayment: 99.56, totalRepayment: 597.36, paymentsMade: 0, isTestData: true },
-            { id: 'loan-2', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 300, interestRate: 96, term: 3, startDate: createDate(7), status: LoanStatus.PAID, monthlyPayment: 112.98, totalRepayment: 338.94, paymentsMade: 3, isTestData: true },
-            { id: 'loan-3', clientId: 'client-2', clientName: 'María García (Prueba)', amount: 1200, interestRate: 96, term: 12, startDate: createDate(4), status: LoanStatus.PENDING, monthlyPayment: 154.55, totalRepayment: 1854.6, paymentsMade: 2, isTestData: true },
+            // Paid loan
+            { id: 'loan-1', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 300, interestRate: 96, term: 3, startDate: createDate(-7), status: LoanStatus.PAID, monthlyPayment: 112.98, totalRepayment: 338.94, paymentsMade: 3, isTestData: true },
+            // Overdue loan
+            { id: 'loan-2', clientId: 'client-1', clientName: 'Juan Pérez (Prueba)', amount: 500, interestRate: 96, term: 6, startDate: createDate(-3), status: LoanStatus.PENDING, monthlyPayment: 99.56, totalRepayment: 597.36, paymentsMade: 1, isTestData: true }, // Due date was 1 month ago
+            // Pending loan (up to date)
+            { id: 'loan-3', clientId: 'client-2', clientName: 'María García (Prueba)', amount: 1200, interestRate: 96, term: 12, startDate: createDate(-4), status: LoanStatus.PENDING, monthlyPayment: 154.55, totalRepayment: 1854.6, paymentsMade: 4, isTestData: true },
+            // Freshly started loan
+            { id: 'loan-4', clientId: 'client-3', clientName: 'Ana Torres (Prueba)', amount: 150, interestRate: 96, term: 2, startDate: createDate(0, -15), status: LoanStatus.PENDING, monthlyPayment: 81.56, totalRepayment: 163.12, paymentsMade: 0, isTestData: true },
         ];
         const dummyRequests: LoanRequest[] = [
-            { id: 'req-1', fullName: 'Carlos Sanchez (Prueba)', idNumber: 'Z1234567X', address: 'Calle Falsa 123', phone: '600112233', email: 'carlos@example.com', loanAmount: 800, loanReason: 'Mejoras Hogar', employmentStatus: 'Empleado', contractType: 'Indefinido', frontId: new Blob(), backId: new Blob(), requestDate: new Date().toISOString(), status: RequestStatus.PENDING, isTestData: true, signature: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', contractPdf: new Blob() },
+            { id: 'req-1', fullName: 'Carlos Sanchez (Prueba)', idNumber: 'Z1234567X', address: 'Calle Falsa 123', phone: '600112233', email: 'carlos@example.com', loanAmount: 800, loanReason: 'Mejoras Hogar', employmentStatus: 'Empleado', contractType: 'Indefinido', frontId: new Blob(), backId: new Blob(), requestDate: createDate(0, -2), status: RequestStatus.PENDING, isTestData: true, signature: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', contractPdf: new Blob() },
         ];
         
         try {

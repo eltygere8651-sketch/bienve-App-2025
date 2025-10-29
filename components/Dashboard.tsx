@@ -144,7 +144,7 @@ const Dashboard: React.FC = () => {
                                 </thead>
                                 <tbody>
                                     {filteredLoans.map(loan => (
-                                        <tr key={loan.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                        <tr key={loan.id} className={`border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${loan.status === LoanStatus.OVERDUE ? 'bg-red-50 dark:bg-red-900/20' : ''}`}>
                                             <td className="p-3 font-medium text-gray-800 dark:text-gray-100">{loan.clientName}</td>
                                             <td className="p-3 text-gray-700 dark:text-gray-300">{formatCurrency(loan.amount)}</td>
                                             <td className="p-3"><StatusBadge status={loan.status} /></td>

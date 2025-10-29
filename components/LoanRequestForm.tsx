@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Loader2, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Loader2, ArrowLeft, FilePlus } from 'lucide-react';
 import { LoanRequest } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
@@ -8,15 +8,17 @@ import { InputField, SelectField, FileUploadField } from './FormFields';
 import { verifyLoanRequestData } from '../services/geminiService';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 
+const initialFormData = {
+    fullName: '', idNumber: '', address: '', phone: '', email: '',
+    loanAmount: '1000', loanReason: '', employmentStatus: '', contractType: '',
+};
+
 const LoanRequestForm: React.FC = () => {
     const { handleLoanRequestSubmit } = useDataContext();
     const { showToast, isAdmin } = useAppContext();
     
     const [step, setStep] = useState(1);
-    const [formData, setFormData] = useState({
-        fullName: '', idNumber: '', address: '', phone: '', email: '',
-        loanAmount: '1000', loanReason: '', employmentStatus: '', contractType: '',
-    });
+    const [formData, setFormData] = useState(initialFormData);
     const [frontId, setFrontId] = useState<File | null>(null);
     const [backId, setBackId] = useState<File | null>(null);
     const [frontIdPreview, setFrontIdPreview] = useState<string | null>(null);
@@ -132,12 +134,31 @@ const LoanRequestForm: React.FC = () => {
         }
     };
     
+    const resetForm = () => {
+        setFormData(initialFormData);
+        setFrontId(null);
+        setBackId(null);
+        setFrontIdPreview(null);
+        setBackIdPreview(null);
+        setSignatureError(false);
+        signaturePadRef.current?.clear();
+        setStep(1);
+        setIsSubmitted(false);
+    };
+
     if (isSubmitted) {
         return (
             <div className="max-w-2xl mx-auto text-center py-16">
                  <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
                  <h1 className="mt-4 text-3xl font-bold text-gray-800 dark:text-gray-100">¡Solicitud Enviada!</h1>
                  <p className="mt-2 text-gray-600 dark:text-gray-300">Gracias por tu interés. Tu solicitud ha sido registrada y será revisada.</p>
+                 <button 
+                    onClick={resetForm} 
+                    className="mt-8 inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105"
+                >
+                    <FilePlus className="mr-2 h-5 w-5" />
+                    Realizar otra solicitud
+                 </button>
             </div>
         );
     }
