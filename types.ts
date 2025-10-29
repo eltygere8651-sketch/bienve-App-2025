@@ -10,13 +10,6 @@ export enum RequestStatus {
     UNDER_REVIEW = 'En Estudio',
 }
 
-// FIX: Added LoyaltyStatus enum to be used by the LoyaltyProgramInfo component and constants.
-export enum LoyaltyStatus {
-    BRONZE = 'Bronce',
-    SILVER = 'Plata',
-    GOLD = 'Oro',
-}
-
 export interface Loan {
     id: string;
     clientId: string;

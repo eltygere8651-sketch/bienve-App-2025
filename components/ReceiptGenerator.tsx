@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { ReceiptText, Download } from 'lucide-react';
 import { generatePaymentReceipt } from '../services/pdfService';
-import { formatCurrency } from '../services/utils';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
+import { useAppContext } from '../contexts/AppContext';
 
 const ReceiptGenerator: React.FC = () => {
+    const { showToast } = useAppContext();
     const [clientName, setClientName] = useState('');
     const [loanId, setLoanId] = useState('');
     const [previousBalance, setPreviousBalance] = useState('');
@@ -15,6 +16,17 @@ const ReceiptGenerator: React.FC = () => {
     const signaturePadRef = useRef<SignaturePadRef>(null);
 
     const isFormValid = clientName.trim() !== '' && parseFloat(paymentAmount) > 0 && previousBalance !== '' && !isNaN(parseFloat(previousBalance));
+
+    const resetForm = () => {
+        setClientName('');
+        setLoanId('');
+        setPreviousBalance('');
+        setPaymentAmount('');
+        setPaymentType('Capital + Interés');
+        setPaymentDate(new Date().toISOString().split('T')[0]);
+        setNotes('');
+        signaturePadRef.current?.clear();
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -34,6 +46,9 @@ const ReceiptGenerator: React.FC = () => {
             previousBalance: prevBalance,
             newBalance: prevBalance - amount,
         }, signatureImage);
+
+        showToast('Recibo generado y descargado con éxito.', 'success');
+        resetForm();
     };
 
     return (

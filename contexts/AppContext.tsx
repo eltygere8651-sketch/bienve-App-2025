@@ -84,14 +84,9 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const handleLogin = (user: string, pass: string): boolean => {
-        const adminUser = process.env.ADMIN_USER;
-        const adminPass = process.env.ADMIN_PASS;
-
-        if (!adminUser || !adminPass) {
-            console.error("Error: ADMIN_USER and ADMIN_PASS environment variables are not set.");
-            showToast('La configuración de inicio de sesión del administrador no está disponible.', 'error');
-            return false;
-        }
+        // Use environment variables if available, otherwise use default credentials for development.
+        const adminUser = process.env.ADMIN_USER || 'admin';
+        const adminPass = process.env.ADMIN_PASS || 'admin123';
 
         if (user === adminUser && pass === adminPass) {
             sessionStorage.setItem(SESSION_STORAGE_KEYS.IS_ADMIN, 'true');
