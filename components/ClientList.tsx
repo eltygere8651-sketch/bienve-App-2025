@@ -4,6 +4,7 @@ import { useDataContext } from '../contexts/DataContext';
 import { Users, Download, Search } from 'lucide-react';
 import { generateClientReport } from '../services/pdfService';
 import { formatCurrency } from '../services/utils';
+import LoanDetailsModal from './LoanDetailsModal';
 
 interface ClientWithData extends Client {
     loans: Loan[];
@@ -15,56 +16,78 @@ const ClientCard: React.FC<{ client: ClientWithData & { loans: Loan[] } }> = ({ 
         .filter(loan => loan.status === LoanStatus.PENDING || loan.status === LoanStatus.OVERDUE)
         .reduce((acc, loan) => acc + (loan.totalRepayment - (loan.monthlyPayment * loan.paymentsMade)), 0);
 
+    const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+
     const handleDownloadReport = () => {
         generateClientReport(client, client.loans);
     };
 
+    const handleLoanClick = (loan: Loan) => {
+        setSelectedLoan(loan);
+    };
+    
+    const closeModal = () => {
+        setSelectedLoan(null);
+    };
+
     return (
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md transition-all hover:shadow-lg hover:scale-[1.02] flex flex-col animate-fade-in">
-            <div className="flex justify-between items-start">
-                <div>
-                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">{client.name}</h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Cliente desde: {new Date(client.joinDate).toLocaleDateString()}</p>
-                </div>
-            </div>
-            <div className="mt-6 grid grid-cols-2 gap-4 text-center">
-                <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Total Prestado</p>
-                    <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{formatCurrency(totalLoaned)}</p>
-                </div>
-                 <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Saldo Pendiente</p>
-                    <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{formatCurrency(outstandingBalance)}</p>
-                </div>
-            </div>
-             <div className="mt-6 flex-grow">
-                <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">Historial de Préstamos ({client.loans.length})</h4>
-                 {client.loans.length > 0 ? (
-                    <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                        {client.loans.map(loan => (
-                            <div key={loan.id} className="flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md text-sm">
-                                <span className="text-gray-700 dark:text-gray-300">{new Date(loan.startDate).toLocaleDateString()} - {formatCurrency(loan.amount)}</span>
-                                <span className={`px-2 py-0.5 text-xs rounded-full ${
-                                    loan.status === LoanStatus.PAID ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 
-                                    loan.status === LoanStatus.PENDING ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
-                                }`}>{loan.status}</span>
-                            </div>
-                        ))}
+        <>
+            <LoanDetailsModal
+                isOpen={!!selectedLoan}
+                onClose={closeModal}
+                loan={selectedLoan}
+                client={client}
+            />
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md transition-all hover:shadow-lg hover:scale-[1.02] flex flex-col animate-fade-in">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">{client.name}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Cliente desde: {new Date(client.joinDate).toLocaleDateString()}</p>
                     </div>
-                 ) : (
-                    <div className="text-center text-xs text-gray-500 dark:text-gray-400 py-4">Sin préstamos.</div>
-                 )}
-             </div>
-             <div className="mt-6 text-right">
-                <button
-                    onClick={handleDownloadReport}
-                    className="inline-flex items-center px-4 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-md hover:bg-blue-200 dark:hover:bg-blue-800"
-                >
-                    <Download size={16} className="mr-2" />
-                    Descargar Informe PDF
-                </button>
-             </div>
-        </div>
+                </div>
+                <div className="mt-6 grid grid-cols-2 gap-4 text-center">
+                    <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Total Prestado</p>
+                        <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{formatCurrency(totalLoaned)}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">Saldo Pendiente</p>
+                        <p className="text-lg font-bold text-gray-700 dark:text-gray-200">{formatCurrency(outstandingBalance)}</p>
+                    </div>
+                </div>
+                <div className="mt-6 flex-grow">
+                    <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">Historial de Préstamos ({client.loans.length})</h4>
+                    {client.loans.length > 0 ? (
+                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {client.loans.map(loan => (
+                                <div 
+                                    key={loan.id} 
+                                    className="flex justify-between items-center bg-gray-50 dark:bg-gray-700/50 p-2 rounded-md text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
+                                    onClick={() => handleLoanClick(loan)}
+                                >
+                                    <span className="text-gray-700 dark:text-gray-300">{new Date(loan.startDate).toLocaleDateString()} - {formatCurrency(loan.amount)}</span>
+                                    <span className={`px-2 py-0.5 text-xs rounded-full ${
+                                        loan.status === LoanStatus.PAID ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 
+                                        loan.status === LoanStatus.PENDING ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+                                    }`}>{loan.status}</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center text-xs text-gray-500 dark:text-gray-400 py-4">Sin préstamos.</div>
+                    )}
+                </div>
+                <div className="mt-6 text-right">
+                    <button
+                        onClick={handleDownloadReport}
+                        className="inline-flex items-center px-4 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-md hover:bg-blue-200 dark:hover:bg-blue-800"
+                    >
+                        <Download size={16} className="mr-2" />
+                        Descargar Informe PDF
+                    </button>
+                </div>
+            </div>
+        </>
     );
 };
 

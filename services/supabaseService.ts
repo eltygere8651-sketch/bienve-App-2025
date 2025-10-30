@@ -3,7 +3,18 @@ import { LOCAL_STORAGE_KEYS } from '../constants';
 
 export let supabase: SupabaseClient | null = null;
 
+// Estas son las variables que configurarás en tu servicio de hosting (Vercel, Netlify, etc.)
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+
 export const getSupabaseConfig = (): { url: string; anonKey: string } | null => {
+    // Prioridad 1: Variables de Entorno (para producción/despliegue)
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+        return { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
+    }
+
+    // Prioridad 2: Configuración en LocalStorage (para configuración manual del admin)
     const configStr = localStorage.getItem(LOCAL_STORAGE_KEYS.SUPABASE_CONFIG);
     if (!configStr) {
         return null;
