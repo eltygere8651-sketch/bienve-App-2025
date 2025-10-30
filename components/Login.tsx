@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Handshake, Shield } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { LOCAL_STORAGE_KEYS } from '../constants';
-// Fix: Import signIn from firebaseService to handle authentication.
-import { signIn } from '../services/firebaseService';
+// Fix: Import signIn from supabaseService to handle authentication.
+import { signIn } from '../services/supabaseService';
 
 const Login: React.FC = () => {
     // Fix: Destructure isAuthenticated and showToast instead of isAdmin and handleLogin.
@@ -33,7 +33,13 @@ const Login: React.FC = () => {
         setError('');
         
         try {
-            await signIn(email, password);
+            // Fix: Supabase signIn returns an error object, it does not throw on auth errors.
+            // We'll throw it manually to be caught by the catch block.
+            const { error: authError } = await signIn(email, password);
+            if (authError) {
+                throw authError;
+            }
+
             showToast('Inicio de sesión exitoso.', 'success');
 
             if (rememberMe) {
@@ -48,15 +54,12 @@ const Login: React.FC = () => {
             setCurrentView('dashboard');
         } catch (err: any) {
             console.error("Error signing in:", err);
-            if (err.code) {
-                switch (err.code) {
-                    case 'auth/user-not-found':
-                    case 'auth/wrong-password':
-                    case 'auth/invalid-credential':
-                        setError('Correo electrónico o contraseña incorrectos.');
-                        break;
-                    default:
-                        setError('Ocurrió un error. Por favor, inténtalo de nuevo.');
+            // Fix: Handle Supabase error messages instead of Firebase error codes.
+            if (err.message) {
+                if (err.message.includes('Invalid login credentials')) {
+                    setError('Correo electrónico o contraseña incorrectos.');
+                } else {
+                    setError('Ocurrió un error. Por favor, inténtalo de nuevo.');
                 }
             } else {
                 setError('Ocurrió un error inesperado.');

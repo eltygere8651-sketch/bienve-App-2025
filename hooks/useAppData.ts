@@ -1,22 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
 import { generateWelcomeMessage } from '../services/geminiService';
 import { INTEREST_RATE_CONFIG } from '../config';
-import { db, storage, getPathFromUrl } from '../services/firebaseService';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, writeBatch, query } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { User } from 'firebase/auth';
-
-const getCollectionRef = (collectionName: string) => {
-    if (!db) {
-        throw new Error("Firestore is not initialized.");
-    }
-    return collection(db, collectionName);
-}
+import { supabase } from '../services/supabaseService';
+import { User } from '@supabase/supabase-js';
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
-    showConfirmModal: (options: { title: string; message: string; onConfirm: () => void; }) => void,
     user: User | null
 ) => {
     const [clients, setClients] = useState<Client[]>([]);
@@ -24,87 +14,46 @@ export const useAppData = (
     const [requests, setRequests] = useState<LoanRequest[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    
-    useEffect(() => {
-        // Guard: Ensure Firebase services are initialized and user is logged in before proceeding.
-        if (!user || !db || !storage) {
-            setClients([]);
-            setLoans([]);
-            setRequests([]);
-            // Only set loading to false if we are not expecting a user. If user is null but auth is loading, we wait.
-            if (!user) { 
-                setIsLoading(false);
-            }
-            return;
-        }
-
-        setIsLoading(true);
-        const collectionsToWatch = ['clients', 'loans', 'requests'];
-        const unsubscribes = collectionsToWatch.map(collectionName => {
-            const q = query(getCollectionRef(collectionName));
-            return onSnapshot(q, (querySnapshot) => {
-                const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                switch (collectionName) {
-                    case 'clients':
-                        setClients(data as Client[]);
-                        break;
-                    case 'loans':
-                        setLoans(data as Loan[]);
-                        break;
-                    case 'requests':
-                        setRequests(data as LoanRequest[]);
-                        break;
-                }
-                setIsLoading(false);
-            }, (err) => {
-                console.error(`Error fetching ${collectionName}:`, err);
-                setError(`No se pudieron cargar los datos de ${collectionName}. Por favor, revisa tu conexión y los permisos de Firestore.`);
-                setIsLoading(false);
-            });
-        });
-
-        return () => unsubscribes.forEach(unsub => unsub());
-
-    }, [user]);
-
 
     const handleLoanRequestSubmit = async (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: File, backId: File }) => {
-        if (!storage || !db) throw new Error("Firebase services not initialized.");
+        if (!supabase) throw new Error("Supabase services not initialized.");
         const requestId = `req-${Date.now()}`;
-        const frontIdPath = `requests/${requestId}/frontId_${files.frontId.name}`;
-        const backIdPath = `requests/${requestId}/backId_${files.backId.name}`;
-    
+        const frontIdPath = `${requestId}/frontId_${files.frontId.name}`;
+        const backIdPath = `${requestId}/backId_${files.backId.name}`;
+
         try {
-            const frontIdRef = ref(storage, frontIdPath);
-            await uploadBytes(frontIdRef, files.frontId);
-            const frontIdUrl = await getDownloadURL(frontIdRef);
-    
-            const backIdRef = ref(storage, backIdPath);
-            await uploadBytes(backIdRef, files.backId);
-            const backIdUrl = await getDownloadURL(backIdRef);
-    
+            const { data: frontUploadData, error: frontUploadError } = await supabase.storage.from('documents').upload(frontIdPath, files.frontId);
+            if (frontUploadError) throw frontUploadError;
+
+            const { data: backUploadData, error: backUploadError } = await supabase.storage.from('documents').upload(backIdPath, files.backId);
+            if (backUploadError) throw backUploadError;
+
+            const { data: frontUrlData } = supabase.storage.from('documents').getPublicUrl(frontIdPath);
+            const { data: backUrlData } = supabase.storage.from('documents').getPublicUrl(backIdPath);
+
             const newRequest: Omit<LoanRequest, 'id'> = {
                 ...requestData,
-                frontIdUrl,
-                backIdUrl,
+                frontIdUrl: frontUrlData.publicUrl,
+                backIdUrl: backUrlData.publicUrl,
                 requestDate: new Date().toISOString(),
                 status: RequestStatus.PENDING,
             };
             
-            await addDoc(getCollectionRef('requests'), newRequest);
+            const { error: insertError } = await supabase.from('requests').insert([newRequest]);
+            if (insertError) throw insertError;
         } catch (err) {
             console.error("Failed to submit loan request:", err);
             showToast('Error al enviar la solicitud.', 'error');
             throw err;
         }
     };
-    
+
     const handleApproveRequest = async (request: LoanRequest, loanAmount: number, loanTerm: number) => {
-        if (!user || !db || !storage) {
+        if (!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
             return;
         }
-        
+
         try {
             const { generateContractPDF } = await import('../services/pdfService');
             const contractPdfBlob = await generateContractPDF({
@@ -113,63 +62,29 @@ export const useAppData = (
                 address: request.address,
                 loanAmount: loanAmount,
             }, request.signature || null);
+
+            const contractPath = `contracts/${user.id}/contract-${request.id}.pdf`;
+            const { error: uploadError } = await supabase.storage.from('documents').upload(contractPath, contractPdfBlob);
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('documents').getPublicUrl(contractPath);
+            const contractPdfUrl = urlData.publicUrl;
             
-            const contractPath = `contracts/${user.uid}/contract-${request.id}.pdf`;
-            const contractRef = ref(storage, contractPath);
-            await uploadBytes(contractRef, contractPdfBlob);
-            const contractPdfUrl = await getDownloadURL(contractRef);
+            // Calling the transactional database function
+            const { error: rpcError } = await supabase.rpc('approve_request', {
+                p_request_id: request.id,
+                p_loan_amount: loanAmount,
+                p_loan_term: loanTerm,
+                p_contract_pdf_url: contractPdfUrl,
+                p_request_signature: request.signature,
+                p_front_id_url: request.frontIdUrl,
+                p_back_id_url: request.backIdUrl
+            });
 
-            const batch = writeBatch(db);
+            if (rpcError) throw rpcError;
 
-            const newClient: Omit<Client, 'id'> = {
-                name: request.fullName,
-                joinDate: new Date().toISOString(),
-            };
-            const clientRef = doc(getCollectionRef('clients'));
-            batch.set(clientRef, newClient);
-
-            const interestRate = INTEREST_RATE_CONFIG.ANNUAL;
-            const principal = loanAmount;
-            const rate = INTEREST_RATE_CONFIG.MONTHLY / 100;
-            const n = loanTerm;
-            const monthlyPayment = rate > 0 ? (principal * rate * Math.pow(1 + rate, n)) / (Math.pow(1 + rate, n) - 1) : principal / n;
-            const totalRepayment = monthlyPayment * n;
-
-            const newLoan: Omit<Loan, 'id'> = {
-                clientId: clientRef.id,
-                clientName: newClient.name,
-                amount: loanAmount,
-                interestRate,
-                term: loanTerm,
-                startDate: new Date().toISOString(),
-                status: LoanStatus.PENDING,
-                monthlyPayment,
-                totalRepayment,
-                paymentsMade: 0,
-                signature: request.signature,
-                contractPdfUrl,
-            };
-            const loanRef = doc(getCollectionRef('loans'));
-            batch.set(loanRef, newLoan);
-
-            const requestRef = doc(getCollectionRef('requests'), request.id);
-            batch.delete(requestRef);
-
-            await batch.commit();
-
-            // Cleanup storage files after successful approval
-            try {
-                const frontIdPath = getPathFromUrl(request.frontIdUrl);
-                if (frontIdPath) await deleteObject(ref(storage, frontIdPath));
-
-                const backIdPath = getPathFromUrl(request.backIdUrl);
-                if (backIdPath) await deleteObject(ref(storage, backIdPath));
-            } catch (storageError) {
-                console.warn("Could not clean up request files from Storage:", storageError);
-            }
-
-            const welcomeMessage = await generateWelcomeMessage(newClient.name);
-            showToast(`Préstamo Aprobado para ${newClient.name}`, 'success');
+            const welcomeMessage = await generateWelcomeMessage(request.fullName);
+            showToast(`Préstamo Aprobado para ${request.fullName}`, 'success');
             showToast(welcomeMessage, 'info');
 
         } catch (err) {
@@ -180,20 +95,18 @@ export const useAppData = (
     };
     
     const handleDenyRequest = async (request: LoanRequest) => {
-        if(!user || !db || !storage) {
+        if(!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
             return;
         }
         try {
-            await deleteDoc(doc(getCollectionRef('requests'), request.id));
+            const { error } = await supabase.from('requests').delete().eq('id', request.id);
+            if (error) throw error;
             
-            // Cleanup storage files after successful deletion
             try {
-                const frontIdPath = getPathFromUrl(request.frontIdUrl);
-                if (frontIdPath) await deleteObject(ref(storage, frontIdPath));
-
-                const backIdPath = getPathFromUrl(request.backIdUrl);
-                if (backIdPath) await deleteObject(ref(storage, backIdPath));
+                const frontPath = new URL(request.frontIdUrl).pathname.split('/documents/')[1];
+                const backPath = new URL(request.backIdUrl).pathname.split('/documents/')[1];
+                await supabase.storage.from('documents').remove([frontPath, backPath]);
             } catch (storageError) {
                 console.warn("Could not clean up request files from Storage:", storageError);
             }
@@ -207,12 +120,13 @@ export const useAppData = (
     };
 
     const handleUpdateRequestStatus = async (requestId: string, status: RequestStatus) => {
-        if(!user || !db) {
+        if(!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
             return;
         }
         try {
-            await updateDoc(doc(getCollectionRef('requests'), requestId), { status });
+            const { error } = await supabase.from('requests').update({ status }).eq('id', requestId);
+            if (error) throw error;
             showToast(`Solicitud actualizada a "${status}".`, 'info');
         } catch (err) {
             console.error("Failed to update request status:", err);
@@ -222,7 +136,7 @@ export const useAppData = (
     };
     
     const handleRegisterPayment = async (loanId: string) => {
-        if(!user || !db) {
+        if(!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
             return;
         }
@@ -234,14 +148,15 @@ export const useAppData = (
         const newStatus = isPaidOff ? LoanStatus.PAID : LoanStatus.PENDING;
 
         try {
-            await updateDoc(doc(getCollectionRef('loans'), loanId), { paymentsMade: newPaymentsMade, status: newStatus });
+            const { error } = await supabase.from('loans').update({ payments_made: newPaymentsMade, status: newStatus }).eq('id', loanId);
+            if (error) throw error;
             showToast('Pago registrado correctamente.', 'success');
         } catch (err) {
             console.error("Failed to register payment:", err);
             showToast('Error al registrar el pago.', 'error');
         }
     };
-    
+
     const clientLoanData = useMemo(() => {
         const loansByClientId = new Map<string, Loan[]>();
         for (const loan of loans) {
@@ -256,6 +171,64 @@ export const useAppData = (
             loans: loansByClientId.get(client.id) || [],
         }));
     }, [clients, loans]);
+
+    const fetchData = useCallback(async () => {
+        if (!supabase) return;
+        setIsLoading(true);
+        setError(null);
+        try {
+            const [
+                { data: clientsData, error: clientsError },
+                { data: loansData, error: loansError },
+                { data: requestsData, error: requestsError }
+            ] = await Promise.all([
+                supabase.from('clients').select('*'),
+                supabase.from('loans').select('*'),
+                supabase.from('requests').select('*')
+            ]);
+            
+            if (clientsError) throw new Error(`Error fetching clients: ${clientsError.message}`);
+            if (loansError) throw new Error(`Error fetching loans: ${loansError.message}`);
+            if (requestsError) throw new Error(`Error fetching requests: ${requestsError.message}`);
+            
+            setClients(clientsData || []);
+            setLoans(loansData || []);
+            setRequests(requestsData || []);
+
+        } catch (err: any) {
+             console.error("Data fetch error:", err);
+             setError("No se pudieron cargar los datos. Revisa tu conexión y la configuración de Supabase (RLS).");
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!user || !supabase) {
+            setClients([]);
+            setLoans([]);
+            setRequests([]);
+            setIsLoading(false);
+            return;
+        }
+        
+        fetchData(); // Initial fetch
+
+        const channels = supabase.channel('db-changes');
+        
+        const subscriptions = {
+            clients: channels.on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => fetchData()),
+            loans: channels.on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, () => fetchData()),
+            requests: channels.on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => fetchData())
+        };
+        
+        channels.subscribe();
+
+        return () => {
+            supabase.removeChannel(channels);
+        };
+    }, [user, fetchData]);
+
 
     return {
         clients,

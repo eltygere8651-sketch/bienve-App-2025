@@ -9,14 +9,13 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import ReceiptGenerator from './components/ReceiptGenerator';
 import SettingsComponent from './components/Settings';
 import DataManagement from './components/DataManagement';
 import Setup from './components/Setup';
-import { LOCAL_STORAGE_KEYS } from './constants';
 
 const App: React.FC = () => {
     const { 
@@ -42,11 +41,6 @@ const App: React.FC = () => {
         setCurrentView(isAuthenticated ? 'dashboard' : 'welcome');
     };
 
-    const handleResetConfig = () => {
-        localStorage.removeItem(LOCAL_STORAGE_KEYS.FIREBASE_CONFIG);
-        window.location.reload();
-    };
-
     if (initializationStatus === 'pending') {
         return (
             <div className="flex justify-center items-center h-screen bg-gray-100 dark:bg-gray-900">
@@ -62,15 +56,8 @@ const App: React.FC = () => {
                      <AlertTriangle className="text-red-500 h-16 w-16 mx-auto" />
                      <h1 className="text-2xl font-bold mt-4 text-gray-800 dark:text-gray-100">Error Crítico de Configuración</h1>
                      <p className="text-gray-600 dark:text-gray-400 mt-2">
-                        La aplicación no pudo iniciarse porque la configuración de Firebase guardada es inválida o está corrupta.
+                        La aplicación no pudo conectarse. Por favor, verifica tu configuración de Supabase.
                      </p>
-                     <button
-                        onClick={handleResetConfig}
-                        className="mt-6 w-full inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                    >
-                        <RefreshCw className="mr-2 h-5 w-5" />
-                        Limpiar Configuración y Reiniciar
-                    </button>
                 </div>
             </div>
         );
@@ -200,7 +187,7 @@ const App: React.FC = () => {
                      {isAuthenticated && (
                         <div className="bg-green-100 dark:bg-green-900/50 border-l-4 border-green-500 text-green-700 dark:text-green-200 p-4 rounded-md mb-6 flex items-center shadow-md">
                             <Wrench className="h-5 w-5 mr-3" />
-                            <p className="font-bold">Modo Administrador Activo (Datos en la nube).</p>
+                            <p className="font-bold">Modo Administrador Activo (Datos en la nube de Supabase).</p>
                         </div>
                     )}
                     <div className="flex-grow">

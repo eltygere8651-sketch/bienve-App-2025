@@ -6,5 +6,5 @@ export const LOCAL_STORAGE_KEYS = {
     FINANCIAL_TIP: 'financialTip',
     THEME: 'theme',
     CONTRACT_TEMPLATE: 'bmContigoContractTemplate',
-    FIREBASE_CONFIG: 'bmContigoFirebaseConfig'
+    SUPABASE_CONFIG: 'bmContigoSupabaseConfig'
 };

@@ -1,15 +1,14 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { AppView } from '../types';
 import { LOCAL_STORAGE_KEYS } from '../constants';
-import { User } from 'firebase/auth';
+import { User } from '@supabase/supabase-js';
 import { 
-    auth, 
-    isFirebaseConfigured, 
-    getFirebaseConfig, 
+    supabase, 
+    isSupabaseConfigured, 
+    getSupabaseConfig, 
     onAuthStateChanged, 
-    signOut,
-    initializeFirebase
-} from '../services/firebaseService';
+    signOut
+} from '../services/supabaseService';
 
 type Theme = 'light' | 'dark';
 type InitializationStatus = 'pending' | 'success' | 'failed';
@@ -42,8 +41,7 @@ interface AppContextType {
     showConfirmModal: (options: Omit<ConfirmState, 'isOpen'>) => void;
     hideConfirmModal: () => void;
     isConfigReady: boolean;
-    firebaseConfig: any;
-    setFirebaseConfig: (config: any) => void;
+    setSupabaseConfig: (config: { url: string; anonKey: string }) => void;
     initializationStatus: InitializationStatus;
 }
 
@@ -70,41 +68,37 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         message: '',
         onConfirm: () => {},
     });
-    const [firebaseConfig, setFirebaseConfigState] = useState(() => getFirebaseConfig());
-    const [isConfigReady, setIsConfigReady] = useState(() => isFirebaseConfigured(getFirebaseConfig()));
+    const [isConfigReady, setIsConfigReady] = useState(() => isSupabaseConfigured(getSupabaseConfig()));
     const [initializationStatus, setInitializationStatus] = useState<InitializationStatus>('pending');
 
     useEffect(() => {
-        // If no valid config is stored, there's nothing to initialize.
-        // We go straight to the 'success' status so the app can render the Setup component.
         if (!isConfigReady) {
-             setInitializationStatus('success');
-             return;
+            setInitializationStatus('success'); // Allows Setup component to render
+            return;
         }
-        
-        // If a config exists, attempt to initialize Firebase.
-        const success = initializeFirebase(firebaseConfig);
-        setInitializationStatus(success ? 'success' : 'failed');
-        
-    }, [isConfigReady, firebaseConfig]);
+        if (supabase) {
+             setInitializationStatus('success');
+        } else {
+             setInitializationStatus('failed'); // Config exists but client creation failed
+        }
+    }, [isConfigReady]);
 
     useEffect(() => {
-        // Only set up auth listener if Firebase initialization was successful.
-        if (initializationStatus !== 'success' || !auth) return;
+        if (initializationStatus !== 'success' || !supabase) return;
 
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        const { data: { subscription } } = onAuthStateChanged((_event, session) => {
+            const currentUser = session?.user ?? null;
             setUser(currentUser);
             setIsAuthenticated(!!currentUser);
             if (currentUser) {
                 setCurrentView(v => (v === 'auth' || v === 'welcome' || v === 'loanRequest' || v === 'setup') ? 'dashboard' : v);
             } else {
-                 // If not logged in, and not on a public view, default to welcome
                 const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth'];
                 setCurrentView(v => publicViews.includes(v) ? v : 'welcome');
             }
         });
 
-        return () => unsubscribe();
+        return () => subscription.unsubscribe();
     }, [initializationStatus]);
 
     useEffect(() => {
@@ -133,9 +127,9 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const logout = async () => {
-        if (!auth) return;
+        if (!supabase) return;
         try {
-            await signOut(auth);
+            await signOut();
             showToast('Sesión cerrada.', 'info');
             setCurrentView('welcome');
         } catch (error) {
@@ -144,11 +138,10 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     };
     
-    const setFirebaseConfig = (config: any) => {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.FIREBASE_CONFIG, JSON.stringify(config));
-        setFirebaseConfigState(config);
+    const setSupabaseConfig = (config: { url: string; anonKey: string }) => {
+        localStorage.setItem(LOCAL_STORAGE_KEYS.SUPABASE_CONFIG, JSON.stringify(config));
         setIsConfigReady(true);
-        window.location.reload(); // Reload to re-initialize firebase with new config
+        window.location.reload(); 
     }
 
     const showConfirmModal = (options: Omit<ConfirmState, 'isOpen'>) => {
@@ -175,8 +168,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         showConfirmModal,
         hideConfirmModal,
         isConfigReady,
-        firebaseConfig,
-        setFirebaseConfig,
+        setSupabaseConfig,
         initializationStatus
     };
 

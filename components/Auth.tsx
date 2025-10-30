@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Handshake, UserPlus, LogIn, Mail, Key } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
-import { signUp, signIn } from '../services/firebaseService';
+import { signUp, signIn } from '../services/supabaseService';
 
 const Auth: React.FC = () => {
     const { showToast, setCurrentView } = useAppContext();
@@ -23,34 +23,35 @@ const Auth: React.FC = () => {
 
         setIsLoading(true);
         try {
+            let authError;
             if (isLogin) {
-                await signIn(email, password);
-                showToast('Inicio de sesión exitoso.', 'success');
+                const { error } = await signIn(email, password);
+                authError = error;
+                if (!error) showToast('Inicio de sesión exitoso.', 'success');
             } else {
-                await signUp(email, password);
-                showToast('Cuenta creada con éxito. ¡Bienvenido!', 'success');
+                const { error } = await signUp(email, password);
+                authError = error;
+                if (!error) showToast('Cuenta creada con éxito. Revisa tu email para confirmar.', 'success');
             }
-            setCurrentView('dashboard');
+            
+            if (authError) throw authError;
+
+            // Supabase handles session and onAuthStateChanged will redirect.
+            // If sign up, user might need to confirm email, so stay on page.
+            if(isLogin) {
+                 setCurrentView('dashboard');
+            }
+
         } catch (err: any) {
-            console.error(err);
-            if (err.code) {
-                switch (err.code) {
-                    case 'auth/user-not-found':
-                    case 'auth/wrong-password':
-                    case 'auth/invalid-credential':
-                        setError('Correo electrónico o contraseña incorrectos.');
-                        break;
-                    case 'auth/email-already-in-use':
-                        setError('Este correo electrónico ya está registrado.');
-                        break;
-                    case 'auth/weak-password':
-                        setError('La contraseña debe tener al menos 6 caracteres.');
-                        break;
-                    default:
-                        setError('Ocurrió un error. Por favor, inténtalo de nuevo.');
-                }
+            console.error("Supabase Auth Error:", err);
+            if (err.message.includes('Invalid login credentials')) {
+                setError('Correo electrónico o contraseña incorrectos.');
+            } else if (err.message.includes('already registered')) {
+                setError('Este correo electrónico ya está registrado.');
+            } else if (err.message.includes('short')) {
+                setError('La contraseña debe tener al menos 6 caracteres.');
             } else {
-                setError('Ocurrió un error inesperado.');
+                setError(err.message || 'Ocurrió un error. Por favor, inténtalo de nuevo.');
             }
         } finally {
             setIsLoading(false);

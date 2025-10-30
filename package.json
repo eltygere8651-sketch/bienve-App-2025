@@ -17,7 +17,7 @@
     "dexie": "^4.0.7",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
-    "firebase": "^12.4.0"
+    "@supabase/supabase-js": "2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
