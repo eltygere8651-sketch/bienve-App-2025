@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { LoanRequest } from '../types';
 
 // Fix: Per coding guidelines, API_KEY is assumed to be available in process.env and should be used directly.
@@ -41,60 +41,5 @@ export const generateWelcomeMessage = async (clientName: string): Promise<string
     } catch (error) {
         console.error("Error generating welcome message:", error);
         return `¡Bienvenido/a, ${clientName}! Estamos felices de que te unas a la comunidad B.M Contigo.`;
-    }
-};
-
-export const verifyLoanRequestData = async (
-    data: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>
-): Promise<{ isValid: boolean; reason: string }> => {
-    const prompt = `
-        Analiza los siguientes datos de una solicitud de préstamo como si fueras un analista de riesgos.
-        Tu objetivo es detectar información que parezca obviamente falsa, inventada o de prueba.
-        No seas demasiado estricto, solo busca señales de alerta claras.
-        Datos de la solicitud:
-        - Nombre Completo: ${data.fullName}
-        - DNI / NIE: ${data.idNumber}
-        - Dirección: ${data.address}
-        - Monto Solicitado: ${data.loanAmount}
-        - Motivo del Préstamo: ${data.loanReason}
-        - Situación Laboral: ${data.employmentStatus}
-
-        Busca inconsistencias como:
-        - Nombres que parecen de prueba (ej: "Test", "Prueba").
-        - Direcciones que parecen falsas (ej: "Calle Falsa 123", "Nowhere").
-        - Formatos de DNI/NIE que no son lógicos para España.
-        - Montos muy altos para motivos triviales (ej: 50,000€ para "Otro").
-
-        Responde únicamente en formato JSON con la siguiente estructura:
-        {
-            "isValid": boolean,
-            "reason": "string con una explicación CORTA y amable si no es válido, o 'OK' si es válido."
-        }
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        isValid: { type: Type.BOOLEAN },
-                        reason: { type: Type.STRING },
-                    },
-                    required: ['isValid', 'reason'],
-                },
-            }
-        });
-        
-        const jsonResponse = JSON.parse(response.text);
-        return jsonResponse;
-
-    } catch (error) {
-        console.error("Error verifying loan request data with Gemini:", error);
-        // In case of error, default to valid to avoid blocking the user.
-        return { isValid: true, reason: 'Error durante la verificación de IA.' };
     }
 };

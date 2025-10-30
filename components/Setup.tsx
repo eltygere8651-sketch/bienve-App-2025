@@ -1,38 +1,92 @@
-
 import React, { useState } from 'react';
-import { Database, Settings, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Database, Settings, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signOut } from 'firebase/auth';
 
 const Setup: React.FC = () => {
-    const { setFirebaseConfig } = useAppContext();
+    const { setFirebaseConfig, showToast } = useAppContext();
     const [configJson, setConfigJson] = useState('');
     const [error, setError] = useState('');
+    const [isVerifying, setIsVerifying] = useState(false);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setError('');
-        let configToParse = configJson.trim();
-        if (!configToParse) {
+        setIsVerifying(true);
+        const userInput = configJson.trim();
+        if (!userInput) {
             setError('El campo de configuración no puede estar vacío.');
+            setIsVerifying(false);
             return;
         }
 
-        // Attempt to extract the JSON object from common paste formats
-        const jsonMatch = configToParse.match(/(\{[\s\S]*\})/);
-        if (jsonMatch && jsonMatch[1]) {
-            configToParse = jsonMatch[1];
-        }
-
         try {
-            const config = JSON.parse(configToParse);
-            // Basic validation
-            if (!config.apiKey || !config.authDomain || !config.projectId || !config.storageBucket || !config.messagingSenderId || !config.appId) {
-                throw new Error('La configuración JSON parece incompleta o tiene un formato incorrecto.');
+            let configObject: any;
+
+            // Use a robust regex to find the JavaScript object part within the pasted text.
+            const match = userInput.match(/(\{[\s\S]+\})/);
+            if (!match || !match[1]) {
+                throw new Error("Formato no reconocido. Asegúrate de pegar el código que contiene el objeto de configuración, empezando con `{` y terminando con `}`.");
             }
-            setFirebaseConfig(config);
-            // The app will reload after setting the config
-        } catch (e) {
-            console.error(e);
-            setError('Error al procesar la configuración. Asegúrate de copiar el objeto de configuración completo y válido, que empieza con `{` y termina con `}`.');
+            const objectString = match[1];
+
+            try {
+                // Use the Function constructor to safely parse the JavaScript object literal.
+                // This is more robust than regex fixes and safer than eval().
+                // It correctly handles unquoted keys, trailing commas, etc.
+                configObject = new Function('return ' + objectString)();
+
+                if (typeof configObject !== 'object' || configObject === null || Array.isArray(configObject)) {
+                    throw new Error("La configuración proporcionada no es un objeto válido.");
+                }
+
+            } catch (e) {
+                console.error("Failed to parse config object string:", e);
+                throw new Error("El formato del código de configuración es inválido. Por favor, asegúrate de que sea un objeto de JavaScript correcto.");
+            }
+            
+            // --- Key Validation ---
+            const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+            for (const key of requiredKeys) {
+                if (!configObject[key] || typeof configObject[key] !== 'string' || configObject[key].trim() === '') {
+                    throw new Error(`La configuración parece incompleta. Falta la clave "${key}" o su valor está vacío.`);
+                }
+            }
+            
+            // --- Verification Step ---
+            // Initialize a temporary app instance to verify credentials without breaking the main app.
+            const tempApp = initializeApp(configObject, `temp-check-${Date.now()}`);
+            const tempAuth = getAuth(tempApp);
+            // This will fail if Anonymous Auth is not enabled or if keys are invalid.
+            await signInAnonymously(tempAuth);
+            await signOut(tempAuth); // Clean up immediately
+
+            showToast('¡Conexión con Firebase exitosa!', 'success');
+            
+            // Wait for the toast to be visible before reloading.
+            setTimeout(() => {
+                setFirebaseConfig(configObject);
+            }, 1000);
+
+        } catch (e: any) {
+            console.error("Config verification error:", e);
+            let errorMessage;
+            if (e.message.includes("JSON")) {
+                errorMessage = e.message;
+            } else if (e.code === 'auth/invalid-api-key') {
+                errorMessage = 'Error de Verificación: La API Key no es válida. Por favor, copia y pega la configuración de nuevo desde tu consola de Firebase.';
+            } else if (e.code === 'auth/operation-not-allowed') {
+                errorMessage = 'Error de Verificación: El inicio de sesión anónimo está deshabilitado. Por favor, sigue el Paso 2 de las instrucciones para habilitarlo en tu Consola de Firebase.';
+            } else if (e.code && typeof e.code === 'string') {
+                errorMessage = `No se pudo conectar a Firebase. Razón: ${e.code}. Revisa que tu configuración sea correcta y que los servicios estén activos.`;
+            } else if (e instanceof Error) {
+                errorMessage = e.message;
+            } else {
+                errorMessage = 'Ocurrió un error inesperado durante la verificación.';
+            }
+            setError(errorMessage);
+        } finally {
+            setIsVerifying(false);
         }
     };
 
@@ -48,18 +102,24 @@ const Setup: React.FC = () => {
                 </div>
 
                 <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300">
-                    <p>
-                        <span className="font-bold">Paso 1:</span> Ve a la <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Consola de Firebase</a> y crea un nuevo proyecto (es gratis).
+                     <p>
+                        <span className="font-bold">Paso 1:</span> Ve a la <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Consola de Firebase</a> y crea un nuevo proyecto.
                     </p>
                     <p>
-                        {/* Fix: Escaped the `</>` sequence to prevent a JSX parsing error. */}
-                        <span className="font-bold">Paso 2:</span> Dentro de tu proyecto, crea una "Aplicación web" (haz clic en el icono {'`</>`'}). Dale un apodo y registra la aplicación.
+                        <span className="font-bold">Paso 2:</span> En el menú de la izquierda, ve a <strong>Authentication</strong>.
+                        <ul className="list-disc list-inside pl-4 mt-1">
+                            <li>Haz clic en la pestaña <strong>"Sign-in method"</strong>.</li>
+                            <li>Habilita los proveedores <strong>"Correo electrónico/Contraseña"</strong> y <strong>"Anónimo"</strong>. Ambos son necesarios para que la app funcione.</li>
+                        </ul>
                     </p>
                     <p>
-                        <span className="font-bold">Paso 3:</span> Firebase te mostrará un objeto de configuración `firebaseConfig`. Cópialo completo.
+                        <span className="font-bold">Paso 3:</span> Vuelve a la página principal del proyecto (haz clic en <Settings className="inline h-4 w-4" /> <strong>Project settings</strong>) y crea una "Aplicación web" (icono {'`</>`'}). Dale un apodo y registra la aplicación.
                     </p>
                     <p>
-                        <span className="font-bold">Paso 4:</span> Pega el objeto de configuración que copiaste en el campo de texto a continuación y haz clic en "Guardar Configuración".
+                        <span className="font-bold">Paso 4:</span> Firebase te mostrará un objeto de configuración `firebaseConfig`. **Selecciona la opción "Config"** y copia el bloque de código completo.
+                    </p>
+                    <p>
+                        <span className="font-bold">Paso 5:</span> Pega el objeto de configuración en el campo de texto de abajo y haz clic en "Guardar y Verificar".
                     </p>
                 </div>
 
@@ -91,10 +151,15 @@ const Setup: React.FC = () => {
                 <div className="mt-6">
                     <button
                         onClick={handleSave}
-                        className="w-full flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105"
+                        disabled={isVerifying}
+                        className="w-full flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all hover:scale-105 disabled:bg-blue-400 disabled:cursor-not-allowed"
                     >
-                        <CheckCircle className="mr-2 h-5 w-5" />
-                        Guardar Configuración y Empezar
+                        {isVerifying ? (
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        ) : (
+                            <CheckCircle className="mr-2 h-5 w-5" />
+                        )}
+                        {isVerifying ? 'Verificando Conexión...' : 'Guardar y Verificar'}
                     </button>
                 </div>
                  <div className="mt-8 text-xs text-gray-500 dark:text-gray-400 text-center">

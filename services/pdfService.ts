@@ -11,14 +11,6 @@ interface ContractData {
     loanAmount: number;
 }
 
-const blobToDataURL = (blob: Blob): Promise<string> =>
-    new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target?.result as string);
-        reader.onerror = e => reject(reader.error);
-        reader.readAsDataURL(blob);
-    });
-
 export const DEFAULT_CONTRACT_TEMPLATE = `CONTRATO DE PRÉSTAMO DE DINERO
 
 En la fecha de \${today}, entre:
@@ -116,24 +108,6 @@ export const generateClientReport = (client: Client, loans: Loan[]) => {
     });
     
     doc.save(`Informe_${client.name.replace(/\s/g, '_')}.pdf`);
-};
-
-export const generateIdPdf = async (frontIdBlob: Blob, backIdBlob: Blob, clientName: string) => {
-    const doc = new jsPDF();
-    const frontUrl = await blobToDataURL(frontIdBlob);
-    const backUrl = await blobToDataURL(backIdBlob);
-
-    doc.setFontSize(16);
-    doc.text(`Documento de Identidad - ${clientName}`, 105, 20, { align: 'center' });
-    
-    doc.setFontSize(12);
-    doc.text('Anverso', 15, 40);
-    doc.addImage(frontUrl, 'PNG', 15, 45, 90, 55);
-    
-    doc.text('Reverso', 15, 115);
-    doc.addImage(backUrl, 'PNG', 15, 120, 90, 55);
-    
-    doc.save(`DNI_${clientName.replace(/\s/g, '_')}.pdf`);
 };
 
 interface ReceiptData {

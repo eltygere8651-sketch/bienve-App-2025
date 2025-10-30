@@ -2,12 +2,17 @@ import { useState, useEffect, useMemo } from 'react';
 import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
 import { generateWelcomeMessage } from '../services/geminiService';
 import { INTEREST_RATE_CONFIG } from '../config';
-import { db, storage } from '../services/firebaseService';
+import { db, storage, getPathFromUrl } from '../services/firebaseService';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, writeBatch, query } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { User } from 'firebase/auth';
 
-const getCollectionRef = (collectionName: string) => collection(db, collectionName);
+const getCollectionRef = (collectionName: string) => {
+    if (!db) {
+        throw new Error("Firestore is not initialized.");
+    }
+    return collection(db, collectionName);
+}
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -21,13 +26,15 @@ export const useAppData = (
     const [error, setError] = useState<string | null>(null);
     
     useEffect(() => {
-        if (!user) {
+        // Guard: Ensure Firebase services are initialized and user is logged in before proceeding.
+        if (!user || !db || !storage) {
             setClients([]);
             setLoans([]);
             setRequests([]);
-            // Don't set loading to false here, as unauthenticated state is not a final data state.
-            // Let's set it to false only when not logged in to avoid showing loader on welcome page.
-            setIsLoading(false);
+            // Only set loading to false if we are not expecting a user. If user is null but auth is loading, we wait.
+            if (!user) { 
+                setIsLoading(false);
+            }
             return;
         }
 
@@ -51,7 +58,7 @@ export const useAppData = (
                 setIsLoading(false);
             }, (err) => {
                 console.error(`Error fetching ${collectionName}:`, err);
-                setError(`No se pudieron cargar los datos de ${collectionName}.`);
+                setError(`No se pudieron cargar los datos de ${collectionName}. Por favor, revisa tu conexión y los permisos de Firestore.`);
                 setIsLoading(false);
             });
         });
@@ -62,6 +69,7 @@ export const useAppData = (
 
 
     const handleLoanRequestSubmit = async (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: File, backId: File }) => {
+        if (!storage || !db) throw new Error("Firebase services not initialized.");
         const requestId = `req-${Date.now()}`;
         const frontIdPath = `requests/${requestId}/frontId_${files.frontId.name}`;
         const backIdPath = `requests/${requestId}/backId_${files.backId.name}`;
@@ -92,8 +100,8 @@ export const useAppData = (
     };
     
     const handleApproveRequest = async (request: LoanRequest, loanAmount: number, loanTerm: number) => {
-        if (!user) {
-            showToast('Acción no autorizada.', 'error');
+        if (!user || !db || !storage) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
             return;
         }
         
@@ -149,11 +157,13 @@ export const useAppData = (
 
             await batch.commit();
 
+            // Cleanup storage files after successful approval
             try {
-                const frontIdFileRef = ref(storage, request.frontIdUrl);
-                await deleteObject(frontIdFileRef);
-                const backIdFileRef = ref(storage, request.backIdUrl);
-                await deleteObject(backIdFileRef);
+                const frontIdPath = getPathFromUrl(request.frontIdUrl);
+                if (frontIdPath) await deleteObject(ref(storage, frontIdPath));
+
+                const backIdPath = getPathFromUrl(request.backIdUrl);
+                if (backIdPath) await deleteObject(ref(storage, backIdPath));
             } catch (storageError) {
                 console.warn("Could not clean up request files from Storage:", storageError);
             }
@@ -165,22 +175,25 @@ export const useAppData = (
         } catch (err) {
             console.error("Failed to approve request:", err);
             showToast('Error al aprobar el préstamo.', 'error');
+            throw err;
         }
     };
     
     const handleDenyRequest = async (request: LoanRequest) => {
-        if(!user) {
-            showToast('Acción no autorizada.', 'error');
+        if(!user || !db || !storage) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
             return;
         }
         try {
             await deleteDoc(doc(getCollectionRef('requests'), request.id));
             
+            // Cleanup storage files after successful deletion
             try {
-                const frontIdFileRef = ref(storage, request.frontIdUrl);
-                await deleteObject(frontIdFileRef);
-                const backIdFileRef = ref(storage, request.backIdUrl);
-                await deleteObject(backIdFileRef);
+                const frontIdPath = getPathFromUrl(request.frontIdUrl);
+                if (frontIdPath) await deleteObject(ref(storage, frontIdPath));
+
+                const backIdPath = getPathFromUrl(request.backIdUrl);
+                if (backIdPath) await deleteObject(ref(storage, backIdPath));
             } catch (storageError) {
                 console.warn("Could not clean up request files from Storage:", storageError);
             }
@@ -189,12 +202,13 @@ export const useAppData = (
         } catch (err) {
             console.error("Failed to deny request:", err);
             showToast('Error al denegar la solicitud.', 'error');
+            throw err;
         }
     };
 
     const handleUpdateRequestStatus = async (requestId: string, status: RequestStatus) => {
-        if(!user) {
-            showToast('Acción no autorizada.', 'error');
+        if(!user || !db) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
             return;
         }
         try {
@@ -203,12 +217,13 @@ export const useAppData = (
         } catch (err) {
             console.error("Failed to update request status:", err);
             showToast('Error al actualizar el estado.', 'error');
+            throw err;
         }
     };
     
     const handleRegisterPayment = async (loanId: string) => {
-        if(!user) {
-            showToast('Acción no autorizada.', 'error');
+        if(!user || !db) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
             return;
         }
         const loan = loans.find(l => l.id === loanId);

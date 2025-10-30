@@ -26,12 +26,19 @@ const LoanRequestForm: React.FC = () => {
     const [signatureError, setSignatureError] = useState(false);
     const signaturePadRef = useRef<SignaturePadRef>(null);
 
+    // Separate useEffect hooks to correctly manage the lifecycle of each object URL.
+    // This prevents one preview from being revoked when the other one changes.
     useEffect(() => {
         return () => {
             if (frontIdPreview) URL.revokeObjectURL(frontIdPreview);
+        };
+    }, [frontIdPreview]);
+
+    useEffect(() => {
+        return () => {
             if (backIdPreview) URL.revokeObjectURL(backIdPreview);
-        }
-    }, [frontIdPreview, backIdPreview]);
+        };
+    }, [backIdPreview]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -41,15 +48,14 @@ const LoanRequestForm: React.FC = () => {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'front' | 'back') => {
         const file = e.target.files?.[0];
         if (file) {
-            const previewUrl = URL.createObjectURL(file);
+            // The old preview URL is revoked by the useEffect cleanup when the state changes.
+            const newPreviewUrl = URL.createObjectURL(file);
             if (type === 'front') {
-                if (frontIdPreview) URL.revokeObjectURL(frontIdPreview);
                 setFrontId(file);
-                setFrontIdPreview(previewUrl);
+                setFrontIdPreview(newPreviewUrl);
             } else {
-                if (backIdPreview) URL.revokeObjectURL(backIdPreview);
                 setBackId(file);
-                setBackIdPreview(previewUrl);
+                setBackIdPreview(newPreviewUrl);
             }
         }
     };

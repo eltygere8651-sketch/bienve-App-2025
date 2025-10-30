@@ -9,13 +9,14 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import ReceiptGenerator from './components/ReceiptGenerator';
 import SettingsComponent from './components/Settings';
 import DataManagement from './components/DataManagement';
 import Setup from './components/Setup';
+import { LOCAL_STORAGE_KEYS } from './constants';
 
 const App: React.FC = () => {
     const { 
@@ -29,9 +30,10 @@ const App: React.FC = () => {
         setIsSidebarOpen,
         showToast,
         hideConfirmModal,
-        isConfigured,
+        isConfigReady,
         isAuthenticated,
-        logout
+        logout,
+        initializationStatus
     } = useAppContext();
     
     const { requests, isLoading, error } = useDataContext();
@@ -40,7 +42,41 @@ const App: React.FC = () => {
         setCurrentView(isAuthenticated ? 'dashboard' : 'welcome');
     };
 
-    if (!isConfigured) {
+    const handleResetConfig = () => {
+        localStorage.removeItem(LOCAL_STORAGE_KEYS.FIREBASE_CONFIG);
+        window.location.reload();
+    };
+
+    if (initializationStatus === 'pending') {
+        return (
+            <div className="flex justify-center items-center h-screen bg-gray-100 dark:bg-gray-900">
+                <Loader2 className="h-16 w-16 animate-spin text-blue-600" />
+            </div>
+        );
+    }
+    
+    if (initializationStatus === 'failed') {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-red-50 dark:bg-gray-900 p-4">
+                <div className="w-full max-w-lg bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg text-center">
+                     <AlertTriangle className="text-red-500 h-16 w-16 mx-auto" />
+                     <h1 className="text-2xl font-bold mt-4 text-gray-800 dark:text-gray-100">Error Crítico de Configuración</h1>
+                     <p className="text-gray-600 dark:text-gray-400 mt-2">
+                        La aplicación no pudo iniciarse porque la configuración de Firebase guardada es inválida o está corrupta.
+                     </p>
+                     <button
+                        onClick={handleResetConfig}
+                        className="mt-6 w-full inline-flex items-center justify-center px-6 py-3 bg-red-600 text-white font-bold rounded-lg shadow-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    >
+                        <RefreshCw className="mr-2 h-5 w-5" />
+                        Limpiar Configuración y Reiniciar
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (!isConfigReady) {
         return <Setup />;
     }
 
@@ -48,8 +84,6 @@ const App: React.FC = () => {
         return <Auth />;
     }
     
-    const isAdmin = isAuthenticated; // Alias for clarity in existing components
-
     const renderContent = () => {
         if (isLoading && isAuthenticated) { // Show loader only when logged in and loading data
             return (
@@ -104,13 +138,13 @@ const App: React.FC = () => {
                     </div>
                     <nav className="flex-1 p-4">
                         <ul>
-                            {isAdmin && <NavItem icon={<LayoutDashboard />} label="Dashboard" view="dashboard" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
-                            {!isAdmin && <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
+                            {isAuthenticated && <NavItem icon={<LayoutDashboard />} label="Dashboard" view="dashboard" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
+                            {!isAuthenticated && <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
                             <NavItem icon={<FileText />} label="Solicitud de Préstamo" view="loanRequest" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />
-                            {isAdmin && <NavItem icon={<GitPullRequest />} label="Gestión de Solicitudes" view="requests" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} badge={requests.length} />}
-                            {isAdmin && <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
+                            {isAuthenticated && <NavItem icon={<GitPullRequest />} label="Gestión de Solicitudes" view="requests" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} badge={requests.length} />}
+                            {isAuthenticated && <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen} />}
                         </ul>
-                         {isAdmin && isSidebarOpen && (
+                         {isAuthenticated && isSidebarOpen && (
                             <>
                                 <div className="mt-4 pt-4 border-t border-gray-700">
                                     <h3 className="px-3 text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Herramientas</h3>
@@ -134,7 +168,7 @@ const App: React.FC = () => {
                                 {theme === 'light' ? 'Modo Oscuro' : 'Modo Claro'}
                             </span>
                         </button>
-                        {isAdmin ? (
+                        {isAuthenticated ? (
                              <button
                                 onClick={logout}
                                 className="w-full flex items-center justify-center p-3 my-1 rounded-lg cursor-pointer text-gray-300 hover:bg-gray-700 hover:text-white"
@@ -149,11 +183,11 @@ const App: React.FC = () => {
                             <button
                                 onClick={() => setCurrentView('auth')}
                                 className="w-full flex items-center justify-center p-3 my-1 rounded-lg cursor-pointer text-gray-300 hover:bg-gray-700 hover:text-white"
-                                aria-label="Iniciar sesión de administrador"
+                                aria-label="Acceder o registrarse"
                             >
                                 <LogIn />
                                 <span className={`ml-4 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 h-0 w-0'}`}>
-                                    Admin Login
+                                    Acceder
                                 </span>
                             </button>
                         )}
@@ -163,7 +197,7 @@ const App: React.FC = () => {
                     </div>
                 </aside>
                 <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 overflow-y-auto">
-                     {isAdmin && (
+                     {isAuthenticated && (
                         <div className="bg-green-100 dark:bg-green-900/50 border-l-4 border-green-500 text-green-700 dark:text-green-200 p-4 rounded-md mb-6 flex items-center shadow-md">
                             <Wrench className="h-5 w-5 mr-3" />
                             <p className="font-bold">Modo Administrador Activo (Datos en la nube).</p>

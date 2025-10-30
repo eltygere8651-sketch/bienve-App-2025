@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LoanRequest, RequestStatus } from '../types';
-import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Download, Printer } from 'lucide-react';
+import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Download, Printer, Loader2 } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import ImageViewer from './ImageViewer';
@@ -33,13 +33,41 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [amount, setAmount] = useState(request.loanAmount || 500);
     const [term, setTerm] = useState(12);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const approveAction = async () => {
+        setIsProcessing(true);
+        try {
+            await handleApproveRequest(request, amount, term);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+    
+    const denyAction = async () => {
+        setIsProcessing(true);
+        try {
+            await handleDenyRequest(request);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+    
+    const reviewAction = async () => {
+        setIsProcessing(true);
+        try {
+            await handleUpdateRequestStatus(request.id, RequestStatus.UNDER_REVIEW);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     const handleApproveClick = () => {
         if (amount > 0 && term > 0) {
             showConfirmModal({
                 title: 'Confirmar Aprobación',
                 message: `¿Estás seguro de que quieres aprobar un préstamo de ${formatCurrency(amount)} a ${term} meses para ${request.fullName}?`,
-                onConfirm: () => handleApproveRequest(request, amount, term),
+                onConfirm: approveAction,
             });
         } else {
             showToast('Por favor, introduce un monto y un plazo válidos.', 'error');
@@ -50,17 +78,9 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
         showConfirmModal({
             title: 'Confirmar Denegación',
             message: `¿Estás seguro de que quieres denegar y eliminar la solicitud de ${request.fullName}? Esta acción no se puede deshacer.`,
-            onConfirm: () => handleDenyRequest(request),
+            onConfirm: denyAction,
         });
     };
-
-    const handleReviewClick = () => {
-        handleUpdateRequestStatus(request.id, RequestStatus.UNDER_REVIEW);
-    };
-
-    const openUrl = (url: string) => {
-        window.open(url, '_blank', 'noopener,noreferrer');
-    }
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
@@ -127,14 +147,17 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                             </div>
                         </div>
                          <div className="flex flex-col sm:flex-row gap-2 justify-end">
-                            <button onClick={handleReviewClick} className="w-full sm:w-auto bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 flex items-center justify-center">
-                                <Edit2 size={18} className="mr-2" /> En Estudio
+                            <button onClick={reviewAction} disabled={isProcessing} className="w-full sm:w-auto bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 flex items-center justify-center disabled:bg-yellow-400">
+                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Edit2 size={18} className="mr-2" />} 
+                                {isProcessing ? 'Procesando...' : 'En Estudio'}
                             </button>
-                            <button onClick={handleDenyClick} className="w-full sm:w-auto bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center">
-                                <X size={18} className="mr-2" /> Denegar
+                            <button onClick={handleDenyClick} disabled={isProcessing} className="w-full sm:w-auto bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center disabled:bg-red-400">
+                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <X size={18} className="mr-2" />} 
+                                {isProcessing ? 'Procesando...' : 'Denegar'}
                             </button>
-                            <button onClick={handleApproveClick} className="w-full sm:w-auto bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center">
-                                <Check size={18} className="mr-2" /> Aprobar
+                            <button onClick={handleApproveClick} disabled={isProcessing} className="w-full sm:w-auto bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center disabled:bg-green-400">
+                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Check size={18} className="mr-2" />} 
+                                {isProcessing ? 'Procesando...' : 'Aprobar'}
                             </button>
                         </div>
                     </div>

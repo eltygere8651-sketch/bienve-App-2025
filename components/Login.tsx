@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Handshake, Shield } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { LOCAL_STORAGE_KEYS } from '../constants';
+// Fix: Import signIn from firebaseService to handle authentication.
+import { signIn } from '../services/firebaseService';
 
 const Login: React.FC = () => {
-    const { handleLogin, isAdmin, setCurrentView } = useAppContext();
-    const [username, setUsername] = useState('');
+    // Fix: Destructure isAuthenticated and showToast instead of isAdmin and handleLogin.
+    const { isAuthenticated, setCurrentView, showToast } = useAppContext();
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState('');
@@ -14,9 +17,9 @@ const Login: React.FC = () => {
         const savedCreds = localStorage.getItem(LOCAL_STORAGE_KEYS.CREDENTIALS);
         if (savedCreds) {
             try {
-                const { username: savedUser, password: savedPass } = JSON.parse(savedCreds);
-                setUsername(savedUser);
-                setPassword(savedPass);
+                const { username: savedUser, email: savedEmail, password: savedPass } = JSON.parse(savedCreds);
+                setEmail(savedEmail || savedUser || '');
+                setPassword(savedPass || '');
                 setRememberMe(true);
             } catch (e) {
                 console.error("Failed to parse saved credentials", e);
@@ -25,34 +28,49 @@ const Login: React.FC = () => {
         }
     }, []);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        const success = handleLogin(username, password);
         
-        if (success) {
+        try {
+            await signIn(email, password);
+            showToast('Inicio de sesión exitoso.', 'success');
+
             if (rememberMe) {
                 // SECURITY WARNING: Storing credentials in localStorage is not recommended in production environments.
                 // This is a security risk as it can be accessed via XSS attacks.
                 // For a real-world application, use secure authentication methods like OAuth, JWTs stored in httpOnly cookies, etc.
-                localStorage.setItem(LOCAL_STORAGE_KEYS.CREDENTIALS, JSON.stringify({ username, password }));
+                localStorage.setItem(LOCAL_STORAGE_KEYS.CREDENTIALS, JSON.stringify({ email, password }));
             } else {
                 localStorage.removeItem(LOCAL_STORAGE_KEYS.CREDENTIALS);
             }
             // Navigate after successful login and credential handling
             setCurrentView('dashboard');
-        } else {
-            setError('Usuario o contraseña incorrectos.');
+        } catch (err: any) {
+            console.error("Error signing in:", err);
+            if (err.code) {
+                switch (err.code) {
+                    case 'auth/user-not-found':
+                    case 'auth/wrong-password':
+                    case 'auth/invalid-credential':
+                        setError('Correo electrónico o contraseña incorrectos.');
+                        break;
+                    default:
+                        setError('Ocurrió un error. Por favor, inténtalo de nuevo.');
+                }
+            } else {
+                setError('Ocurrió un error inesperado.');
+            }
         }
     };
 
     // This effect is a backup but handleSubmit is now the primary navigation trigger.
     // This handles cases where the user is already logged in and lands on this page.
     useEffect(() => {
-        if (isAdmin) {
+        if (isAuthenticated) {
             setCurrentView('dashboard');
         }
-    }, [isAdmin, setCurrentView]);
+    }, [isAuthenticated, setCurrentView]);
 
     return (
         <div className="flex items-center justify-center p-4">
@@ -66,16 +84,16 @@ const Login: React.FC = () => {
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
                             <label 
-                                htmlFor="username" 
+                                htmlFor="email" 
                                 className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                             >
-                                Usuario
+                                Correo Electrónico
                             </label>
                             <input
-                                id="username"
-                                type="text"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
+                                id="email"
+                                type="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                                 required
                                 className="mt-1 w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                             />

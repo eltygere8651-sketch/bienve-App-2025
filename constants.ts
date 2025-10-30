@@ -8,7 +8,3 @@ export const LOCAL_STORAGE_KEYS = {
     CONTRACT_TEMPLATE: 'bmContigoContractTemplate',
     FIREBASE_CONFIG: 'bmContigoFirebaseConfig'
 };
-
-export const SESSION_STORAGE_KEYS = {
-    IS_ADMIN: 'isAdmin',
-};
