@@ -16,6 +16,7 @@ import ReceiptGenerator from './components/ReceiptGenerator';
 import SettingsComponent from './components/Settings';
 import DataManagement from './components/DataManagement';
 import Setup from './components/Setup';
+import SchemaSetup from './components/SchemaSetup';
 
 const App: React.FC = () => {
     const { 
@@ -32,19 +33,24 @@ const App: React.FC = () => {
         isConfigReady,
         isAuthenticated,
         logout,
-        initializationStatus
+        initializationStatus,
+        isSchemaReady,
+        schemaVerificationStatus,
     } = useAppContext();
     
     const { requests, isLoading, error } = useDataContext();
 
     const handleLogoClick = () => {
-        setCurrentView(isAuthenticated ? 'dashboard' : 'welcome');
+        if (isSchemaReady) {
+            setCurrentView(isAuthenticated ? 'dashboard' : 'welcome');
+        }
     };
 
-    if (initializationStatus === 'pending') {
+    if (initializationStatus === 'pending' || (isConfigReady && schemaVerificationStatus === 'verifying')) {
         return (
-            <div className="flex justify-center items-center h-screen bg-gray-100 dark:bg-gray-900">
+            <div className="flex flex-col justify-center items-center h-screen bg-gray-100 dark:bg-gray-900">
                 <Loader2 className="h-16 w-16 animate-spin text-blue-600" />
+                <p className="mt-4 text-gray-600 dark:text-gray-300">Inicializando aplicación...</p>
             </div>
         );
     }
@@ -67,12 +73,16 @@ const App: React.FC = () => {
         return <Setup />;
     }
 
+    if (!isSchemaReady) {
+        return <SchemaSetup />;
+    }
+
     if (!isAuthenticated && currentView !== 'welcome' && currentView !== 'loanRequest' && currentView !== 'auth') {
         return <Auth />;
     }
     
     const renderContent = () => {
-        if (isLoading && isAuthenticated) { // Show loader only when logged in and loading data
+        if (isLoading && isAuthenticated) {
             return (
                 <div className="flex justify-center items-center h-full">
                     <Loader2 className="h-12 w-12 animate-spin text-blue-600" />

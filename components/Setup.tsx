@@ -56,9 +56,7 @@ const Setup: React.FC = () => {
 
             showToast('¡Conexión con Supabase exitosa!', 'success');
             
-            setTimeout(() => {
-                setSupabaseConfig({ url, anonKey });
-            }, 1000);
+            setSupabaseConfig({ url, anonKey });
 
         } catch (e: any) {
             console.error("Config verification error:", e);

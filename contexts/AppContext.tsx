@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { AppView } from '../types';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 import { User } from '@supabase/supabase-js';
@@ -7,11 +7,14 @@ import {
     isSupabaseConfigured, 
     getSupabaseConfig, 
     onAuthStateChanged, 
-    signOut
+    signOut,
+    verifySchema
 } from '../services/supabaseService';
 
 type Theme = 'light' | 'dark';
 type InitializationStatus = 'pending' | 'success' | 'failed';
+type SchemaVerificationStatus = 'pending' | 'verifying' | 'verified';
+
 
 interface ToastMessage {
     message: string;
@@ -43,6 +46,10 @@ interface AppContextType {
     isConfigReady: boolean;
     setSupabaseConfig: (config: { url: string; anonKey: string }) => void;
     initializationStatus: InitializationStatus;
+    isSchemaReady: boolean;
+    schemaVerificationStatus: SchemaVerificationStatus;
+    verifyDatabaseSchema: () => Promise<void>;
+    supabaseConfig: { url: string; anonKey: string } | null;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -68,23 +75,47 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         message: '',
         onConfirm: () => {},
     });
-    const [isConfigReady, setIsConfigReady] = useState(() => isSupabaseConfigured(getSupabaseConfig()));
+    const [supabaseConfig, setSupabaseConfigState] = useState<{ url: string; anonKey: string } | null>(() => getSupabaseConfig());
+    const [isConfigReady, setIsConfigReady] = useState(() => isSupabaseConfigured(supabaseConfig));
     const [initializationStatus, setInitializationStatus] = useState<InitializationStatus>('pending');
+    const [isSchemaReady, setIsSchemaReady] = useState<boolean>(false);
+    const [schemaVerificationStatus, setSchemaVerificationStatus] = useState<SchemaVerificationStatus>('pending');
 
+
+    const verifyDatabaseSchema = useCallback(async () => {
+        setSchemaVerificationStatus('verifying');
+        try {
+            const schemaExists = await verifySchema();
+            setIsSchemaReady(schemaExists);
+        } catch (error) {
+            console.error("Failed to execute schema verification", error);
+            setIsSchemaReady(false);
+        } finally {
+            setSchemaVerificationStatus('verified');
+        }
+    }, []);
+    
     useEffect(() => {
         if (!isConfigReady) {
-            setInitializationStatus('success'); // Allows Setup component to render
+            setInitializationStatus('success');
+            setSchemaVerificationStatus('verified'); // No need to verify if not configured
             return;
         }
         if (supabase) {
              setInitializationStatus('success');
         } else {
-             setInitializationStatus('failed'); // Config exists but client creation failed
+             setInitializationStatus('failed');
         }
     }, [isConfigReady]);
 
     useEffect(() => {
-        if (initializationStatus !== 'success' || !supabase) return;
+        if (initializationStatus === 'success') {
+            verifyDatabaseSchema();
+        }
+    }, [initializationStatus, verifyDatabaseSchema]);
+
+    useEffect(() => {
+        if (initializationStatus !== 'success' || !supabase || !isSchemaReady) return;
 
         const { data: { subscription } } = onAuthStateChanged((_event, session) => {
             const currentUser = session?.user ?? null;
@@ -99,7 +130,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         });
 
         return () => subscription.unsubscribe();
-    }, [initializationStatus]);
+    }, [initializationStatus, isSchemaReady]);
 
     useEffect(() => {
         if (theme === 'dark') {
@@ -112,11 +143,12 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }, [theme]);
     
     useEffect(() => {
+        if (!isSchemaReady) return;
         const adminOnlyViews: AppView[] = ['dashboard', 'clients', 'requests', 'receiptGenerator', 'settings', 'dataManagement'];
         if (!isAuthenticated && adminOnlyViews.includes(currentView)) {
             setCurrentView('auth');
         }
-    }, [isAuthenticated, currentView]);
+    }, [isAuthenticated, currentView, isSchemaReady]);
 
     const handleThemeToggle = () => {
         setTheme(theme === 'light' ? 'dark' : 'light');
@@ -140,6 +172,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     
     const setSupabaseConfig = (config: { url: string; anonKey: string }) => {
         localStorage.setItem(LOCAL_STORAGE_KEYS.SUPABASE_CONFIG, JSON.stringify(config));
+        setSupabaseConfigState(config);
         setIsConfigReady(true);
         window.location.reload(); 
     }
@@ -169,7 +202,11 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         hideConfirmModal,
         isConfigReady,
         setSupabaseConfig,
-        initializationStatus
+        initializationStatus,
+        isSchemaReady,
+        schemaVerificationStatus,
+        verifyDatabaseSchema,
+        supabaseConfig,
     };
 
     return (

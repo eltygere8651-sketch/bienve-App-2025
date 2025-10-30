@@ -6,7 +6,8 @@ import { User } from '@supabase/supabase-js';
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
-    user: User | null
+    user: User | null,
+    isSchemaReady: boolean
 ) => {
     const [clients, setClients] = useState<Client[]>([]);
     const [loans, setLoans] = useState<Loan[]>([]);
@@ -86,7 +87,8 @@ export const useAppData = (
             showToast(`Préstamo Aprobado para ${request.fullName}`, 'success');
             showToast(welcomeMessage, 'info');
 
-        } catch (err) {
+        } catch (err)
+ {
             console.error("Failed to approve request:", err);
             showToast('Error al aprobar el préstamo.', 'error');
             throw err;
@@ -205,7 +207,7 @@ export const useAppData = (
     }, []);
 
     useEffect(() => {
-        if (!user || !supabase) {
+        if (!user || !supabase || !isSchemaReady) {
             setClients([]);
             setLoans([]);
             setRequests([]);
@@ -254,7 +256,7 @@ export const useAppData = (
         return () => {
             supabase.removeChannel(channels);
         };
-    }, [user, fetchData]);
+    }, [user, fetchData, isSchemaReady]);
 
 
     return {

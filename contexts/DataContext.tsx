@@ -24,8 +24,8 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { showToast, user } = useAppContext();
-    const appData = useAppData(showToast, user);
+    const { showToast, user, isSchemaReady } = useAppContext();
+    const appData = useAppData(showToast, user, isSchemaReady);
 
     return (
         <DataContext.Provider value={appData}>
