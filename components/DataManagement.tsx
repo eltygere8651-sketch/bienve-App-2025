@@ -30,13 +30,13 @@ const DataManagement: React.FC = () => {
             <div className="bg-amber-100 dark:bg-amber-900/50 border-l-4 border-amber-500 text-amber-700 dark:text-amber-200 p-4 rounded-md flex items-center shadow-md">
                 <Construction className="h-5 w-5 mr-3" />
                 <p>
-                    <span className="font-bold">Función en desarrollo:</span> La importación/exportación de datos para la versión en la nube está siendo rediseñada. Sus datos están seguros en Firebase.
+                    <span className="font-bold">Función en desarrollo:</span> La importación/exportación de datos para la versión en la nube está siendo rediseñada. Sus datos están seguros en Supabase.
                 </p>
             </div>
 
 
             <p className="text-gray-600 dark:text-gray-400">
-                Sus datos ahora se almacenan de forma segura en la nube de Firebase. Las herramientas para exportar e importar colecciones completas estarán disponibles en una futura actualización.
+                Sus datos ahora se almacenan de forma segura en la nube de Supabase. Las herramientas para exportar e importar colecciones completas estarán disponibles en una futura actualización.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-50 cursor-not-allowed">

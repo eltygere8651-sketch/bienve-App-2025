@@ -25,7 +25,6 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { showToast, user } = useAppContext();
-    // Fix: Removed `showConfirmModal` as it's not an expected argument for useAppData.
     const appData = useAppData(showToast, user);
 
     return (

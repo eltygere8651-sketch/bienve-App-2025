@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-// Fix: Import the missing 'FilePlus' icon from lucide-react.
 import { Database, CheckCircle, AlertTriangle, Loader2, Link, KeyRound, ClipboardCopy, ShieldCheck, ExternalLink, Info, FilePlus } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { createClient } from '@supabase/supabase-js';

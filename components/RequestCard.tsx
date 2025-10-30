@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LoanRequest, RequestStatus } from '../types';
-import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Download, Printer, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Loader2, Clock } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import ImageViewer from './ImageViewer';
@@ -20,10 +20,14 @@ const InfoRow: React.FC<{ icon: React.ReactNode, label: string, value?: string |
 
 const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
     const baseClasses = "px-2 py-1 text-xs font-semibold rounded-full inline-flex items-center";
-    if (status === RequestStatus.UNDER_REVIEW) {
-        return <span className={`${baseClasses} bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300`}><Info size={12} className="mr-1"/> {status}</span>;
+    switch (status) {
+        case RequestStatus.PENDING:
+            return <span className={`${baseClasses} bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300`}><Clock size={12} className="mr-1"/> {status}</span>;
+        case RequestStatus.UNDER_REVIEW:
+            return <span className={`${baseClasses} bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300`}><Info size={12} className="mr-1"/> {status}</span>;
+        default:
+            return null;
     }
-    return null;
 };
 
 const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {

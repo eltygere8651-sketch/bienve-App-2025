@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
 import { generateWelcomeMessage } from '../services/geminiService';
-import { INTEREST_RATE_CONFIG } from '../config';
 import { supabase } from '../services/supabaseService';
 import { User } from '@supabase/supabase-js';
 
@@ -22,10 +21,10 @@ export const useAppData = (
         const backIdPath = `${requestId}/backId_${files.backId.name}`;
 
         try {
-            const { data: frontUploadData, error: frontUploadError } = await supabase.storage.from('documents').upload(frontIdPath, files.frontId);
+            const { error: frontUploadError } = await supabase.storage.from('documents').upload(frontIdPath, files.frontId);
             if (frontUploadError) throw frontUploadError;
 
-            const { data: backUploadData, error: backUploadError } = await supabase.storage.from('documents').upload(backIdPath, files.backId);
+            const { error: backUploadError } = await supabase.storage.from('documents').upload(backIdPath, files.backId);
             if (backUploadError) throw backUploadError;
 
             const { data: frontUrlData } = supabase.storage.from('documents').getPublicUrl(frontIdPath);
@@ -39,7 +38,7 @@ export const useAppData = (
                 status: RequestStatus.PENDING,
             };
             
-            const { error: insertError } = await supabase.from('requests').insert([newRequest]);
+            const { error: insertError } = await supabase.from('requests').insert([newRequest]).select();
             if (insertError) throw insertError;
         } catch (err) {
             console.error("Failed to submit loan request:", err);
@@ -104,8 +103,10 @@ export const useAppData = (
             if (error) throw error;
             
             try {
-                const frontPath = new URL(request.frontIdUrl).pathname.split('/documents/')[1];
-                const backPath = new URL(request.backIdUrl).pathname.split('/documents/')[1];
+                // Robust path extraction from URL
+                const getPath = (url: string) => url.substring(url.indexOf('/documents/') + '/documents/'.length);
+                const frontPath = getPath(request.frontIdUrl);
+                const backPath = getPath(request.backIdUrl);
                 await supabase.storage.from('documents').remove([frontPath, backPath]);
             } catch (storageError) {
                 console.warn("Could not clean up request files from Storage:", storageError);
@@ -184,7 +185,7 @@ export const useAppData = (
             ] = await Promise.all([
                 supabase.from('clients').select('*'),
                 supabase.from('loans').select('*'),
-                supabase.from('requests').select('*')
+                supabase.from('requests').select('*').in('status', [RequestStatus.PENDING, RequestStatus.UNDER_REVIEW]),
             ]);
             
             if (clientsError) throw new Error(`Error fetching clients: ${clientsError.message}`);
@@ -212,17 +213,43 @@ export const useAppData = (
             return;
         }
         
-        fetchData(); // Initial fetch
+        fetchData(); 
 
-        const channels = supabase.channel('db-changes');
-        
-        const subscriptions = {
-            clients: channels.on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => fetchData()),
-            loans: channels.on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, () => fetchData()),
-            requests: channels.on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => fetchData())
+        const handleChanges = (payload: any) => {
+            console.log('Realtime change received!', payload);
+            const table = payload.table;
+            const event = payload.eventType;
+            const newRecord = payload.new;
+            const oldRecord = payload.old;
+
+            const stateUpdater = {
+                clients: setClients,
+                loans: setLoans,
+                requests: setRequests,
+            }[table];
+
+            if (!stateUpdater) return;
+
+            stateUpdater((currentRecords: any[]) => {
+                if (event === 'INSERT') {
+                    return [...currentRecords, newRecord];
+                }
+                if (event === 'UPDATE') {
+                    return currentRecords.map(record => record.id === newRecord.id ? newRecord : record);
+                }
+                if (event === 'DELETE') {
+                    return currentRecords.filter(record => record.id !== oldRecord.id);
+                }
+                return currentRecords;
+            });
         };
         
-        channels.subscribe();
+        const channels = supabase
+            .channel('db-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, handleChanges)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, handleChanges)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, handleChanges)
+            .subscribe();
 
         return () => {
             supabase.removeChannel(channels);
