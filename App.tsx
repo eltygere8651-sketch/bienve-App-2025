@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AppView } from './types';
 import Dashboard from './components/Dashboard';
 import ClientList from './components/ClientList';
@@ -9,7 +9,7 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, Sun, Moon, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import ReceiptGenerator from './components/ReceiptGenerator';
@@ -36,6 +36,7 @@ const App: React.FC = () => {
         initializationStatus,
         isSchemaReady,
         schemaVerificationStatus,
+        supabaseConfig,
     } = useAppContext();
     
     const { requests, isLoading, error } = useDataContext();
@@ -45,6 +46,17 @@ const App: React.FC = () => {
             setCurrentView(isAuthenticated ? 'dashboard' : 'welcome');
         }
     };
+
+    const projectRef = useMemo(() => {
+        if (!supabaseConfig?.url) return null;
+        try {
+            const url = new URL(supabaseConfig.url);
+            return url.hostname.split('.')[0];
+        } catch (e) {
+            console.error("Could not parse Supabase URL", e);
+            return null;
+        }
+    }, [supabaseConfig]);
 
     if (initializationStatus === 'pending' || (isConfigReady && schemaVerificationStatus === 'verifying')) {
         return (
@@ -196,8 +208,15 @@ const App: React.FC = () => {
                 <main className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 overflow-y-auto">
                      {isAuthenticated && (
                         <div className="bg-green-100 dark:bg-green-900/50 border-l-4 border-green-500 text-green-700 dark:text-green-200 p-4 rounded-md mb-6 flex items-center shadow-md">
-                            <Wrench className="h-5 w-5 mr-3" />
-                            <p className="font-bold">Modo Administrador Activo (Datos en la nube de Supabase).</p>
+                            <ShieldCheck className="h-6 w-6 mr-4 flex-shrink-0" />
+                            <div>
+                                <p className="font-bold">Conectado a Supabase</p>
+                                {projectRef ? (
+                                    <p className="text-xs font-mono text-green-800 dark:text-green-300">ID del Proyecto: {projectRef}</p>
+                                ) : (
+                                    <p className="text-xs">No se pudo identificar el ID del proyecto.</p>
+                                )}
+                            </div>
                         </div>
                     )}
                     <div className="flex-grow">

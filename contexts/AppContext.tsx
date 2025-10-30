@@ -3,12 +3,12 @@ import { AppView } from '../types';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 import { User } from '@supabase/supabase-js';
 import { 
-    supabase, 
     isSupabaseConfigured, 
     getSupabaseConfig, 
     onAuthStateChanged, 
     signOut,
-    verifySchema
+    verifySchema,
+    initializeSupabaseClient
 } from '../services/supabaseService';
 
 type Theme = 'light' | 'dark';
@@ -75,8 +75,8 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         message: '',
         onConfirm: () => {},
     });
-    const [supabaseConfig, setSupabaseConfigState] = useState<{ url: string; anonKey: string } | null>(() => getSupabaseConfig());
-    const [isConfigReady, setIsConfigReady] = useState(() => isSupabaseConfigured(supabaseConfig));
+    const [supabaseConfig, setSupabaseConfigState] = useState<{ url: string; anonKey: string } | null>(null);
+    const [isConfigReady, setIsConfigReady] = useState(false);
     const [initializationStatus, setInitializationStatus] = useState<InitializationStatus>('pending');
     const [isSchemaReady, setIsSchemaReady] = useState<boolean>(false);
     const [schemaVerificationStatus, setSchemaVerificationStatus] = useState<SchemaVerificationStatus>('pending');
@@ -96,26 +96,28 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }, []);
     
     useEffect(() => {
-        if (!isConfigReady) {
-            setInitializationStatus('success');
-            setSchemaVerificationStatus('verified'); // No need to verify if not configured
-            return;
-        }
-        if (supabase) {
-             setInitializationStatus('success');
+        const config = getSupabaseConfig();
+        if (isSupabaseConfigured(config)) {
+            if (initializeSupabaseClient(config!.url, config!.anonKey)) {
+                setSupabaseConfigState(config);
+                setIsConfigReady(true);
+                setInitializationStatus('success');
+            } else {
+                setInitializationStatus('failed');
+            }
         } else {
-             setInitializationStatus('failed');
+            setInitializationStatus('success'); // Ready to show Setup screen
         }
-    }, [isConfigReady]);
+    }, []);
 
     useEffect(() => {
-        if (initializationStatus === 'success') {
+        if (initializationStatus === 'success' && isConfigReady) {
             verifyDatabaseSchema();
         }
-    }, [initializationStatus, verifyDatabaseSchema]);
+    }, [initializationStatus, isConfigReady, verifyDatabaseSchema]);
 
     useEffect(() => {
-        if (initializationStatus !== 'success' || !supabase || !isSchemaReady) return;
+        if (initializationStatus !== 'success' || !isConfigReady || !isSchemaReady) return;
 
         const { data: { subscription } } = onAuthStateChanged((_event, session) => {
             const currentUser = session?.user ?? null;
@@ -130,7 +132,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         });
 
         return () => subscription.unsubscribe();
-    }, [initializationStatus, isSchemaReady]);
+    }, [initializationStatus, isConfigReady, isSchemaReady]);
 
     useEffect(() => {
         if (theme === 'dark') {
@@ -159,7 +161,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const logout = async () => {
-        if (!supabase) return;
         try {
             await signOut();
             showToast('Sesión cerrada.', 'info');
@@ -172,9 +173,14 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     
     const setSupabaseConfig = (config: { url: string; anonKey: string }) => {
         localStorage.setItem(LOCAL_STORAGE_KEYS.SUPABASE_CONFIG, JSON.stringify(config));
-        setSupabaseConfigState(config);
-        setIsConfigReady(true);
-        window.location.reload(); 
+        if (initializeSupabaseClient(config.url, config.anonKey)) {
+            setSupabaseConfigState(config);
+            setIsConfigReady(true);
+            setInitializationStatus('success');
+        } else {
+            setInitializationStatus('failed');
+            showToast('Error al inicializar la conexión con Supabase.', 'error');
+        }
     }
 
     const showConfirmModal = (options: Omit<ConfirmState, 'isOpen'>) => {

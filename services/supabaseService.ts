@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient, AuthChangeEvent, Session, User } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 
 export let supabase: SupabaseClient | null = null;
@@ -25,22 +25,21 @@ export const isSupabaseConfigured = (config: any): boolean => {
     );
 };
 
-const initializeSupabase = () => {
-    const config = getSupabaseConfig();
-    if (isSupabaseConfigured(config)) {
-        try {
-            supabase = createClient(config!.url, config!.anonKey);
-        } catch (error) {
-            console.error("Failed to initialize Supabase client:", error);
-            supabase = null;
-            // Clear the invalid config to prevent a boot loop
-            localStorage.removeItem(LOCAL_STORAGE_KEYS.SUPABASE_CONFIG);
-        }
+export const initializeSupabaseClient = (url: string, anonKey: string): boolean => {
+    if (!url || !anonKey) {
+        console.error("Supabase URL or anon key is missing for initialization.");
+        return false;
+    }
+    try {
+        supabase = createClient(url, anonKey);
+        return true;
+    } catch (error) {
+        console.error("Failed to initialize Supabase client:", error);
+        supabase = null;
+        return false;
     }
 };
 
-// Initialize on load
-initializeSupabase();
 
 export const verifySchema = async (): Promise<boolean> => {
     if (!supabase) return false;
