@@ -1,31 +1,41 @@
 import { createClient, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 
+// --- INICIO DE LA CONFIGURACIÓN DE DESPLIEGUE ---
+// IMPORTANTE: Para desplegar la aplicación en un dominio público (Vercel, Netlify, etc.),
+// reemplaza estos valores con tu URL y clave anónima de Supabase.
+// Estos valores son seguros para ser públicos en el código del cliente.
+// La seguridad de los datos la gestiona Supabase a través de Row Level Security (RLS).
+const DEPLOYED_SUPABASE_URL = 'REPLACE_WITH_YOUR_SUPABASE_URL';
+const DEPLOYED_SUPABASE_ANON_KEY = 'REPLACE_WITH_YOUR_SUPABASE_ANON_KEY';
+// --- FIN DE LA CONFIGURACIÓN DE DESPLIEGUE ---
+
 export let supabase: SupabaseClient | null = null;
 
-// Estas son las variables que configurarás en tu servicio de hosting (Vercel, Netlify, etc.)
-const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
-
+const isPlaceholder = (value: string) => value.startsWith('REPLACE_WITH');
 
 export const getSupabaseConfig = (): { url: string; anonKey: string } | null => {
-    // Prioridad 1: Variables de Entorno (para producción/despliegue)
-    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-        return { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
+    // Prioridad 1: Valores incrustados para la aplicación desplegada.
+    if (!isPlaceholder(DEPLOYED_SUPABASE_URL) && !isPlaceholder(DEPLOYED_SUPABASE_ANON_KEY)) {
+        return { url: DEPLOYED_SUPABASE_URL, anonKey: DEPLOYED_SUPABASE_ANON_KEY };
     }
 
-    // Prioridad 2: Configuración en LocalStorage (para configuración manual del admin)
+    // Prioridad 2: Configuración en LocalStorage (para configuración manual del admin en un nuevo navegador).
     const configStr = localStorage.getItem(LOCAL_STORAGE_KEYS.SUPABASE_CONFIG);
-    if (!configStr) {
-        return null;
+    if (configStr) {
+        try {
+            const config = JSON.parse(configStr);
+            // Re-validamos que el objeto parseado tenga la estructura correcta.
+            if (config && typeof config.url === 'string' && typeof config.anonKey === 'string') {
+                 return config;
+            }
+        } catch (error) {
+            console.error("Error parsing Supabase config from localStorage.", error);
+            localStorage.removeItem(LOCAL_STORAGE_KEYS.SUPABASE_CONFIG);
+        }
     }
-    try {
-        return JSON.parse(configStr);
-    } catch (error) {
-        console.error("Error parsing Supabase config from localStorage.", error);
-        localStorage.removeItem(LOCAL_STORAGE_KEYS.SUPABASE_CONFIG);
-        return null;
-    }
+    
+    return null;
 };
 
 export const isSupabaseConfigured = (config: any): boolean => {

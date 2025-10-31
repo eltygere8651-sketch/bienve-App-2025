@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Database, CheckCircle, AlertTriangle, Loader2, Link, KeyRound, ClipboardCopy, ShieldCheck, ExternalLink, Info, FilePlus } from 'lucide-react';
+import { Database, CheckCircle, AlertTriangle, Loader2, Link, KeyRound, ClipboardCopy, ShieldCheck, ExternalLink, Info, FilePlus, Wrench } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { createClient } from '@supabase/supabase-js';
 
@@ -79,8 +79,13 @@ const Setup: React.FC = () => {
                     <Database className="text-emerald-500 h-16 w-16 mx-auto" />
                     <h1 className="text-3xl font-bold mt-4">Configuración Inicial de Supabase</h1>
                     <p className="text-gray-600 dark:text-gray-400 mt-2">
-                        Sigue estos pasos para conectar la aplicación a tu propia base de datos de Supabase.
+                        Conecta la aplicación a tu propia base de datos de Supabase.
                     </p>
+                </div>
+                
+                <div className="mb-6 p-4 bg-sky-100 dark:bg-sky-900/50 rounded-lg text-sky-800 dark:text-sky-200 text-sm">
+                    <h3 className="font-bold flex items-center"><Wrench className="mr-2"/>Para Desarrolladores (Paso para Despliegue Público)</h3>
+                    <p className="mt-2">Si ya has desplegado la aplicación y los usuarios siguen viendo esta pantalla, necesitas <strong className="font-semibold">incrustar tus claves</strong> en el código. Edita el archivo <code className="text-xs bg-gray-200 dark:bg-gray-700 p-1 rounded">services/supabaseService.ts</code>, reemplaza los valores de las constantes y vuelve a desplegar tu aplicación.</p>
                 </div>
 
                 <div className="space-y-4">
