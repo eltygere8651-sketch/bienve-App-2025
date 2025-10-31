@@ -6,8 +6,8 @@ import { LOCAL_STORAGE_KEYS } from '../constants';
 // reemplaza estos valores con tu URL y clave anónima de Supabase.
 // Estos valores son seguros para ser públicos en el código del cliente.
 // La seguridad de los datos la gestiona Supabase a través de Row Level Security (RLS).
-const DEPLOYED_SUPABASE_URL = 'REPLACE_WITH_YOUR_SUPABASE_URL';
-const DEPLOYED_SUPABASE_ANON_KEY = 'REPLACE_WITH_YOUR_SUPABASE_ANON_KEY';
+const DEPLOYED_SUPABASE_URL = 'https://tgkhtfhahtozehtjpghd.supabase.co';
+const DEPLOYED_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRna2h0ZmhhaHRvemVodGpwZ2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE4NDE4MTIsImV4cCI6MjA3NzQxNzgxMn0.uHIa6Nf-k9pAUqpOBKWrF0GmYpK5pxzIACkPO44Or7o';
 // --- FIN DE LA CONFIGURACIÓN DE DESPLIEGUE ---
 
 export let supabase: SupabaseClient | null = null;
