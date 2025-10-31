@@ -34,6 +34,47 @@ const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
     }
 };
 
+const SimpleMarkdownRenderer: React.FC<{ text: string }> = ({ text }) => {
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let listItems: string[] = [];
+
+    const renderLine = (line: string): React.ReactNode => {
+        const parts = line.split(/(\*\*.*?\*\*)/g);
+        return parts.map((part, index) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={index}>{part.slice(2, -2)}</strong>;
+            }
+            return part;
+        });
+    };
+
+    const flushList = () => {
+        if (listItems.length > 0) {
+            elements.push(
+                <ul key={`ul-${elements.length}`} className="list-disc pl-5 mt-2 space-y-1">
+                    {listItems.map((item, index) => <li key={index}>{renderLine(item)}</li>)}
+                </ul>
+            );
+            listItems = [];
+        }
+    };
+
+    lines.forEach((line, lineIndex) => {
+        const listItemMatch = line.match(/^[\s-]*\*\s(.*)/) || line.match(/^[\s-]*-\s(.*)/);
+        if (listItemMatch) {
+            listItems.push(listItemMatch[1]);
+        } else {
+            flushList();
+            elements.push(<p key={`p-${lineIndex}`} className={line.trim() === '' ? 'h-2' : ''}>{renderLine(line)}</p>);
+        }
+    });
+
+    flushList();
+
+    return <>{elements}</>;
+};
+
 const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
     const { handleApproveRequest, handleDenyRequest, handleUpdateRequestStatus } = useDataContext();
     const { showToast, showConfirmModal } = useAppContext();
@@ -143,8 +184,8 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                         <p className="mt-4 text-gray-600">Analizando la solicitud...</p>
                     </div>
                 ) : (
-                    <div className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">
-                        {summaryModal.content}
+                    <div className="text-sm text-gray-800 font-sans leading-relaxed">
+                        <SimpleMarkdownRenderer text={summaryModal.content} />
                     </div>
                 )}
             </InfoModal>

@@ -1,7 +1,7 @@
 
 
 import { GoogleGenAI } from "@google/genai";
-import { LoanRequest } from '../types';
+import { LoanRequest, LoanStatus } from '../types';
 import { formatCurrency } from './utils';
 
 // --- Configuración de la API de Gemini (¡IMPORTANTE!) ---
@@ -128,5 +128,55 @@ export const generateRequestSummary = async (request: LoanRequest): Promise<stri
     } catch (error) {
         console.error("Error generating request summary from Gemini:", error);
         return "No se pudo generar el resumen en este momento. Inténtalo de nuevo más tarde.";
+    }
+};
+
+export interface DashboardStats {
+    totalLoaned: number;
+    totalOutstanding: number;
+    activeLoans: number;
+    counts: {
+        [LoanStatus.PAID]: number;
+        [LoanStatus.PENDING]: number;
+        [LoanStatus.OVERDUE]: number;
+    };
+}
+
+export const generateDashboardInsights = async (stats: DashboardStats): Promise<string> => {
+    const client = getAiClient();
+    if (!client) {
+        return "El análisis con IA está desactivado. Configura la clave API de Gemini.";
+    }
+
+    const prompt = `
+        Eres un asesor financiero analizando la cartera de préstamos de un pequeño prestamista.
+        Proporciona un análisis breve y útil en español, basado en las siguientes métricas.
+        Formatea la respuesta en Markdown, usando negritas y listas. No uses un título principal.
+
+        **Métricas de la Cartera:**
+        - **Total Prestado:** ${formatCurrency(stats.totalLoaned)}
+        - **Saldo Pendiente:** ${formatCurrency(stats.totalOutstanding)}
+        - **Préstamos Activos:** ${stats.activeLoans}
+        - **Desglose de Estados:**
+            - Pagados: ${stats.counts[LoanStatus.PAID] || 0}
+            - Pendientes: ${stats.counts[LoanStatus.PENDING] || 0}
+            - Vencidos: ${stats.counts[LoanStatus.OVERDUE] || 0}
+
+        **Tu Tarea:**
+        1.  **Diagnóstico General:** Escribe una o dos frases resumiendo la salud de la cartera.
+        2.  **Observación Positiva:** Destaca un punto fuerte (ej. "buen ratio de préstamos pagados").
+        3.  **Punto de Atención:** Identifica un posible riesgo o área de mejora (ej. "el número de préstamos vencidos está creciendo").
+        4.  **Sugerencia Práctica:** Ofrece una recomendación concreta y accionable (ej. "Considera enviar recordatorios de pago a los clientes con préstamos vencidos.").
+    `;
+
+    try {
+        const response = await client.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error generating dashboard insights from Gemini:", error);
+        return "No se pudo generar el análisis en este momento. Inténtalo de nuevo más tarde.";
     }
 };

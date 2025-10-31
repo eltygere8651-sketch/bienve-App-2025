@@ -1,10 +1,11 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Loan, LoanStatus, FilterStatus, Client } from '../types';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, Lightbulb, RefreshCw, FileWarning } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, Lightbulb, RefreshCw, FileWarning, Sparkles, Loader2 } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { formatCurrency } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
+import { generateDashboardInsights, DashboardStats } from '../services/geminiService';
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; change?: string; changeType?: 'increase' | 'decrease' }> = ({ title, value, icon, change, changeType }) => (
     <div className="bg-white p-6 rounded-2xl shadow-md flex items-center justify-between transition-transform hover:scale-105">
@@ -24,33 +25,99 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
     </div>
 );
 
+const SimpleMarkdownRenderer: React.FC<{ text: string }> = ({ text }) => {
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let listItems: string[] = [];
+
+    const renderLine = (line: string): React.ReactNode => {
+        const parts = line.split(/(\*\*.*?\*\*)/g);
+        return parts.map((part, index) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={index}>{part.slice(2, -2)}</strong>;
+            }
+            return part;
+        });
+    };
+
+    const flushList = () => {
+        if (listItems.length > 0) {
+            elements.push(
+                <ul key={`ul-${elements.length}`} className="list-disc pl-5 mt-2 space-y-1">
+                    {listItems.map((item, index) => <li key={index}>{renderLine(item)}</li>)}
+                </ul>
+            );
+            listItems = [];
+        }
+    };
+
+    lines.forEach((line, lineIndex) => {
+        const listItemMatch = line.match(/^[\s-]*\*\s(.*)/) || line.match(/^[\s-]*-\s(.*)/);
+        if (listItemMatch) {
+            listItems.push(listItemMatch[1]);
+        } else {
+            flushList();
+            elements.push(<p key={`p-${lineIndex}`} className={line.trim() === '' ? 'h-2' : ''}>{renderLine(line)}</p>);
+        }
+    });
+
+    flushList();
+
+    return <>{elements}</>;
+};
 
 const Dashboard: React.FC = () => {
     const { loans, clients, handleRegisterPayment } = useDataContext();
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('Todos');
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+    const [insight, setInsight] = useState<string | null>(null);
+    const [isInsightLoading, setIsInsightLoading] = useState(false);
     
 
-    const stats = useMemo(() => {
+    const detailedStats = useMemo((): DashboardStats => {
         const totalLoaned = loans.reduce((acc, loan) => acc + loan.amount, 0);
         const totalOutstanding = loans
             .filter(loan => loan.status === LoanStatus.PENDING || loan.status === LoanStatus.OVERDUE)
             .reduce((acc, loan) => acc + (loan.totalRepayment - (loan.monthlyPayment * loan.paymentsMade)), 0);
         const activeLoans = loans.filter(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE).length;
-        return { totalLoaned, totalOutstanding, activeLoans };
+        
+        const counts = loans.reduce((acc, loan) => {
+            acc[loan.status] = (acc[loan.status] || 0) + 1;
+            return acc;
+        }, {} as Record<LoanStatus, number>);
+
+        return {
+            totalLoaned,
+            totalOutstanding,
+            activeLoans,
+            counts: {
+                [LoanStatus.PAID]: counts[LoanStatus.PAID] || 0,
+                [LoanStatus.PENDING]: counts[LoanStatus.PENDING] || 0,
+                [LoanStatus.OVERDUE]: counts[LoanStatus.OVERDUE] || 0,
+            }
+        };
     }, [loans]);
     
     const pieChartData = useMemo(() => {
         if (loans.length === 0) {
             return [{ name: 'Sin datos', value: 1 }];
         }
-        const statusCounts = loans.reduce((acc, loan) => {
-            acc[loan.status] = (acc[loan.status] || 0) + 1;
-            return acc;
-        }, {} as Record<LoanStatus, number>);
+        return Object.entries(detailedStats.counts).map(([name, value]) => ({ name, value }));
+    }, [loans, detailedStats]);
 
-        return Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
-    }, [loans]);
+    const handleGenerateInsight = useCallback(async () => {
+        setIsInsightLoading(true);
+        setInsight(null);
+        try {
+            const result = await generateDashboardInsights(detailedStats);
+            setInsight(result);
+        } catch (error) {
+            console.error(error);
+            setInsight("Ocurrió un error al generar el análisis. Por favor, intenta de nuevo.");
+        } finally {
+            setIsInsightLoading(false);
+        }
+    }, [detailedStats]);
     
     const COLORS: { [key: string]: string } = {
         [LoanStatus.PENDING]: '#3b82f6', // blue-500
@@ -111,9 +178,9 @@ const Dashboard: React.FC = () => {
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Panel</h1>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <StatCard title="Total Prestado" value={formatCurrency(stats.totalLoaned)} icon={<Banknote />} />
-                    <StatCard title="Saldo Pendiente" value={formatCurrency(stats.totalOutstanding)} icon={<Banknote />} />
-                    <StatCard title="Préstamos Activos" value={stats.activeLoans.toString()} icon={<Clock />} />
+                    <StatCard title="Total Prestado" value={formatCurrency(detailedStats.totalLoaned)} icon={<Banknote />} />
+                    <StatCard title="Saldo Pendiente" value={formatCurrency(detailedStats.totalOutstanding)} icon={<Banknote />} />
+                    <StatCard title="Préstamos Activos" value={detailedStats.activeLoans.toString()} icon={<Clock />} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -190,6 +257,46 @@ const Dashboard: React.FC = () => {
                                     <FileWarning size={40} className="text-gray-400" />
                                     <h3 className="mt-4 font-semibold text-gray-700">Sin Datos de Préstamos</h3>
                                     <p className="mt-1 text-sm text-gray-500">No hay préstamos para mostrar en el gráfico.</p>
+                                </div>
+                            )}
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-md flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-semibold text-gray-700 flex items-center">
+                                    <Lightbulb size={20} className="mr-2 text-yellow-500" />
+                                    Análisis Financiero con IA
+                                </h2>
+                                {insight && !isInsightLoading && (
+                                     <button 
+                                        onClick={handleGenerateInsight} 
+                                        className="p-1.5 rounded-full text-gray-500 hover:bg-gray-100"
+                                        title="Generar nuevo análisis"
+                                    >
+                                        <RefreshCw size={16} />
+                                    </button>
+                                )}
+                            </div>
+                            {isInsightLoading ? (
+                                <div className="flex-grow flex flex-col items-center justify-center min-h-[150px]">
+                                    <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+                                    <p className="mt-4 text-gray-600">Analizando cartera...</p>
+                                </div>
+                            ) : insight ? (
+                                <div className="text-sm text-gray-800 font-sans leading-relaxed flex-grow">
+                                    <SimpleMarkdownRenderer text={insight} />
+                                </div>
+                            ) : (
+                                <div className="flex-grow flex flex-col items-center justify-center text-center min-h-[150px]">
+                                     <p className="text-gray-600 mb-4">
+                                        Obtén un resumen de la salud de tu cartera y sugerencias para mejorarla.
+                                    </p>
+                                    <button
+                                        onClick={handleGenerateInsight}
+                                        className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105"
+                                    >
+                                        <Sparkles size={18} className="mr-2" />
+                                        Generar Análisis
+                                    </button>
                                 </div>
                             )}
                         </div>
