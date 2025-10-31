@@ -6,6 +6,7 @@ import { useDataContext } from '../contexts/DataContext';
 import { InputField, SelectField, FileUploadField } from './FormFields';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 import { getContractText } from '../services/pdfService';
+import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER } from '../constants';
 
 const initialFormData = {
     fullName: '', idNumber: '', address: '', phone: '', email: '',
@@ -199,8 +200,8 @@ const LoanRequestForm: React.FC = () => {
                     <div>
                         <h2 className="text-lg font-semibold text-gray-700 mb-4 border-b pb-2">Documento de Identidad</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <FileUploadField label="Foto del Anverso" id="front-id-upload" onChange={(e) => handleFileChange(e, 'front')} previewUrl={frontIdPreview} fileName={frontId?.name} />
-                            <FileUploadField label="Foto del Reverso" id="back-id-upload" onChange={(e) => handleFileChange(e, 'back')} previewUrl={backIdPreview} fileName={backId?.name} />
+                            <FileUploadField label="Foto del Anverso" id="front-id-upload" onChange={(e) => handleFileChange(e, 'front')} previewUrl={frontIdPreview || DNI_FRONT_PLACEHOLDER} fileName={frontId?.name} />
+                            <FileUploadField label="Foto del Reverso" id="back-id-upload" onChange={(e) => handleFileChange(e, 'back')} previewUrl={backIdPreview || DNI_BACK_PLACEHOLDER} fileName={backId?.name} />
                         </div>
                     </div>
                      <div className="text-right">
