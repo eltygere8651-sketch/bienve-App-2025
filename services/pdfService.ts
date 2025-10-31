@@ -1,8 +1,9 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { Loan, Client } from '../types';
+import { Loan, Client, LoanRequest } from '../types';
 import { INTEREST_RATE_CONFIG } from '../config';
 import { LOCAL_STORAGE_KEYS } from '../constants';
+import { formatCurrency } from './utils';
 
 interface ContractData {
     fullName: string;
@@ -211,4 +212,142 @@ export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: strin
 
 
     doc.save(`Recibo_${data.clientName.replace(/\s/g, '_')}_${new Date(data.paymentDate).toISOString().split('T')[0]}.pdf`);
+};
+
+export const generateRequestSummaryPDF = (request: LoanRequest) => {
+    const doc = new jsPDF();
+    
+    // --- PAGE 1: SUMMARY ---
+
+    // Title
+    doc.setFontSize(18);
+    doc.text(`Resumen de Solicitud de Préstamo`, 105, 20, { align: 'center' });
+    doc.setFontSize(11);
+    doc.text(`Fecha de Solicitud: ${new Date(request.requestDate).toLocaleString('es-ES')}`, 15, 30);
+    doc.text(`Estado: ${request.status}`, 195, 30, { align: 'right' });
+    doc.setLineWidth(0.5);
+    doc.line(15, 35, 195, 35);
+
+    // Client Data Section
+    doc.setFontSize(14);
+    doc.text('Datos del Solicitante', 15, 45);
+    (doc as any).autoTable({
+        startY: 50,
+        head: [['Concepto', 'Información']],
+        body: [
+            ['Nombre Completo', request.fullName],
+            ['DNI/NIE', request.idNumber],
+            ['Dirección', request.address],
+            ['Teléfono', request.phone],
+            ['Email', request.email || 'No proporcionado'],
+        ],
+        theme: 'striped',
+        headStyles: { fillColor: [37, 99, 235] },
+    });
+
+    // Loan Details Section
+    let lastY = (doc as any).lastAutoTable.finalY;
+    doc.setFontSize(14);
+    doc.text('Detalles del Préstamo', 15, lastY + 15);
+    const loanDetailsBody = [
+        ['Monto Solicitado', formatCurrency(request.loanAmount)],
+        ['Motivo', request.loanReason],
+        ['Situación Laboral', request.employmentStatus],
+    ];
+    if (request.contractType) {
+        loanDetailsBody.push(['Tipo de Contrato', request.contractType]);
+    }
+    (doc as any).autoTable({
+        startY: lastY + 20,
+        head: [['Concepto', 'Información']],
+        body: loanDetailsBody,
+        theme: 'striped',
+        headStyles: { fillColor: [37, 99, 235] },
+    });
+    
+    // --- PAGE 2: CONTRACT ---
+    doc.addPage();
+    
+    const contractData = {
+        fullName: request.fullName,
+        idNumber: request.idNumber,
+        address: request.address,
+        loanAmount: request.loanAmount,
+    };
+    const contractText = getContractText(contractData);
+
+    doc.setFontSize(16);
+    doc.text("Contrato de Préstamo Aceptado", 105, 20, { align: 'center' });
+
+    doc.setFontSize(10);
+    const splitText = doc.splitTextToSize(contractText, 180);
+    doc.text(splitText, 15, 35);
+
+    if (request.signature) {
+        const lastTextY = 35 + (splitText.length * 4.5); // Adjust line height factor for font size 10
+        const signatureY = Math.max(lastTextY + 10, 240); // Ensure signature is at the bottom
+        doc.setFontSize(12);
+        doc.text("Firma del Prestatario:", 15, signatureY);
+        try {
+            doc.addImage(request.signature, 'PNG', 15, signatureY + 5, 60, 30);
+        } catch (e) {
+            console.error("Could not add signature image to PDF:", e);
+            doc.text("[Error al cargar la firma]", 15, signatureY + 15);
+        }
+    }
+
+    doc.save(`Solicitud_${request.fullName.replace(/\s/g, '_')}.pdf`);
+};
+
+const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+};
+
+export const generateIdDocumentsPDF = async (request: LoanRequest) => {
+    const doc = new jsPDF();
+
+    const addImageToPage = (docInstance: jsPDF, imageData: string, title: string) => {
+        const imgProps = docInstance.getImageProperties(imageData);
+        const pdfWidth = docInstance.internal.pageSize.getWidth();
+        const pdfHeight = docInstance.internal.pageSize.getHeight();
+        const margin = 15;
+        const maxWidth = pdfWidth - margin * 2;
+        const maxHeight = pdfHeight - margin * 2 - 40;
+
+        const ratio = Math.min(maxWidth / imgProps.width, maxHeight / imgProps.height);
+        const imgWidth = imgProps.width * ratio;
+        const imgHeight = imgProps.height * ratio;
+
+        const x = (pdfWidth - imgWidth) / 2;
+        const y = 40;
+
+        docInstance.setFontSize(16);
+        docInstance.text(title, pdfWidth / 2, 20, { align: 'center' });
+        docInstance.addImage(imageData, imgProps.fileType, x, y, imgWidth, imgHeight);
+    };
+
+    try {
+        // Fetch and add front ID
+        const frontResponse = await fetch(request.frontIdUrl);
+        const frontBlob = await frontResponse.blob();
+        const frontBase64 = await blobToBase64(frontBlob);
+        addImageToPage(doc, frontBase64, `Documento de Identidad (Anverso) - ${request.fullName}`);
+
+        // Fetch and add back ID
+        doc.addPage();
+        const backResponse = await fetch(request.backIdUrl);
+        const backBlob = await backResponse.blob();
+        const backBase64 = await blobToBase64(backBlob);
+        addImageToPage(doc, backBase64, `Documento de Identidad (Reverso) - ${request.fullName}`);
+
+        doc.save(`DNI_${request.fullName.replace(/\s/g, '_')}.pdf`);
+    } catch (error) {
+        console.error("Error generating ID PDF:", error);
+        throw new Error("Could not fetch images to generate PDF.");
+    }
 };

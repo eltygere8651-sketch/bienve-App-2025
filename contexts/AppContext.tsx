@@ -8,6 +8,7 @@ import {
     onAuthStateChanged, 
     signOut,
     verifySchema,
+    verifyStorage,
     initializeSupabaseClient
 } from '../services/supabaseService';
 
@@ -44,8 +45,9 @@ interface AppContextType {
     setSupabaseConfig: (config: { url: string; anonKey: string }) => void;
     initializationStatus: InitializationStatus;
     isSchemaReady: boolean;
+    isStorageReady: boolean;
     schemaVerificationStatus: SchemaVerificationStatus;
-    verifyDatabaseSchema: () => Promise<void>;
+    verifySetups: () => Promise<void>;
     supabaseConfig: { url: string; anonKey: string } | null;
 }
 
@@ -67,17 +69,23 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [isConfigReady, setIsConfigReady] = useState(false);
     const [initializationStatus, setInitializationStatus] = useState<InitializationStatus>('pending');
     const [isSchemaReady, setIsSchemaReady] = useState<boolean>(false);
+    const [isStorageReady, setIsStorageReady] = useState<boolean>(false);
     const [schemaVerificationStatus, setSchemaVerificationStatus] = useState<SchemaVerificationStatus>('pending');
 
 
-    const verifyDatabaseSchema = useCallback(async () => {
+    const verifySetups = useCallback(async () => {
         setSchemaVerificationStatus('verifying');
         try {
-            const schemaExists = await verifySchema();
+            const [schemaExists, storageExists] = await Promise.all([
+                verifySchema(),
+                verifyStorage()
+            ]);
             setIsSchemaReady(schemaExists);
+            setIsStorageReady(storageExists);
         } catch (error) {
-            console.error("Failed to execute schema verification", error);
+            console.error("Failed to execute setup verification", error);
             setIsSchemaReady(false);
+            setIsStorageReady(false);
         } finally {
             setSchemaVerificationStatus('verified');
         }
@@ -100,9 +108,9 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     useEffect(() => {
         if (initializationStatus === 'success' && isConfigReady) {
-            verifyDatabaseSchema();
+            verifySetups();
         }
-    }, [initializationStatus, isConfigReady, verifyDatabaseSchema]);
+    }, [initializationStatus, isConfigReady, verifySetups]);
 
     useEffect(() => {
         if (initializationStatus !== 'success' || !isConfigReady || !isSchemaReady) return;
@@ -114,7 +122,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             if (currentUser) {
                 setCurrentView(v => (v === 'auth' || v === 'welcome' || v === 'loanRequest' || v === 'setup') ? 'dashboard' : v);
             } else {
-                const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth', 'dashboard'];
+                const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth', 'dashboard', 'requestStatusChecker'];
                 setCurrentView(v => publicViews.includes(v) ? v : 'welcome');
             }
         });
@@ -182,8 +190,9 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setSupabaseConfig,
         initializationStatus,
         isSchemaReady,
+        isStorageReady,
         schemaVerificationStatus,
-        verifyDatabaseSchema,
+        verifySetups,
         supabaseConfig,
     };
 

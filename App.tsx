@@ -9,7 +9,7 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle, ShieldCheck, Menu, X } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle, ShieldCheck, Menu, X, SearchCheck } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import ReceiptGenerator from './components/ReceiptGenerator';
@@ -17,6 +17,7 @@ import SettingsComponent from './components/Settings';
 import DataManagement from './components/DataManagement';
 import Setup from './components/Setup';
 import SchemaSetup from './components/SchemaSetup';
+import RequestStatusChecker from './components/RequestStatusChecker';
 
 const App: React.FC = () => {
     const { 
@@ -33,6 +34,7 @@ const App: React.FC = () => {
         logout,
         initializationStatus,
         isSchemaReady,
+        isStorageReady,
         schemaVerificationStatus,
         supabaseConfig,
     } = useAppContext();
@@ -46,7 +48,7 @@ const App: React.FC = () => {
     }, [currentView]);
 
     const handleLogoClick = () => {
-        if (isSchemaReady) {
+        if (isSchemaReady && isStorageReady) {
             setCurrentView(isAuthenticated ? 'dashboard' : 'welcome');
         }
     };
@@ -89,7 +91,7 @@ const App: React.FC = () => {
         return <Setup />;
     }
 
-    if (!isSchemaReady) {
+    if (!isSchemaReady || !isStorageReady) {
         return <SchemaSetup />;
     }
     
@@ -116,6 +118,7 @@ const App: React.FC = () => {
             case 'dashboard': return <Dashboard />;
             case 'clients': return isAuthenticated ? <ClientList /> : <Auth />;
             case 'loanRequest': return <LoanRequestForm />;
+            case 'requestStatusChecker': return <RequestStatusChecker />;
             case 'requests': return isAuthenticated ? <RequestList /> : <Auth />;
             case 'auth': return <Auth />;
             case 'receiptGenerator': return isAuthenticated ? <ReceiptGenerator /> : <Auth />;
@@ -150,7 +153,7 @@ const App: React.FC = () => {
                             {/* Public Order */}
                             <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                             <NavItem icon={<FileText />} label="Solicitud de Préstamo" view="loanRequest" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                            <NavItem icon={<LayoutDashboard />} label="Panel" view="dashboard" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                            <NavItem icon={<SearchCheck />} label="Consultar Solicitud" view="requestStatusChecker" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         </>
                     )}
                 </ul>

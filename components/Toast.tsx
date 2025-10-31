@@ -52,6 +52,8 @@ const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
 
     return (
         <div
+            role="alert"
+            aria-live="assertive"
             className={`fixed top-5 right-5 z-50 flex items-center p-4 rounded-lg shadow-lg text-white transition-transform duration-300 ${styles.bg} ${
                 isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
             }`}

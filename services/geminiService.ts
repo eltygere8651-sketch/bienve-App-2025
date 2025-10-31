@@ -1,50 +1,43 @@
 
 
 import { GoogleGenAI } from "@google/genai";
+import { LoanRequest } from '../types';
+import { formatCurrency } from './utils';
 
-// --- INICIO DE LA CONFIGURACIÓN DE DESPLIEGUE (¡ADVERTENCIA DE SEGURIDAD!) ---
-// IMPORTANTE: Exponer tu clave API de Gemini en el código del cliente es un RIESGO DE SEGURIDAD.
-// Cualquiera que visite tu web puede verla y usarla, lo que podría generar costos en tu cuenta.
-// Esta solución es un parche para que la funcionalidad se active en un entorno de despliegue simple.
-// Para un proyecto en producción, se recomienda usar una función en la nube (Edge Function de Supabase)
-// que actúe como intermediario para llamar a la API de Gemini de forma segura.
-const DEPLOYED_GEMINI_API_KEY = 'REPLACE_WITH_YOUR_GEMINI_API_KEY';
-// --- FIN DE LA CONFIGURACIÓN DE DESPLIEGUE ---
+// --- Configuración de la API de Gemini (¡IMPORTANTE!) ---
+// Para que las funciones de IA funcionen en tu aplicación desplegada, debes configurar
+// tu clave API de Gemini como una variable de entorno en tu plataforma de hosting (Vercel, Netlify, etc.).
+// El nombre de la variable de entorno DEBE SER "API_KEY".
+// NO PEGUES TU CLAVE API DIRECTAMENTE EN ESTE ARCHIVO.
 
 let ai: GoogleGenAI | null = null;
-let hasWarnedMissingApiKey = false;
-
-const isPlaceholder = (value: string) => value.startsWith('REPLACE_WITH');
+let isInitialized = false;
 
 /**
  * Inicializa y devuelve el cliente de GoogleGenAI de forma diferida.
- * Devuelve null si la clave API no está configurada, evitando bloqueos.
+ * Devuelve null si la clave API (process.env.API_KEY) no está configurada.
  */
 const getAiClient = (): GoogleGenAI | null => {
-    if (ai) {
+    // Si ya intentamos inicializar, devolvemos la instancia (o null si falló).
+    if (isInitialized) {
         return ai;
     }
 
-    let apiKey: string | undefined = undefined;
-
-    // Prioridad 1: Clave incrustada para el despliegue público (menos seguro).
-    if (!isPlaceholder(DEPLOYED_GEMINI_API_KEY)) {
-        apiKey = DEPLOYED_GEMINI_API_KEY;
-    }
-    // Prioridad 2: Variable de entorno (ideal para entornos de desarrollo seguros).
-    else if (process.env.API_KEY) {
-        apiKey = process.env.API_KEY;
-    }
+    const apiKey = process.env.API_KEY;
 
     if (apiKey) {
-        ai = new GoogleGenAI({ apiKey });
-        return ai;
+        try {
+            ai = new GoogleGenAI({ apiKey });
+        } catch (error) {
+            console.error("Error al inicializar el cliente de Gemini:", error);
+            ai = null;
+        }
     } else {
-        if (hasWarnedMissingApiKey) return null;
-        console.warn("La clave API de Gemini no está configurada. Las funciones de IA estarán desactivadas.");
-        hasWarnedMissingApiKey = true;
-        return null;
+        console.warn("La variable de entorno API_KEY de Gemini no está configurada. Las funciones de IA estarán desactivadas.");
     }
+    
+    isInitialized = true;
+    return ai;
 };
 
 
@@ -100,5 +93,40 @@ export const generateWelcomeMessage = async (clientName: string): Promise<string
     } catch (error) {
         console.error("Error generating welcome message:", error);
         return `¡Bienvenido/a, ${clientName}! Estamos felices de que te unas a la comunidad B.M Contigo.`;
+    }
+};
+
+export const generateRequestSummary = async (request: LoanRequest): Promise<string> => {
+    const client = getAiClient();
+    if (!client) {
+        return "La clave API de Gemini no está configurada. El resumen de IA está desactivado.";
+    }
+
+    const prompt = `
+        Analiza la siguiente solicitud de préstamo y proporciona un resumen conciso y profesional en español para un analista de crédito.
+        Formatea la respuesta en Markdown, utilizando negritas y listas. No incluyas un título principal, empieza directamente con el resumen.
+
+        **Datos de la Solicitud:**
+        - **Solicitante:** ${request.fullName}
+        - **Monto Solicitado:** ${formatCurrency(request.loanAmount)}
+        - **Motivo:** ${request.loanReason}
+        - **Situación Laboral:** ${request.employmentStatus} ${request.contractType ? `(${request.contractType})` : ''}
+
+        **Tu Tarea:**
+        1.  **Resumen General:** Escribe un párrafo breve sobre el perfil del solicitante y su petición.
+        2.  **Puntos Positivos:** Crea una lista de 2-3 puntos clave que respalden la solicitud (ej. situación laboral estable, motivo de inversión).
+        3.  **Posibles Riesgos a Considerar:** Crea una lista de 2-3 puntos que requieran atención o más investigación (ej. monto elevado, situación laboral precaria, motivo vago).
+        4.  **Recomendación Final:** Concluye con una recomendación breve (ej. "Parece un candidato sólido", "Se recomienda cautela", "Requiere análisis adicional").
+    `;
+
+    try {
+        const response = await client.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error generating request summary from Gemini:", error);
+        return "No se pudo generar el resumen en este momento. Inténtalo de nuevo más tarde.";
     }
 };

@@ -82,6 +82,27 @@ export const verifySchema = async (): Promise<boolean> => {
     }
 };
 
+export const verifyStorage = async (): Promise<boolean> => {
+    if (!supabase) return false;
+    try {
+        // Using getBucket is a more direct and reliable way to check for bucket existence,
+        // as it is not affected by RLS policies on objects within the bucket, unlike .list().
+        const { error } = await supabase.storage.getBucket('documents');
+
+        // If an error occurs, it means the bucket doesn't exist or is inaccessible.
+        if (error) {
+            console.warn("Storage verification failed: 'documents' bucket not found or inaccessible.");
+            return false;
+        }
+        
+        // If no error, the bucket exists.
+        return true;
+    } catch (e) {
+        console.error("Unexpected error during storage verification:", e);
+        return false;
+    }
+};
+
 
 // --- Auth Wrappers ---
 export const signUp = (email: string, password: string) => {

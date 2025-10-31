@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Loader2, ArrowLeft, FilePlus, Upload } from 'lucide-react';
+import { CheckCircle, Loader2, ArrowLeft, FilePlus, Upload, SearchCheck } from 'lucide-react';
 import { LoanRequest } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
@@ -14,7 +14,7 @@ const initialFormData = {
 
 const LoanRequestForm: React.FC = () => {
     const { handleLoanRequestSubmit } = useDataContext();
-    const { showToast } = useAppContext();
+    const { showToast, setCurrentView } = useAppContext();
     
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState(initialFormData);
@@ -136,14 +136,25 @@ const LoanRequestForm: React.FC = () => {
             <div className="max-w-2xl mx-auto text-center py-16">
                  <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
                  <h1 className="mt-4 text-3xl font-bold text-gray-800">¡Solicitud Enviada!</h1>
-                 <p className="mt-2 text-gray-600">Gracias por tu interés. Tu solicitud ha sido registrada y será revisada por un administrador.</p>
-                 <button 
-                    onClick={resetForm} 
-                    className="mt-8 inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105"
-                >
-                    <FilePlus className="mr-2 h-5 w-5" />
-                    Realizar otra solicitud
-                 </button>
+                 <p className="mt-2 text-gray-600">
+                    Gracias por tu interés. Tu solicitud ha sido registrada. Puedes consultar su estado en cualquier momento desde la pestaña <strong>'Consultar Solicitud'</strong> utilizando tu DNI/NIE.
+                 </p>
+                 <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                    <button 
+                        onClick={() => setCurrentView('requestStatusChecker')}
+                        className="inline-flex items-center justify-center px-6 py-3 bg-gray-600 text-white font-bold rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-transform hover:scale-105"
+                    >
+                        <SearchCheck className="mr-2 h-5 w-5" />
+                        Consultar Estado Ahora
+                    </button>
+                    <button 
+                        onClick={resetForm} 
+                        className="inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105"
+                    >
+                        <FilePlus className="mr-2 h-5 w-5" />
+                        Realizar otra solicitud
+                    </button>
+                </div>
             </div>
         );
     }

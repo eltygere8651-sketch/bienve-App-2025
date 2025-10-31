@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { Database, Copy, Check, ExternalLink, RefreshCw, Loader2, AlertTriangle, ScrollText } from 'lucide-react';
+import { Database, Copy, Check, ExternalLink, RefreshCw, Loader2, AlertTriangle, ScrollText, HardDrive } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 
 const SQL_SCRIPT = `-- B.M. Contigo - Script de Inicialización de Base de Datos para Supabase
--- Versión 1.0.0
--- Este script creará las tablas necesarias, activará la seguridad a nivel de fila (RLS),
--- definirá las políticas de acceso y creará una función para manejar la aprobación de préstamos.
+-- Versión 1.1.0
+-- Este script es RE-EJECUTABLE. Soluciona el error "violates row-level security policy"
+-- limpiando las políticas antiguas y creando las correctas.
 
--- 1. CREACIÓN DE TABLAS
+-- 1. CREACIÓN DE TABLAS (Se crearán solo si no existen)
 
 -- Tabla para almacenar información de los clientes
-CREATE TABLE clients (
+CREATE TABLE IF NOT EXISTS clients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     join_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -18,7 +18,7 @@ CREATE TABLE clients (
 );
 
 -- Tabla para almacenar las solicitudes de préstamo
-CREATE TABLE requests (
+CREATE TABLE IF NOT EXISTS requests (
     id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     full_name TEXT NOT NULL,
     id_number TEXT NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE requests (
 );
 
 -- Tabla para almacenar los préstamos aprobados
-CREATE TABLE loans (
+CREATE TABLE IF NOT EXISTS loans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
     client_name TEXT NOT NULL,
@@ -54,44 +54,46 @@ CREATE TABLE loans (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 2. CONFIGURACIÓN DE ALMACENAMIENTO (Storage)
--- Se asume que el bucket 'documents' se crea manualmente desde el dashboard de Supabase.
--- Estas políticas permiten a los usuarios anónimos (público) subir a 'documents' y a los usuarios autenticados gestionar sus propios archivos.
-
--- Política para que CUALQUIERA (anon) pueda subir archivos a la carpeta 'documents'.
--- Esto es necesario para que el formulario de solicitud público funcione.
-CREATE POLICY "Public Upload Access" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'documents');
-
--- Política para que los usuarios autenticados (admins) puedan ver sus propios archivos.
-CREATE POLICY "Allow Authenticated Select" ON storage.objects FOR SELECT TO authenticated USING (auth.role() = 'authenticated');
-
--- Política para que los usuarios autenticados (admins) puedan actualizar sus propios archivos.
-CREATE POLICY "Allow Authenticated Update" ON storage.objects FOR UPDATE TO authenticated USING (auth.role() = 'authenticated');
-
--- Política para que los usuarios autenticados (admins) puedan eliminar sus propios archivos.
-CREATE POLICY "Allow Authenticated Delete" ON storage.objects FOR DELETE TO authenticated USING (auth.role() = 'authenticated');
-
-
--- 3. HABILITACIÓN DE SEGURIDAD A NIVEL DE FILA (RLS)
+-- 2. HABILITACIÓN DE SEGURIDAD A NIVEL DE FILA (RLS)
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE requests ENABLE ROW LEVEL SECURITY;
 
--- 4. POLÍTICAS DE ACCESO (RLS Policies)
+-- 3. LIMPIEZA DE POLÍTICAS ANTIGUAS
+-- Es seguro ejecutar esto incluso si las políticas no existen.
 
--- Policies para la tabla 'clients'
--- Los usuarios autenticados (admins) pueden realizar todas las operaciones.
+-- Políticas de Storage
+DROP POLICY IF EXISTS "Public Upload Access" ON storage.objects;
+DROP POLICY IF EXISTS "Allow Authenticated Select" ON storage.objects;
+DROP POLICY IF EXISTS "Allow Authenticated Update" ON storage.objects;
+DROP POLICY IF EXISTS "Allow Authenticated Delete" ON storage.objects;
+
+-- Políticas de Datos
+DROP POLICY IF EXISTS "Allow admin full access on clients" ON clients;
+DROP POLICY IF EXISTS "Allow admin full access on loans" ON loans;
+DROP POLICY IF EXISTS "Allow public insert on requests" ON requests;
+DROP POLICY IF EXISTS "Allow admin full access on requests" ON requests;
+
+-- 4. CREACIÓN DE POLÍTICAS DE ACCESO (CORREGIDAS)
+
+-- Políticas de Almacenamiento (Storage)
+-- [CORREGIDO] Permite a usuarios ANÓNIMOS subir archivos a 'documents'.
+CREATE POLICY "Public Upload Access" ON storage.objects FOR INSERT TO anon WITH CHECK (bucket_id = 'documents');
+-- Permite a los administradores autenticados gestionar archivos.
+CREATE POLICY "Allow Authenticated Select" ON storage.objects FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Allow Authenticated Update" ON storage.objects FOR UPDATE TO authenticated USING (true);
+CREATE POLICY "Allow Authenticated Delete" ON storage.objects FOR DELETE TO authenticated USING (true);
+
+-- Políticas de Datos (RLS)
+-- Los administradores autenticados tienen acceso total a 'clients' y 'loans'.
 CREATE POLICY "Allow admin full access on clients" ON clients FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
--- Policies para la tabla 'loans'
--- Los usuarios autenticados (admins) pueden realizar todas las operaciones.
 CREATE POLICY "Allow admin full access on loans" ON loans FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- Policies para la tabla 'requests'
--- CUALQUIERA (anon) puede crear una nueva solicitud.
-CREATE POLICY "Allow public insert on requests" ON requests FOR INSERT TO public WITH CHECK (true);
--- Los usuarios autenticados (admins) pueden ver, actualizar y eliminar solicitudes.
+-- [CORREGIDO] Permite a usuarios ANÓNIMOS crear nuevas solicitudes en 'requests'.
+CREATE POLICY "Allow public insert on requests" ON requests FOR INSERT TO anon WITH CHECK (true);
+-- Permite a los administradores autenticados gestionar todas las solicitudes.
 CREATE POLICY "Allow admin full access on requests" ON requests FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
 
 -- 5. FUNCIÓN DE BASE DE DATOS PARA TRANSACCIONES
 -- Esta función asegura que la aprobación de una solicitud sea una operación atómica:
@@ -160,13 +162,13 @@ $$;
 
 
 const SchemaSetup: React.FC = () => {
-    const { verifyDatabaseSchema, supabaseConfig } = useAppContext();
+    const { verifySetups, supabaseConfig, isSchemaReady, isStorageReady } = useAppContext();
     const [isChecking, setIsChecking] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
 
     const handleRecheck = async () => {
         setIsChecking(true);
-        await verifyDatabaseSchema();
+        await verifySetups();
         setIsChecking(false);
     };
     
@@ -188,33 +190,53 @@ const SchemaSetup: React.FC = () => {
             <div className="w-full max-w-4xl bg-white p-6 sm:p-8 rounded-2xl shadow-lg text-gray-800">
                 <div className="text-center mb-6">
                     <Database className="text-blue-500 h-16 w-16 mx-auto" />
-                    <h1 className="text-2xl sm:text-3xl font-bold mt-4">Configuración de la Base de Datos</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold mt-4">Pasos Finales de Configuración</h1>
                     <p className="text-gray-600 mt-2">
-                        ¡Conexión exitosa! Ahora solo falta un paso: preparar tu base de datos.
+                        ¡Conexión exitosa! Ahora solo falta preparar tu base de datos y almacenamiento.
                     </p>
                 </div>
-                 <div className="mt-4 p-4 bg-amber-100 rounded-lg text-amber-800 text-sm flex items-start">
-                    <AlertTriangle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5" />
-                    <div>
-                         <p className="font-bold">Acción Requerida</p>
-                         <p>La aplicación no encontró las tablas necesarias en tu base de datos de Supabase. Por favor, ejecuta el siguiente script SQL para crearlas.</p>
-                    </div>
-                </div>
 
-                <div className="mt-6">
-                     <h2 className="text-xl font-semibold mb-2 flex items-center"><ScrollText className="mr-2"/>Script de Inicialización SQL</h2>
-                     <div className="relative">
-                        <textarea
-                            readOnly
-                            value={SQL_SCRIPT}
-                            rows={10}
-                            className="w-full p-3 font-mono text-xs border border-gray-300 rounded-md bg-gray-50 text-gray-600"
-                        />
-                         <button onClick={handleCopy} className="absolute top-2 right-2 p-2 bg-gray-200 rounded-md hover:bg-gray-300">
-                            {copySuccess ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-                         </button>
-                     </div>
-                </div>
+                {!isSchemaReady && (
+                    <div className="mt-4 p-4 bg-amber-100 rounded-lg text-amber-800 text-sm flex items-start">
+                        <AlertTriangle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-bold">Paso 1: Configurar la Base de Datos</p>
+                            <p>La aplicación no encontró las tablas necesarias. Por favor, ejecuta el siguiente script SQL para crearlas.</p>
+                        </div>
+                    </div>
+                )}
+
+                {!isStorageReady && (
+                    <div className="mt-6 p-4 bg-blue-100 rounded-lg text-blue-800 text-sm">
+                        <h3 className="font-bold flex items-center"><HardDrive className="mr-2 h-5 w-5"/>Paso {isSchemaReady ? '1' : '2'}: Crear el Bucket de Almacenamiento</h3>
+                        <p className="mt-2">
+                            Para que la subida de documentos (DNI, contratos) funcione, necesitas crear un "bucket" de almacenamiento.
+                        </p>
+                        <ul className="list-disc list-inside mt-2 space-y-1">
+                            <li>En tu panel de Supabase, ve a la sección <strong>Storage</strong> (icono de cilindro).</li>
+                            <li>Haz clic en <strong>"Create a new bucket"</strong>.</li>
+                            <li>Nombra el bucket exactamente: <code className="text-xs bg-gray-200 p-1 rounded font-mono">documents</code>.</li>
+                            <li><strong>¡Muy importante!</strong> Activa la opción <strong>"Public bucket"</strong> para permitir las subidas desde el formulario.</li>
+                        </ul>
+                    </div>
+                )}
+
+                {!isSchemaReady && (
+                    <div className="mt-6">
+                        <h2 className="text-xl font-semibold mb-2 flex items-center"><ScrollText className="mr-2"/>Script SQL para el Paso 1</h2>
+                        <div className="relative">
+                            <textarea
+                                readOnly
+                                value={SQL_SCRIPT}
+                                rows={10}
+                                className="w-full p-3 font-mono text-xs border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                            />
+                            <button onClick={handleCopy} className="absolute top-2 right-2 p-2 bg-gray-200 rounded-md hover:bg-gray-300">
+                                {copySuccess ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <a href={sqlEditorLink} target="_blank" rel="noopener noreferrer" className="w-full flex items-center justify-center px-6 py-3 bg-emerald-600 text-white font-bold rounded-lg shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all hover:scale-105">
@@ -231,11 +253,11 @@ const SchemaSetup: React.FC = () => {
                         ) : (
                             <RefreshCw className="mr-2 h-5 w-s5" />
                         )}
-                        {isChecking ? 'Verificando...' : 'He ejecutado el script, verificar de nuevo'}
+                        {isChecking ? 'Verificando...' : 'He completado los pasos, verificar de nuevo'}
                     </button>
                 </div>
                  <div className="mt-6 text-xs text-gray-500 text-center">
-                    <p>Una vez que ejecutes el script en tu editor de Supabase, haz clic en "Verificar de nuevo" para acceder a la aplicación.</p>
+                    <p>Una vez que completes los pasos pendientes, haz clic en "Verificar de nuevo" para acceder a la aplicación.</p>
                 </div>
             </div>
         </div>

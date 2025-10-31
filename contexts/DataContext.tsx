@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { useAppContext } from './AppContext';
@@ -17,7 +18,7 @@ interface DataContextType {
     handleLoanRequestSubmit: (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: File, backId: File }) => Promise<void>;
     handleApproveRequest: (request: LoanRequest, loanAmount: number, loanTerm: number) => Promise<void>;
     handleDenyRequest: (request: LoanRequest) => Promise<void>;
-    handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
+    handleUpdateRequestStatus: (requestId: number, status: RequestStatus) => Promise<void>;
     handleRegisterPayment: (loanId: string) => Promise<void>;
 }
 

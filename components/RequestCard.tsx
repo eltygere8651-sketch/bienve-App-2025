@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { LoanRequest, RequestStatus } from '../types';
-import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Loader2, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Loader2, Clock, Download, Sparkles } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import ImageViewer from './ImageViewer';
 import { formatCurrency } from '../services/utils';
+import { generateRequestSummaryPDF, generateIdDocumentsPDF } from '../services/pdfService';
+import InfoModal from './InfoModal';
+import { generateRequestSummary } from '../services/geminiService';
+
 
 const InfoRow: React.FC<{ icon: React.ReactNode, label: string, value?: string | number }> = ({ icon, label, value }) => (
     value ? (
@@ -38,6 +42,10 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
     const [amount, setAmount] = useState(request.loanAmount || 500);
     const [term, setTerm] = useState(12);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    const [isDownloadingDniPdf, setIsDownloadingDniPdf] = useState(false);
+    const [summaryModal, setSummaryModal] = useState({ isOpen: false, content: '', isLoading: false });
+
 
     const approveAction = async () => {
         setIsProcessing(true);
@@ -66,6 +74,42 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
         }
     };
 
+    const handleGenerateSummary = async () => {
+        setSummaryModal({ isOpen: true, content: '', isLoading: true });
+        try {
+            const summary = await generateRequestSummary(request);
+            setSummaryModal({ isOpen: true, content: summary, isLoading: false });
+        } catch (e) {
+            console.error(e);
+            showToast("Error al generar el resumen.", "error");
+            setSummaryModal({ isOpen: false, content: '', isLoading: false });
+        }
+    };
+
+    const handleDownloadSummaryClick = () => {
+        setIsDownloadingPdf(true);
+        try {
+            generateRequestSummaryPDF(request);
+        } catch (e) {
+            console.error("Failed to generate PDF:", e);
+            showToast("Error al generar el PDF.", "error");
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    };
+
+    const handleDownloadDniPdfClick = async () => {
+        setIsDownloadingDniPdf(true);
+        try {
+            await generateIdDocumentsPDF(request);
+        } catch (e) {
+            console.error("Failed to generate DNI PDF:", e);
+            showToast("Error al generar el PDF del DNI.", "error");
+        } finally {
+            setIsDownloadingDniPdf(false);
+        }
+    };
+
     const handleApproveClick = () => {
         if (amount > 0 && term > 0) {
             showConfirmModal({
@@ -87,87 +131,151 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="p-4 flex justify-between items-center cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-                <div>
-                    <h3 className="font-bold text-lg text-gray-800">{request.fullName}</h3>
-                    <div className="flex items-center gap-2">
-                        <p className="text-sm text-gray-500">Solicitud del {new Date(request.requestDate).toLocaleDateString()}</p>
-                        <StatusBadge status={request.status} />
+        <>
+            <InfoModal
+                isOpen={summaryModal.isOpen}
+                onClose={() => setSummaryModal({ ...summaryModal, isOpen: false })}
+                title="Resumen con Inteligencia Artificial"
+            >
+                {summaryModal.isLoading ? (
+                    <div className="flex flex-col items-center justify-center min-h-[150px]">
+                        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+                        <p className="mt-4 text-gray-600">Analizando la solicitud...</p>
+                    </div>
+                ) : (
+                    <div className="text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">
+                        {summaryModal.content}
+                    </div>
+                )}
+            </InfoModal>
+
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div className="p-4 flex justify-between items-center cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
+                    <div>
+                        <h3 className="font-bold text-lg text-gray-800">{request.fullName}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                            <p className="text-sm text-gray-500">Solicitud del {new Date(request.requestDate).toLocaleDateString()}</p>
+                            <StatusBadge status={request.status} />
+                        </div>
+                    </div>
+                    <div className="flex items-center">
+                        <span className="text-sm font-bold text-blue-600 mr-2 sm:mr-4">
+                            {formatCurrency(request.loanAmount)}
+                        </span>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleGenerateSummary();
+                            }}
+                            className="p-2 rounded-full text-gray-500 hover:bg-yellow-100 hover:text-yellow-600 disabled:opacity-50 disabled:cursor-wait"
+                            title="Generar resumen con IA"
+                            disabled={summaryModal.isLoading}
+                        >
+                            {summaryModal.isLoading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+                        </button>
+                        <div className="p-2">
+                            {isExpanded ? <ChevronUp className="text-gray-500" /> : <ChevronDown className="text-gray-500" />}
+                        </div>
                     </div>
                 </div>
-                <div className="flex items-center">
-                     <span className="text-sm font-bold text-blue-600 mr-4">
-                        {formatCurrency(request.loanAmount)}
-                    </span>
-                    {isExpanded ? <ChevronUp className="text-gray-500" /> : <ChevronDown className="text-gray-500" />}
-                </div>
+                {isExpanded && (
+                    <div className="p-4 border-t border-gray-200 animate-fade-in-down">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 mb-4">
+                            <InfoRow icon={<Banknote size={16} />} label="Monto Solicitado" value={formatCurrency(request.loanAmount)} />
+                            <InfoRow icon={<FileText size={16} />} label="Motivo" value={request.loanReason} />
+                            <InfoRow icon={<Hash size={16} />} label="DNI/NIE" value={request.idNumber} />
+                            <InfoRow icon={<Briefcase size={16} />} label="Situación Laboral" value={request.employmentStatus} />
+                            <InfoRow icon={<Phone size={16} />} label="Teléfono" value={request.phone} />
+                            {request.contractType && <InfoRow icon={<Calendar size={16} />} label="Contrato" value={request.contractType} />}
+                            <InfoRow icon={<Mail size={16} />} label="Email" value={request.email} />
+                            <div className="md:col-span-2">
+                                <InfoRow icon={<MapPin size={16} />} label="Dirección" value={request.address} />
+                            </div>
+                        </div>
+                        
+                        <div className="border-t border-gray-200 mt-4 pt-4">
+                            <h4 className="text-base font-semibold text-gray-700 mb-4">Documentos y Firma</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-700 mb-2">Anverso DNI</p>
+                                    <ImageViewer imageUrl={request.frontIdUrl} alt="Front ID" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-700 mb-2">Reverso DNI</p>
+                                    <ImageViewer imageUrl={request.backIdUrl} alt="Back ID" />
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <p className="text-sm font-medium mb-2 text-gray-700">Firma del Solicitante</p>
+                                {request.signature ? (
+                                    <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                                        <img src={request.signature} alt="Firma del solicitante" className="mx-auto bg-white rounded" style={{ maxHeight: '100px' }} />
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-gray-500">No se proporcionó firma.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="border-t border-gray-200 mt-6 pt-4">
+                            <h4 className="text-base font-semibold text-gray-700 mb-4">Acciones</h4>
+                            <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+                                <div>
+                                    <p className="text-sm text-gray-700 font-semibold mb-3">Descargar Documentación</p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            onClick={handleDownloadDniPdfClick}
+                                            disabled={isDownloadingDniPdf}
+                                            className="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded-md hover:bg-gray-100 disabled:opacity-50"
+                                        >
+                                            {isDownloadingDniPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
+                                            {isDownloadingDniPdf ? 'Generando...' : 'DNI (PDF)'}
+                                        </button>
+                                        <button
+                                            onClick={handleDownloadSummaryClick}
+                                            disabled={isDownloadingPdf}
+                                            className="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-md hover:bg-blue-200 disabled:opacity-50"
+                                        >
+                                            {isDownloadingPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
+                                            {isDownloadingPdf ? 'Generando...' : 'Resumen (PDF)'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-gray-200">
+                                    <p className="text-sm text-gray-700 font-semibold mb-3">Gestionar Solicitud</p>
+                                    <div className="flex flex-col md:flex-row items-center gap-4">
+                                        <div className="w-full">
+                                            <label className="block text-sm font-medium text-gray-700">Monto a Aprobar (€)</label>
+                                            <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900" />
+                                        </div>
+                                        <div className="w-full">
+                                            <label className="block text-sm font-medium text-gray-700">Plazo (meses)</label>
+                                            <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900" />
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2 justify-end mt-4">
+                                        <button onClick={reviewAction} disabled={isProcessing} className="w-full sm:w-auto bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 flex items-center justify-center disabled:bg-yellow-400">
+                                            {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Edit2 size={18} className="mr-2" />} 
+                                            {isProcessing ? 'Procesando...' : 'En Estudio'}
+                                        </button>
+                                        <button onClick={handleDenyClick} disabled={isProcessing} className="w-full sm:w-auto bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center disabled:bg-red-400">
+                                            {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <X size={18} className="mr-2" />} 
+                                            {isProcessing ? 'Procesando...' : 'Denegar'}
+                                        </button>
+                                        <button onClick={handleApproveClick} disabled={isProcessing} className="w-full sm:w-auto bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center disabled:bg-green-400">
+                                            {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Check size={18} className="mr-2" />} 
+                                            {isProcessing ? 'Procesando...' : 'Aprobar'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
-            {isExpanded && (
-                <div className="p-4 border-t border-gray-200">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 mb-4">
-                        <InfoRow icon={<Banknote size={16} />} label="Monto Solicitado" value={formatCurrency(request.loanAmount)} />
-                        <InfoRow icon={<FileText size={16} />} label="Motivo" value={request.loanReason} />
-                        <InfoRow icon={<Hash size={16} />} label="DNI/NIE" value={request.idNumber} />
-                        <InfoRow icon={<Briefcase size={16} />} label="Situación Laboral" value={request.employmentStatus} />
-                        <InfoRow icon={<Phone size={16} />} label="Teléfono" value={request.phone} />
-                         {request.contractType && <InfoRow icon={<Calendar size={16} />} label="Contrato" value={request.contractType} />}
-                        <InfoRow icon={<Mail size={16} />} label="Email" value={request.email} />
-                        <div className="md:col-span-2">
-                             <InfoRow icon={<MapPin size={16} />} label="Dirección" value={request.address} />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <p className="text-sm font-semibold mb-2 text-gray-700">Anverso DNI</p>
-                            <ImageViewer imageUrl={request.frontIdUrl} alt="Front ID" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-semibold mb-2 text-gray-700">Reverso DNI</p>
-                            <ImageViewer imageUrl={request.backIdUrl} alt="Back ID" />
-                        </div>
-                    </div>
-                     <div className="space-y-4 mb-6">
-                        <div>
-                            <p className="text-sm font-semibold mb-2 text-gray-700">Firma del Solicitante</p>
-                            {request.signature ? (
-                                 <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-                                    <img src={request.signature} alt="Firma del solicitante" className="mx-auto bg-white rounded" style={{ maxHeight: '100px' }} />
-                                 </div>
-                            ) : (
-                                <p className="text-xs text-gray-500">No se proporcionó firma.</p>
-                            )}
-                        </div>
-                    </div>
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-4">
-                        <div className="flex flex-col md:flex-row items-center gap-4">
-                            <div className="w-full">
-                                <label className="block text-sm font-medium text-gray-700">Monto a Aprobar (€)</label>
-                                <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900" />
-                            </div>
-                            <div className="w-full">
-                                <label className="block text-sm font-medium text-gray-700">Plazo (meses)</label>
-                                <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900" />
-                            </div>
-                        </div>
-                         <div className="flex flex-col sm:flex-row gap-2 justify-end">
-                            <button onClick={reviewAction} disabled={isProcessing} className="w-full sm:w-auto bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 flex items-center justify-center disabled:bg-yellow-400">
-                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Edit2 size={18} className="mr-2" />} 
-                                {isProcessing ? 'Procesando...' : 'En Estudio'}
-                            </button>
-                            <button onClick={handleDenyClick} disabled={isProcessing} className="w-full sm:w-auto bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center disabled:bg-red-400">
-                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <X size={18} className="mr-2" />} 
-                                {isProcessing ? 'Procesando...' : 'Denegar'}
-                            </button>
-                            <button onClick={handleApproveClick} disabled={isProcessing} className="w-full sm:w-auto bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center disabled:bg-green-400">
-                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Check size={18} className="mr-2" />} 
-                                {isProcessing ? 'Procesando...' : 'Aprobar'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+        </>
     );
 };
 

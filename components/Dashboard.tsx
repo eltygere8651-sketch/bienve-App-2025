@@ -159,8 +159,14 @@ const Dashboard: React.FC = () => {
                         ) : (
                             <div className="text-center py-10">
                                 <FileWarning size={40} className="mx-auto text-gray-400" />
-                                <h3 className="mt-4 font-semibold text-gray-700">No hay préstamos que coincidan</h3>
-                                <p className="mt-1 text-sm text-gray-500">Prueba con otro filtro o aprueba una solicitud.</p>
+                                <h3 className="mt-4 font-semibold text-gray-700">
+                                    {filterStatus === 'Todos' ? 'No hay préstamos recientes' : `No hay préstamos con estado "${filterStatus}"`}
+                                </h3>
+                                <p className="mt-1 text-sm text-gray-500">
+                                    {filterStatus === 'Todos' 
+                                        ? 'Cuando se apruebe una nueva solicitud, aparecerá aquí.' 
+                                        : 'Prueba seleccionando otro estado en el gráfico.'}
+                                </p>
                             </div>
                         )}
                     </div>

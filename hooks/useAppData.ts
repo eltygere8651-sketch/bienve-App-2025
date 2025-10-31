@@ -1,7 +1,50 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
 import { supabase } from '../services/supabaseService';
 import { User } from '@supabase/supabase-js';
+
+// --- Mappers: DB (snake_case) to App (camelCase) ---
+
+const mapClientFromDb = (c: any): Client => ({
+    id: c.id,
+    name: c.name,
+    joinDate: c.join_date,
+});
+
+const mapLoanFromDb = (l: any): Loan => ({
+    id: l.id,
+    clientId: l.client_id,
+    clientName: l.client_name,
+    amount: l.amount,
+    interestRate: l.interest_rate,
+    term: l.term,
+    startDate: l.start_date,
+    status: l.status,
+    monthlyPayment: l.monthly_payment,
+    totalRepayment: l.total_repayment,
+    paymentsMade: l.payments_made,
+    signature: l.signature,
+    contractPdfUrl: l.contract_pdf_url,
+});
+
+const mapRequestFromDb = (r: any): LoanRequest => ({
+    id: r.id,
+    fullName: r.full_name,
+    idNumber: r.id_number,
+    address: r.address,
+    phone: r.phone,
+    email: r.email,
+    loanAmount: r.loan_amount,
+    loanReason: r.loan_reason,
+    employmentStatus: r.employment_status,
+    contractType: r.contract_type,
+    frontIdUrl: r.front_id_url,
+    backIdUrl: r.back_id_url,
+    requestDate: r.request_date,
+    status: r.status,
+    signature: r.signature,
+});
+
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -30,19 +73,33 @@ export const useAppData = (
             const { data: frontUrlData } = supabase.storage.from('documents').getPublicUrl(frontIdPath);
             const { data: backUrlData } = supabase.storage.from('documents').getPublicUrl(backIdPath);
 
-            const newRequest: Omit<LoanRequest, 'id'> = {
-                ...requestData,
-                frontIdUrl: frontUrlData.publicUrl,
-                backIdUrl: backUrlData.publicUrl,
-                requestDate: new Date().toISOString(),
+            const newRequestForDb = {
+                full_name: requestData.fullName,
+                id_number: requestData.idNumber,
+                address: requestData.address,
+                phone: requestData.phone,
+                email: requestData.email,
+                loan_amount: requestData.loanAmount,
+                loan_reason: requestData.loanReason,
+                employment_status: requestData.employmentStatus,
+                contract_type: requestData.contractType,
+                front_id_url: frontUrlData.publicUrl,
+                back_id_url: backUrlData.publicUrl,
+                request_date: new Date().toISOString(),
                 status: RequestStatus.PENDING,
+                signature: requestData.signature,
             };
             
-            const { error: insertError } = await supabase.from('requests').insert([newRequest]).select();
+            const { error: insertError } = await supabase.from('requests').insert([newRequestForDb]).select();
+
             if (insertError) throw insertError;
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to submit loan request:", err);
-            showToast('Error al enviar la solicitud.', 'error');
+            if (err.message && (err.message.toLowerCase().includes('bucket not found') || err.message === 'The resource was not found')) {
+                 showToast('Error: El bucket "documents" no existe. Por favor, créalo en tu panel de Supabase Storage.', 'error');
+            } else {
+                 showToast('Error al enviar la solicitud.', 'error');
+            }
             throw err;
         }
     };
@@ -84,10 +141,13 @@ export const useAppData = (
 
             showToast(`Préstamo Aprobado para ${request.fullName}`, 'success');
 
-        } catch (err)
- {
+        } catch (err: any) {
             console.error("Failed to approve request:", err);
-            showToast('Error al aprobar el préstamo.', 'error');
+            if (err.message && err.message.toLowerCase().includes('bucket not found')) {
+                showToast('Error de Storage: El bucket "documents" no existe. Por favor, créalo en tu panel de Supabase.', 'error');
+            } else {
+                showToast('Error al aprobar el préstamo.', 'error');
+            }
             throw err;
         }
     };
@@ -107,8 +167,12 @@ export const useAppData = (
                 const frontPath = getPath(request.frontIdUrl);
                 const backPath = getPath(request.backIdUrl);
                 await supabase.storage.from('documents').remove([frontPath, backPath]);
-            } catch (storageError) {
-                console.warn("Could not clean up request files from Storage:", storageError);
+            } catch (storageError: any) {
+                if (storageError.message && storageError.message.toLowerCase().includes('bucket not found')) {
+                    console.warn('Skipping file cleanup: Storage bucket "documents" not found.');
+                } else {
+                    console.warn("Could not clean up request files from Storage:", storageError);
+                }
             }
 
             showToast('Solicitud denegada y eliminada.', 'info');
@@ -119,7 +183,7 @@ export const useAppData = (
         }
     };
 
-    const handleUpdateRequestStatus = async (requestId: string, status: RequestStatus) => {
+    const handleUpdateRequestStatus = async (requestId: number, status: RequestStatus) => {
         if(!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
             return;
@@ -131,7 +195,6 @@ export const useAppData = (
         } catch (err) {
             console.error("Failed to update request status:", err);
             showToast('Error al actualizar el estado.', 'error');
-            throw err;
         }
     };
     
@@ -191,9 +254,9 @@ export const useAppData = (
             if (loansError) throw new Error(`Error fetching loans: ${loansError.message}`);
             if (requestsError) throw new Error(`Error fetching requests: ${requestsError.message}`);
             
-            setClients(clientsData || []);
-            setLoans(loansData || []);
-            setRequests(requestsData || []);
+            setClients((clientsData || []).map(mapClientFromDb));
+            setLoans((loansData || []).map(mapLoanFromDb));
+            setRequests((requestsData || []).map(mapRequestFromDb));
 
         } catch (err: any) {
              console.error("Data fetch error:", err);
@@ -218,29 +281,38 @@ export const useAppData = (
             console.log('Realtime change received!', payload);
             const table = payload.table;
             const event = payload.eventType;
-            const newRecord = payload.new;
-            const oldRecord = payload.old;
 
+            const mapper = {
+                clients: mapClientFromDb,
+                loans: mapLoanFromDb,
+                requests: mapRequestFromDb,
+            }[table];
+
+            if (!mapper) return;
+            
             const stateUpdater = {
                 clients: setClients,
                 loans: setLoans,
                 requests: setRequests,
-            }[table];
+            }[table] as React.Dispatch<React.SetStateAction<any[]>>;
 
             if (!stateUpdater) return;
 
-            stateUpdater((currentRecords: any[]) => {
-                if (event === 'INSERT') {
+            if (event === 'INSERT') {
+                const newRecord = mapper(payload.new);
+                stateUpdater(currentRecords => {
+                    if (currentRecords.some(rec => rec.id === newRecord.id)) {
+                        return currentRecords;
+                    }
                     return [...currentRecords, newRecord];
-                }
-                if (event === 'UPDATE') {
-                    return currentRecords.map(record => record.id === newRecord.id ? newRecord : record);
-                }
-                if (event === 'DELETE') {
-                    return currentRecords.filter(record => record.id !== oldRecord.id);
-                }
-                return currentRecords;
-            });
+                });
+            } else if (event === 'UPDATE') {
+                const updatedRecord = mapper(payload.new);
+                stateUpdater(currentRecords => currentRecords.map(record => record.id === updatedRecord.id ? updatedRecord : record));
+            } else if (event === 'DELETE') {
+                const oldRecordId = payload.old.id;
+                stateUpdater(currentRecords => currentRecords.filter(record => record.id !== oldRecordId));
+            }
         };
         
         const channels = supabase
