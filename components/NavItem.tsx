@@ -24,9 +24,9 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, view, currentView, onCli
         >
             <div className="flex items-center">
                 {icon}
-                <span className={`ml-4 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 h-0 w-0'}`}>{label}</span>
+                <span className={`ml-4 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 h-0 w-0 pointer-events-none'}`}>{label}</span>
             </div>
-            {isSidebarOpen && badge && badge > 0 && (
+            {isSidebarOpen && badge != null && badge > 0 && (
                 <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
                     {badge}
                 </span>

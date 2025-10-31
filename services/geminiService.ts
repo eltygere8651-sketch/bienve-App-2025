@@ -1,9 +1,20 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 
-// Instancia inicializada de forma diferida para evitar que la aplicación se bloquee si la clave API falta al cargar.
+// --- INICIO DE LA CONFIGURACIÓN DE DESPLIEGUE (¡ADVERTENCIA DE SEGURIDAD!) ---
+// IMPORTANTE: Exponer tu clave API de Gemini en el código del cliente es un RIESGO DE SEGURIDAD.
+// Cualquiera que visite tu web puede verla y usarla, lo que podría generar costos en tu cuenta.
+// Esta solución es un parche para que la funcionalidad se active en un entorno de despliegue simple.
+// Para un proyecto en producción, se recomienda usar una función en la nube (Edge Function de Supabase)
+// que actúe como intermediario para llamar a la API de Gemini de forma segura.
+const DEPLOYED_GEMINI_API_KEY = 'REPLACE_WITH_YOUR_GEMINI_API_KEY';
+// --- FIN DE LA CONFIGURACIÓN DE DESPLIEGUE ---
+
 let ai: GoogleGenAI | null = null;
 let hasWarnedMissingApiKey = false;
+
+const isPlaceholder = (value: string) => value.startsWith('REPLACE_WITH');
 
 /**
  * Inicializa y devuelve el cliente de GoogleGenAI de forma diferida.
@@ -14,11 +25,21 @@ const getAiClient = (): GoogleGenAI | null => {
         return ai;
     }
 
-    if (process.env.API_KEY) {
-        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    let apiKey: string | undefined = undefined;
+
+    // Prioridad 1: Clave incrustada para el despliegue público (menos seguro).
+    if (!isPlaceholder(DEPLOYED_GEMINI_API_KEY)) {
+        apiKey = DEPLOYED_GEMINI_API_KEY;
+    }
+    // Prioridad 2: Variable de entorno (ideal para entornos de desarrollo seguros).
+    else if (process.env.API_KEY) {
+        apiKey = process.env.API_KEY;
+    }
+
+    if (apiKey) {
+        ai = new GoogleGenAI({ apiKey });
         return ai;
     } else {
-        // Este aviso se registrará solo una vez.
         if (hasWarnedMissingApiKey) return null;
         console.warn("La clave API de Gemini no está configurada. Las funciones de IA estarán desactivadas.");
         hasWarnedMissingApiKey = true;

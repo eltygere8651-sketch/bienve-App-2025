@@ -184,16 +184,16 @@ const SchemaSetup: React.FC = () => {
     const sqlEditorLink = projectRef ? `https://supabase.com/dashboard/project/${projectRef}/sql/new` : 'https://supabase.com/dashboard';
 
     return (
-         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 p-4 font-sans">
-            <div className="w-full max-w-4xl bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg text-gray-800 dark:text-gray-100">
+         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4 font-sans">
+            <div className="w-full max-w-4xl bg-white p-6 sm:p-8 rounded-2xl shadow-lg text-gray-800">
                 <div className="text-center mb-6">
                     <Database className="text-blue-500 h-16 w-16 mx-auto" />
-                    <h1 className="text-3xl font-bold mt-4">Configuración de la Base de Datos</h1>
-                    <p className="text-gray-600 dark:text-gray-400 mt-2">
+                    <h1 className="text-2xl sm:text-3xl font-bold mt-4">Configuración de la Base de Datos</h1>
+                    <p className="text-gray-600 mt-2">
                         ¡Conexión exitosa! Ahora solo falta un paso: preparar tu base de datos.
                     </p>
                 </div>
-                 <div className="mt-4 p-4 bg-amber-100 dark:bg-amber-900/50 rounded-lg text-amber-800 dark:text-amber-200 text-sm flex items-start">
+                 <div className="mt-4 p-4 bg-amber-100 rounded-lg text-amber-800 text-sm flex items-start">
                     <AlertTriangle className="h-5 w-5 mr-3 flex-shrink-0 mt-0.5" />
                     <div>
                          <p className="font-bold">Acción Requerida</p>
@@ -208,9 +208,9 @@ const SchemaSetup: React.FC = () => {
                             readOnly
                             value={SQL_SCRIPT}
                             rows={10}
-                            className="w-full p-3 font-mono text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-900/50 text-gray-600 dark:text-gray-300"
+                            className="w-full p-3 font-mono text-xs border border-gray-300 rounded-md bg-gray-50 text-gray-600"
                         />
-                         <button onClick={handleCopy} className="absolute top-2 right-2 p-2 bg-gray-200 dark:bg-gray-600 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500">
+                         <button onClick={handleCopy} className="absolute top-2 right-2 p-2 bg-gray-200 rounded-md hover:bg-gray-300">
                             {copySuccess ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
                          </button>
                      </div>
@@ -234,7 +234,7 @@ const SchemaSetup: React.FC = () => {
                         {isChecking ? 'Verificando...' : 'He ejecutado el script, verificar de nuevo'}
                     </button>
                 </div>
-                 <div className="mt-6 text-xs text-gray-500 dark:text-gray-400 text-center">
+                 <div className="mt-6 text-xs text-gray-500 text-center">
                     <p>Una vez que ejecutes el script en tu editor de Supabase, haz clic en "Verificar de nuevo" para acceder a la aplicación.</p>
                 </div>
             </div>

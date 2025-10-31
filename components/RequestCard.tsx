@@ -9,10 +9,10 @@ import { formatCurrency } from '../services/utils';
 const InfoRow: React.FC<{ icon: React.ReactNode, label: string, value?: string | number }> = ({ icon, label, value }) => (
     value ? (
         <div className="flex items-start text-sm">
-            <div className="text-gray-500 dark:text-gray-400 mr-2 mt-0.5">{icon}</div>
+            <div className="text-gray-500 mr-2 mt-0.5">{icon}</div>
             <div>
-                <span className="font-semibold text-gray-700 dark:text-gray-300 mr-2">{label}:</span>
-                <span className="text-gray-600 dark:text-gray-200">{value}</span>
+                <span className="font-semibold text-gray-700 mr-2">{label}:</span>
+                <span className="text-gray-600">{value}</span>
             </div>
         </div>
     ) : null
@@ -22,9 +22,9 @@ const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
     const baseClasses = "px-2 py-1 text-xs font-semibold rounded-full inline-flex items-center";
     switch (status) {
         case RequestStatus.PENDING:
-            return <span className={`${baseClasses} bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300`}><Clock size={12} className="mr-1"/> {status}</span>;
+            return <span className={`${baseClasses} bg-blue-100 text-blue-700`}><Clock size={12} className="mr-1"/> {status}</span>;
         case RequestStatus.UNDER_REVIEW:
-            return <span className={`${baseClasses} bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300`}><Info size={12} className="mr-1"/> {status}</span>;
+            return <span className={`${baseClasses} bg-yellow-100 text-yellow-700`}><Info size={12} className="mr-1"/> {status}</span>;
         default:
             return null;
     }
@@ -87,24 +87,24 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="p-4 flex justify-between items-center cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
                 <div>
-                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{request.fullName}</h3>
+                    <h3 className="font-bold text-lg text-gray-800">{request.fullName}</h3>
                     <div className="flex items-center gap-2">
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Solicitud del {new Date(request.requestDate).toLocaleDateString()}</p>
+                        <p className="text-sm text-gray-500">Solicitud del {new Date(request.requestDate).toLocaleDateString()}</p>
                         <StatusBadge status={request.status} />
                     </div>
                 </div>
                 <div className="flex items-center">
-                     <span className="text-sm font-bold text-blue-600 dark:text-blue-400 mr-4">
+                     <span className="text-sm font-bold text-blue-600 mr-4">
                         {formatCurrency(request.loanAmount)}
                     </span>
                     {isExpanded ? <ChevronUp className="text-gray-500" /> : <ChevronDown className="text-gray-500" />}
                 </div>
             </div>
             {isExpanded && (
-                <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="p-4 border-t border-gray-200">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 mb-4">
                         <InfoRow icon={<Banknote size={16} />} label="Monto Solicitado" value={formatCurrency(request.loanAmount)} />
                         <InfoRow icon={<FileText size={16} />} label="Motivo" value={request.loanReason} />
@@ -119,35 +119,35 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div>
-                            <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Anverso DNI</p>
+                            <p className="text-sm font-semibold mb-2 text-gray-700">Anverso DNI</p>
                             <ImageViewer imageUrl={request.frontIdUrl} alt="Front ID" />
                         </div>
                         <div>
-                            <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Reverso DNI</p>
+                            <p className="text-sm font-semibold mb-2 text-gray-700">Reverso DNI</p>
                             <ImageViewer imageUrl={request.backIdUrl} alt="Back ID" />
                         </div>
                     </div>
                      <div className="space-y-4 mb-6">
                         <div>
-                            <p className="text-sm font-semibold mb-2 text-gray-700 dark:text-gray-300">Firma del Solicitante</p>
+                            <p className="text-sm font-semibold mb-2 text-gray-700">Firma del Solicitante</p>
                             {request.signature ? (
-                                 <div className="p-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
-                                    <img src={request.signature} alt="Firma del solicitante" className="mx-auto bg-white dark:bg-gray-200 rounded" style={{ maxHeight: '100px' }} />
+                                 <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                                    <img src={request.signature} alt="Firma del solicitante" className="mx-auto bg-white rounded" style={{ maxHeight: '100px' }} />
                                  </div>
                             ) : (
                                 <p className="text-xs text-gray-500">No se proporcionó firma.</p>
                             )}
                         </div>
                     </div>
-                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg space-y-4">
+                    <div className="bg-gray-50 p-4 rounded-lg space-y-4">
                         <div className="flex flex-col md:flex-row items-center gap-4">
                             <div className="w-full">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Monto a Aprobar (€)</label>
-                                <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
+                                <label className="block text-sm font-medium text-gray-700">Monto a Aprobar (€)</label>
+                                <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900" />
                             </div>
                             <div className="w-full">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Plazo (meses)</label>
-                                <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
+                                <label className="block text-sm font-medium text-gray-700">Plazo (meses)</label>
+                                <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900" />
                             </div>
                         </div>
                          <div className="flex flex-col sm:flex-row gap-2 justify-end">

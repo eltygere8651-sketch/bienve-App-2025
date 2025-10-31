@@ -1,18 +1,16 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Loan, LoanStatus, FilterStatus, Client } from '../types';
-import { getFinancialTip } from '../services/geminiService';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, Lightbulb, RefreshCw, FileWarning } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { formatCurrency } from '../services/utils';
-import { LOCAL_STORAGE_KEYS } from '../constants';
 import LoanDetailsModal from './LoanDetailsModal';
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; change?: string; changeType?: 'increase' | 'decrease' }> = ({ title, value, icon, change, changeType }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center justify-between transition-transform hover:scale-105">
+    <div className="bg-white p-6 rounded-2xl shadow-md flex items-center justify-between transition-transform hover:scale-105">
         <div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">{title}</p>
-            <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{value}</p>
+            <p className="text-sm text-gray-500 font-medium">{title}</p>
+            <p className="text-2xl font-bold text-gray-800">{value}</p>
             {change && (
                 <div className={`text-xs flex items-center mt-1 ${changeType === 'increase' ? 'text-green-500' : 'text-red-500'}`}>
                     {changeType === 'increase' ? <ArrowUpRight size={14} className="mr-1"/> : <ArrowDownRight size={14} className="mr-1"/>}
@@ -20,7 +18,7 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
                 </div>
             )}
         </div>
-        <div className="bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 p-3 rounded-full">
+        <div className="bg-blue-100 text-blue-600 p-3 rounded-full">
             {icon}
         </div>
     </div>
@@ -29,39 +27,9 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
 
 const Dashboard: React.FC = () => {
     const { loans, clients, handleRegisterPayment } = useDataContext();
-    const [tip, setTip] = useState<string>('');
-    const [isLoadingTip, setIsLoadingTip] = useState<boolean>(true);
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('Todos');
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
     
-    const fetchTip = useCallback(async (forceRefresh = false) => {
-        setIsLoadingTip(true);
-        const today = new Date().toISOString().split('T')[0];
-        const storedTipData = localStorage.getItem(LOCAL_STORAGE_KEYS.FINANCIAL_TIP);
-
-        if (storedTipData && !forceRefresh) {
-            try {
-                const { date, tip: storedTip } = JSON.parse(storedTipData);
-                if (date === today && storedTip) {
-                    setTip(storedTip);
-                    setIsLoadingTip(false);
-                    return;
-                }
-            } catch (error) {
-                console.error("Failed to parse stored financial tip", error);
-                localStorage.removeItem(LOCAL_STORAGE_KEYS.FINANCIAL_TIP);
-            }
-        }
-
-        const newTip = await getFinancialTip();
-        setTip(newTip);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.FINANCIAL_TIP, JSON.stringify({ date: today, tip: newTip }));
-        setIsLoadingTip(false);
-    }, []);
-
-    useEffect(() => {
-        fetchTip();
-    }, [fetchTip]);
 
     const stats = useMemo(() => {
         const totalLoaned = loans.reduce((acc, loan) => acc + loan.amount, 0);
@@ -95,11 +63,11 @@ const Dashboard: React.FC = () => {
         const baseClasses = "px-3 py-1 text-xs font-semibold rounded-full inline-flex items-center";
         switch (status) {
             case LoanStatus.PAID:
-                return <span className={`${baseClasses} bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300`}><ThumbsUp size={12} className="mr-1"/> {status}</span>;
+                return <span className={`${baseClasses} bg-green-100 text-green-700`}><ThumbsUp size={12} className="mr-1"/> {status}</span>;
             case LoanStatus.PENDING:
-                return <span className={`${baseClasses} bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300`}><Clock size={12} className="mr-1"/> {status}</span>;
+                return <span className={`${baseClasses} bg-blue-100 text-blue-700`}><Clock size={12} className="mr-1"/> {status}</span>;
             case LoanStatus.OVERDUE:
-                return <span className={`${baseClasses} bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300`}><AlertTriangle size={12} className="mr-1"/> {status}</span>;
+                return <span className={`${baseClasses} bg-red-100 text-red-700`}><AlertTriangle size={12} className="mr-1"/> {status}</span>;
             default:
                 return null;
         }
@@ -140,7 +108,7 @@ const Dashboard: React.FC = () => {
                 client={selectedClient}
             />
             <div className="space-y-6">
-                <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Dashboard</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Panel</h1>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <StatCard title="Total Prestado" value={formatCurrency(stats.totalLoaned)} icon={<Banknote />} />
@@ -149,14 +117,14 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
-                        <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">
-                            Préstamos Recientes {filterStatus !== 'Todos' && <span className="text-sm font-normal text-gray-500 dark:text-gray-400">- Filtrado por: {filterStatus}</span>}
+                    <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-md">
+                        <h2 className="text-lg font-semibold text-gray-700 mb-4">
+                            Préstamos Recientes {filterStatus !== 'Todos' && <span className="text-sm font-normal text-gray-500">- Filtrado por: {filterStatus}</span>}
                         </h2>
                         {filteredLoans.length > 0 ? (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left">
-                                    <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-gray-700">
+                                <table className="w-full text-left min-w-[400px]">
+                                    <thead className="text-xs text-gray-500 uppercase bg-gray-50">
                                         <tr>
                                             <th className="p-3">Cliente</th>
                                             <th className="p-3">Monto</th>
@@ -169,10 +137,10 @@ const Dashboard: React.FC = () => {
                                             <tr 
                                                 key={loan.id} 
                                                 onClick={() => handleLoanClick(loan)}
-                                                className={`border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${loan.status === LoanStatus.OVERDUE ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
+                                                className={`border-b border-gray-200 hover:bg-gray-50 cursor-pointer ${loan.status === LoanStatus.OVERDUE ? 'bg-red-50' : ''}`}
                                             >
-                                                <td className="p-3 font-medium text-gray-800 dark:text-gray-100">{loan.clientName}</td>
-                                                <td className="p-3 text-gray-700 dark:text-gray-300">{formatCurrency(loan.amount)}</td>
+                                                <td className="p-3 font-medium text-gray-800">{loan.clientName}</td>
+                                                <td className="p-3 text-gray-700">{formatCurrency(loan.amount)}</td>
                                                 <td className="p-3"><StatusBadge status={loan.status} /></td>
                                                 <td className="p-3 text-right">
                                                     {loan.status !== LoanStatus.PAID &&
@@ -191,14 +159,14 @@ const Dashboard: React.FC = () => {
                         ) : (
                             <div className="text-center py-10">
                                 <FileWarning size={40} className="mx-auto text-gray-400" />
-                                <h3 className="mt-4 font-semibold text-gray-700 dark:text-gray-200">No hay préstamos que coincidan</h3>
-                                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Prueba con otro filtro o aprueba una solicitud.</p>
+                                <h3 className="mt-4 font-semibold text-gray-700">No hay préstamos que coincidan</h3>
+                                <p className="mt-1 text-sm text-gray-500">Prueba con otro filtro o aprueba una solicitud.</p>
                             </div>
                         )}
                     </div>
                     <div className="space-y-6">
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
-                            <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-4">Estado de Préstamos</h2>
+                        <div className="bg-white p-6 rounded-2xl shadow-md">
+                            <h2 className="text-lg font-semibold text-gray-700 mb-4">Estado de Préstamos</h2>
                             {loans.length > 0 ? (
                                 <ResponsiveContainer width="100%" height={200}>
                                     <PieChart>
@@ -214,29 +182,11 @@ const Dashboard: React.FC = () => {
                             ) : (
                                 <div className="h-[200px] flex flex-col justify-center items-center text-center">
                                     <FileWarning size={40} className="text-gray-400" />
-                                    <h3 className="mt-4 font-semibold text-gray-700 dark:text-gray-200">Sin Datos de Préstamos</h3>
-                                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">No hay préstamos para mostrar en el gráfico.</p>
+                                    <h3 className="mt-4 font-semibold text-gray-700">Sin Datos de Préstamos</h3>
+                                    <p className="mt-1 text-sm text-gray-500">No hay préstamos para mostrar en el gráfico.</p>
                                 </div>
                             )}
                         </div>
-                    </div>
-                </div>
-                
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 rounded-2xl shadow-lg text-white">
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <h2 className="text-lg font-semibold flex items-center"><Lightbulb className="mr-2"/> Consejo Financiero del Día</h2>
-                            {isLoadingTip ? (
-                                <div className="h-12 flex items-center mt-2">
-                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                                </div>
-                            ) : (
-                                <p className="mt-2 text-blue-100 max-w-prose">{tip}</p>
-                            )}
-                        </div>
-                        <button onClick={() => fetchTip(true)} disabled={isLoadingTip} className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors disabled:opacity-50" aria-label="Refrescar consejo">
-                        <RefreshCw size={18}/>
-                        </button>
                     </div>
                 </div>
 

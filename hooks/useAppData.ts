@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
-import { generateWelcomeMessage } from '../services/geminiService';
 import { supabase } from '../services/supabaseService';
 import { User } from '@supabase/supabase-js';
 
@@ -83,9 +82,7 @@ export const useAppData = (
 
             if (rpcError) throw rpcError;
 
-            const welcomeMessage = await generateWelcomeMessage(request.fullName);
             showToast(`Préstamo Aprobado para ${request.fullName}`, 'success');
-            showToast(welcomeMessage, 'info');
 
         } catch (err)
  {
@@ -204,7 +201,7 @@ export const useAppData = (
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [supabase]);
 
     useEffect(() => {
         if (!user || !supabase || !isSchemaReady) {
@@ -256,7 +253,7 @@ export const useAppData = (
         return () => {
             supabase.removeChannel(channels);
         };
-    }, [user, fetchData, isSchemaReady]);
+    }, [user, fetchData, isSchemaReady, supabase]);
 
 
     return {

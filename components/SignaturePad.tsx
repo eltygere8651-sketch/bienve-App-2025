@@ -1,9 +1,7 @@
-import React, { useRef, useEffect, useImperativeHandle, forwardRef, useState } from 'react';
+import React, { useRef, useEffect, useImperativeHandle, forwardRef, useState, useLayoutEffect } from 'react';
 import { Eraser } from 'lucide-react';
 
 interface SignaturePadProps {
-    width?: number;
-    height?: number;
     onDrawEnd?: () => void;
 }
 
@@ -14,34 +12,44 @@ export interface SignaturePadRef {
 }
 
 const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
-    ({ width = 400, height = 200, onDrawEnd }, ref) => {
+    ({ onDrawEnd }, ref) => {
         const canvasRef = useRef<HTMLCanvasElement>(null);
+        const containerRef = useRef<HTMLDivElement>(null);
         const [isDrawing, setIsDrawing] = useState(false);
         const [isEmpty, setIsEmpty] = useState(true);
 
         const getCanvasContext = () => {
             return canvasRef.current?.getContext('2d');
         };
+
+        const configureCanvas = (canvas: HTMLCanvasElement) => {
+             const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            const { width, height } = canvas.getBoundingClientRect();
+            canvas.width = width * ratio;
+            canvas.height = height * ratio;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.scale(ratio, ratio);
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+            }
+        };
         
-        useEffect(() => {
+        useLayoutEffect(() => {
             const canvas = canvasRef.current;
             if (canvas) {
-                // Adjust for device pixel ratio for sharper lines
-                const ratio = Math.max(window.devicePixelRatio || 1, 1);
-                canvas.width = width * ratio;
-                canvas.height = height * ratio;
-                canvas.style.width = `${width}px`;
-                canvas.style.height = `${height}px`;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.scale(ratio, ratio);
-                    ctx.strokeStyle = document.documentElement.classList.contains('dark') ? '#FFFFFF' : '#000000';
-                    ctx.lineWidth = 2;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
-                }
+                configureCanvas(canvas);
             }
-        }, [width, height]);
+            const resizeObserver = new ResizeObserver(() => {
+                if(canvas) configureCanvas(canvas);
+            });
+            if(containerRef.current) {
+                resizeObserver.observe(containerRef.current);
+            }
+            return () => resizeObserver.disconnect();
+        }, []);
         
         const getCoords = (e: MouseEvent | TouchEvent): { x: number; y: number } | null => {
             const canvas = canvasRef.current;
@@ -91,8 +99,10 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
 
         const clear = () => {
             const ctx = getCanvasContext();
-            if (ctx && canvasRef.current) {
-                ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            const canvas = canvasRef.current;
+            if (ctx && canvas) {
+                const ratio = Math.max(window.devicePixelRatio || 1, 1);
+                ctx.clearRect(0, 0, canvas.width / ratio, canvas.height / ratio);
                 setIsEmpty(true);
             }
         };
@@ -107,7 +117,7 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
         }));
 
         return (
-            <div className="relative w-full max-w-lg">
+            <div ref={containerRef} className="relative w-full h-48 max-w-lg">
                 <canvas
                     ref={canvasRef}
                     onMouseDown={startDrawing}
@@ -117,13 +127,12 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
                     onTouchStart={startDrawing}
                     onTouchMove={draw}
                     onTouchEnd={stopDrawing}
-                    className="border border-gray-300 dark:border-gray-600 rounded-md touch-none bg-gray-50 dark:bg-gray-700/50"
-                    style={{ width: `${width}px`, height: `${height}px` }}
+                    className="border border-gray-300 rounded-md touch-none bg-gray-50 w-full h-full"
                 />
                 <button
                     type="button"
                     onClick={clear}
-                    className="absolute top-2 right-2 p-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                    className="absolute top-2 right-2 p-2 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors"
                     aria-label="Limpiar firma"
                 >
                     <Eraser size={18} />

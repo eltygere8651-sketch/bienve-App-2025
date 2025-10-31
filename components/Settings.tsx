@@ -35,13 +35,13 @@ const Settings: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="flex items-center">
-                <SettingsIcon className="h-8 w-8 mr-3 text-blue-600 dark:text-blue-400" />
-                <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Ajustes</h1>
+                <SettingsIcon className="h-8 w-8 mr-3 text-blue-600" />
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Ajustes</h1>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-md">
-                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4">Plantilla de Contrato de Préstamo</h2>
-                <p className="text-gray-600 dark:text-gray-400 mb-4">
+            <div className="bg-white p-4 sm:p-8 rounded-2xl shadow-md">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">Plantilla de Contrato de Préstamo</h2>
+                <p className="text-gray-600 mb-4">
                     Modifica el texto del contrato que se genera para cada nueva solicitud. Utiliza los placeholders disponibles para insertar datos dinámicamente.
                 </p>
 
@@ -51,34 +51,34 @@ const Settings: React.FC = () => {
                             value={template}
                             onChange={(e) => setTemplate(e.target.value)}
                             rows={20}
-                            className="w-full p-3 font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                            className="w-full p-3 font-mono text-sm border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
                             placeholder="Escribe aquí tu plantilla de contrato..."
                         />
                     </div>
                     <div>
-                        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">Placeholders Disponibles</h3>
+                        <h3 className="text-lg font-semibold text-gray-700 mb-2">Placeholders Disponibles</h3>
                         <div className="space-y-2">
                             {placeholders.map(p => (
-                                <div key={p.key} className="p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md">
-                                    <p className="font-mono text-sm text-blue-600 dark:text-blue-400">{p.key}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{p.desc}</p>
+                                <div key={p.key} className="p-2 bg-gray-100 rounded-md">
+                                    <p className="font-mono text-sm text-blue-600">{p.key}</p>
+                                    <p className="text-xs text-gray-500">{p.desc}</p>
                                 </div>
                             ))}
                         </div>
                     </div>
                 </div>
 
-                <div className="flex justify-end gap-4 mt-6">
+                <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
                     <button
                         onClick={handleReset}
-                        className="inline-flex items-center px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 font-bold rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors"
+                        className="inline-flex items-center justify-center px-4 py-2 bg-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-300 transition-colors"
                     >
                         <RotateCcw size={18} className="mr-2" />
                         Restaurar por Defecto
                     </button>
                     <button
                         onClick={handleSave}
-                        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition-transform hover:scale-105"
+                        className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition-transform hover:scale-105"
                     >
                         <Save size={18} className="mr-2" />
                         Guardar Plantilla

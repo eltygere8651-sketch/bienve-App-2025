@@ -11,7 +11,6 @@ import {
     initializeSupabaseClient
 } from '../services/supabaseService';
 
-type Theme = 'light' | 'dark';
 type InitializationStatus = 'pending' | 'success' | 'failed';
 type SchemaVerificationStatus = 'pending' | 'verifying' | 'verified';
 
@@ -29,8 +28,6 @@ interface ConfirmState {
 }
 
 interface AppContextType {
-    theme: Theme;
-    handleThemeToggle: () => void;
     toast: ToastMessage;
     showToast: (message: string, type: 'success' | 'error' | 'info') => void;
     currentView: AppView;
@@ -54,16 +51,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const getInitialTheme = (): Theme => {
-  const storedTheme = localStorage.getItem(LOCAL_STORAGE_KEYS.THEME);
-  if (storedTheme === 'dark' || storedTheme === 'light') {
-    return storedTheme;
-  }
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-};
-
 export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [theme, setTheme] = useState<Theme>(getInitialTheme);
     const [toast, setToast] = useState<ToastMessage>({ message: '', type: 'info' });
     const [user, setUser] = useState<User | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -126,35 +114,21 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             if (currentUser) {
                 setCurrentView(v => (v === 'auth' || v === 'welcome' || v === 'loanRequest' || v === 'setup') ? 'dashboard' : v);
             } else {
-                const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth'];
+                const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth', 'dashboard'];
                 setCurrentView(v => publicViews.includes(v) ? v : 'welcome');
             }
         });
 
         return () => subscription.unsubscribe();
     }, [initializationStatus, isConfigReady, isSchemaReady]);
-
-    useEffect(() => {
-        if (theme === 'dark') {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem(LOCAL_STORAGE_KEYS.THEME, 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem(LOCAL_STORAGE_KEYS.THEME, 'light');
-        }
-    }, [theme]);
     
     useEffect(() => {
         if (!isSchemaReady) return;
-        const adminOnlyViews: AppView[] = ['dashboard', 'clients', 'requests', 'receiptGenerator', 'settings', 'dataManagement'];
+        const adminOnlyViews: AppView[] = ['clients', 'requests', 'receiptGenerator', 'settings', 'dataManagement'];
         if (!isAuthenticated && adminOnlyViews.includes(currentView)) {
             setCurrentView('auth');
         }
     }, [isAuthenticated, currentView, isSchemaReady]);
-
-    const handleThemeToggle = () => {
-        setTheme(theme === 'light' ? 'dark' : 'light');
-    };
 
     const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setToast({ message, type });
@@ -192,8 +166,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     };
 
     const value = { 
-        theme, 
-        handleThemeToggle,
         toast,
         showToast,
         currentView,
