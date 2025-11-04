@@ -3,9 +3,13 @@ import { Database, Copy, Check, ExternalLink, RefreshCw, Loader2, AlertTriangle,
 import { useAppContext } from '../contexts/AppContext';
 
 const SQL_SCRIPT = `-- B.M. Contigo - Script de Inicialización de Base de Datos para Supabase
--- Versión 1.1.0
--- Este script es RE-EJECUTABLE. Soluciona el error "violates row-level security policy"
--- limpiando las políticas antiguas y creando las correctas.
+-- Versión 1.3.0
+-- Este script es RE-EJECUTABLE.
+-- v1.3.0: Añade tablas 'accounting_entries' y 'app_meta' para la nueva funcionalidad de contabilidad.
+-- v1.2.0: Agrega política de lectura pública a la tabla 'requests' para
+--         permitir la consulta de estado de solicitud por DNI/NIE.
+-- v1.1.0: Soluciona el error "violates row-level security policy"
+--         limpiando las políticas antiguas y creando las correctas.
 
 -- 1. CREACIÓN DE TABLAS (Se crearán solo si no existen)
 
@@ -54,10 +58,31 @@ CREATE TABLE IF NOT EXISTS loans (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Tabla para entradas contables manuales (ingresos, egresos, capital)
+CREATE TABLE IF NOT EXISTS accounting_entries (
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    entry_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    type TEXT NOT NULL CHECK (type IN ('INCOME', 'EXPENSE', 'CAPITAL_INJECTION', 'CAPITAL_WITHDRAWAL')),
+    description TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Tabla para metadatos de la aplicación (ej. capital inicial)
+CREATE TABLE IF NOT EXISTS app_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- 2. HABILITACIÓN DE SEGURIDAD A NIVEL DE FILA (RLS)
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE loans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE accounting_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_meta ENABLE ROW LEVEL SECURITY;
+
 
 -- 3. LIMPIEZA DE POLÍTICAS ANTIGUAS
 -- Es seguro ejecutar esto incluso si las políticas no existen.
@@ -73,6 +98,9 @@ DROP POLICY IF EXISTS "Allow admin full access on clients" ON clients;
 DROP POLICY IF EXISTS "Allow admin full access on loans" ON loans;
 DROP POLICY IF EXISTS "Allow public insert on requests" ON requests;
 DROP POLICY IF EXISTS "Allow admin full access on requests" ON requests;
+DROP POLICY IF EXISTS "Allow public read access on requests" ON requests;
+DROP POLICY IF EXISTS "Allow admin full access on accounting_entries" ON accounting_entries;
+DROP POLICY IF EXISTS "Allow admin full access on app_meta" ON app_meta;
 
 -- 4. CREACIÓN DE POLÍTICAS DE ACCESO (CORREGIDAS)
 
@@ -85,12 +113,18 @@ CREATE POLICY "Allow Authenticated Update" ON storage.objects FOR UPDATE TO auth
 CREATE POLICY "Allow Authenticated Delete" ON storage.objects FOR DELETE TO authenticated USING (true);
 
 -- Políticas de Datos (RLS)
--- Los administradores autenticados tienen acceso total a 'clients' y 'loans'.
+-- Los administradores autenticados tienen acceso total.
 CREATE POLICY "Allow admin full access on clients" ON clients FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Allow admin full access on loans" ON loans FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow admin full access on accounting_entries" ON accounting_entries FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Allow admin full access on app_meta" ON app_meta FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- [CORREGIDO] Permite a usuarios ANÓNIMOS crear nuevas solicitudes en 'requests'.
+-- Permite a usuarios ANÓNIMOS crear nuevas solicitudes en 'requests'.
 CREATE POLICY "Allow public insert on requests" ON requests FOR INSERT TO anon WITH CHECK (true);
+
+-- [NUEVO en v1.2.0] Permite a usuarios ANÓNIMOS leer solicitudes para consultar su estado.
+CREATE POLICY "Allow public read access on requests" ON requests FOR SELECT TO anon USING (true);
+
 -- Permite a los administradores autenticados gestionar todas las solicitudes.
 CREATE POLICY "Allow admin full access on requests" ON requests FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
@@ -120,7 +154,7 @@ DECLARE
     v_total_repayment NUMERIC;
 BEGIN
     -- Obtener los detalles de la solicitud
-    SELECT * INTO v_request FROM public.requests WHERE id = p_request_id;
+    SELECT * INTO public.requests WHERE id = p_request_id;
 
     -- Si la solicitud no existe, lanzar un error
     IF NOT FOUND THEN

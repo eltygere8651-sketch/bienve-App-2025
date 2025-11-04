@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
+import { Client, Loan, LoanRequest, LoanStatus, RequestStatus, AccountingEntry, AppMeta, AccountingEntryType } from '../types';
 import { supabase } from '../services/supabaseService';
 import { User } from '@supabase/supabase-js';
 
@@ -45,6 +45,20 @@ const mapRequestFromDb = (r: any): LoanRequest => ({
     signature: r.signature,
 });
 
+const mapAccountingEntryFromDb = (e: any): AccountingEntry => ({
+    id: e.id,
+    entry_date: e.entry_date,
+    type: e.type,
+    description: e.description,
+    amount: e.amount,
+    created_at: e.created_at,
+});
+
+const mapAppMetaFromDb = (m: any): AppMeta => ({
+    key: m.key,
+    value: m.value,
+});
+
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -54,6 +68,8 @@ export const useAppData = (
     const [clients, setClients] = useState<Client[]>([]);
     const [loans, setLoans] = useState<Loan[]>([]);
     const [requests, setRequests] = useState<LoanRequest[]>([]);
+    const [accountingEntries, setAccountingEntries] = useState<AccountingEntry[]>([]);
+    const [appMeta, setAppMeta] = useState<AppMeta[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -158,24 +174,16 @@ export const useAppData = (
             return;
         }
         try {
-            const { error } = await supabase.from('requests').delete().eq('id', request.id);
+            // Se cambia la acción de borrar a actualizar el estado a "Denegado"
+            const { error } = await supabase
+                .from('requests')
+                .update({ status: RequestStatus.DENIED })
+                .eq('id', request.id);
+
             if (error) throw error;
             
-            try {
-                // Robust path extraction from URL
-                const getPath = (url: string) => url.substring(url.indexOf('/documents/') + '/documents/'.length);
-                const frontPath = getPath(request.frontIdUrl);
-                const backPath = getPath(request.backIdUrl);
-                await supabase.storage.from('documents').remove([frontPath, backPath]);
-            } catch (storageError: any) {
-                if (storageError.message && storageError.message.toLowerCase().includes('bucket not found')) {
-                    console.warn('Skipping file cleanup: Storage bucket "documents" not found.');
-                } else {
-                    console.warn("Could not clean up request files from Storage:", storageError);
-                }
-            }
-
-            showToast('Solicitud denegada y eliminada.', 'info');
+            // Ya no se eliminan los archivos de Storage para mantener el historial.
+            showToast('Solicitud marcada como denegada.', 'info');
         } catch (err) {
             console.error("Failed to deny request:", err);
             showToast('Error al denegar la solicitud.', 'error');
@@ -220,6 +228,38 @@ export const useAppData = (
         }
     };
 
+    const handleAddAccountingEntry = async (entry: { type: AccountingEntryType; description: string; amount: number; entry_date: string; }) => {
+        if (!user || !supabase) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
+            return;
+        }
+        try {
+            const { error } = await supabase.from('accounting_entries').insert([entry]);
+            if (error) throw error;
+            showToast('Movimiento contable registrado.', 'success');
+        } catch (err) {
+            console.error("Failed to add accounting entry:", err);
+            showToast('Error al registrar el movimiento.', 'error');
+            throw err;
+        }
+    };
+
+    const handleSetCapital = async (amount: number) => {
+        if (!user || !supabase) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
+            return;
+        }
+        try {
+            const { error } = await supabase.from('app_meta').upsert({ key: 'initial_capital', value: amount.toString() }, { onConflict: 'key' });
+            if (error) throw error;
+            showToast('Capital inicial actualizado.', 'success');
+        } catch (err) {
+            console.error("Failed to set capital:", err);
+            showToast('Error al actualizar el capital.', 'error');
+            throw err;
+        }
+    };
+
     const clientLoanData = useMemo(() => {
         const loansByClientId = new Map<string, Loan[]>();
         for (const loan of loans) {
@@ -243,20 +283,28 @@ export const useAppData = (
             const [
                 { data: clientsData, error: clientsError },
                 { data: loansData, error: loansError },
-                { data: requestsData, error: requestsError }
+                { data: requestsData, error: requestsError },
+                { data: accountingData, error: accountingError },
+                { data: metaData, error: metaError },
             ] = await Promise.all([
                 supabase.from('clients').select('*'),
                 supabase.from('loans').select('*'),
                 supabase.from('requests').select('*').in('status', [RequestStatus.PENDING, RequestStatus.UNDER_REVIEW]),
+                supabase.from('accounting_entries').select('*'),
+                supabase.from('app_meta').select('*'),
             ]);
             
             if (clientsError) throw new Error(`Error fetching clients: ${clientsError.message}`);
             if (loansError) throw new Error(`Error fetching loans: ${loansError.message}`);
             if (requestsError) throw new Error(`Error fetching requests: ${requestsError.message}`);
+            if (accountingError) throw new Error(`Error fetching accounting entries: ${accountingError.message}`);
+            if (metaError) throw new Error(`Error fetching app meta: ${metaError.message}`);
             
             setClients((clientsData || []).map(mapClientFromDb));
             setLoans((loansData || []).map(mapLoanFromDb));
             setRequests((requestsData || []).map(mapRequestFromDb));
+            setAccountingEntries((accountingData || []).map(mapAccountingEntryFromDb));
+            setAppMeta((metaData || []).map(mapAppMetaFromDb));
 
         } catch (err: any) {
              console.error("Data fetch error:", err);
@@ -271,6 +319,8 @@ export const useAppData = (
             setClients([]);
             setLoans([]);
             setRequests([]);
+            setAccountingEntries([]);
+            setAppMeta([]);
             setIsLoading(false);
             return;
         }
@@ -286,6 +336,8 @@ export const useAppData = (
                 clients: mapClientFromDb,
                 loans: mapLoanFromDb,
                 requests: mapRequestFromDb,
+                accounting_entries: mapAccountingEntryFromDb,
+                app_meta: mapAppMetaFromDb,
             }[table];
 
             if (!mapper) return;
@@ -294,6 +346,8 @@ export const useAppData = (
                 clients: setClients,
                 loans: setLoans,
                 requests: setRequests,
+                accounting_entries: setAccountingEntries,
+                app_meta: setAppMeta,
             }[table] as React.Dispatch<React.SetStateAction<any[]>>;
 
             if (!stateUpdater) return;
@@ -320,6 +374,8 @@ export const useAppData = (
             .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, handleChanges)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, handleChanges)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, handleChanges)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'accounting_entries' }, handleChanges)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_meta' }, handleChanges)
             .subscribe();
 
         return () => {
@@ -332,6 +388,8 @@ export const useAppData = (
         clients,
         loans,
         requests,
+        accountingEntries,
+        appMeta,
         isLoading,
         error,
         handleLoanRequestSubmit,
@@ -339,6 +397,8 @@ export const useAppData = (
         handleDenyRequest,
         handleUpdateRequestStatus,
         handleRegisterPayment,
+        handleAddAccountingEntry,
+        handleSetCapital,
         clientLoanData,
     };
 };

@@ -166,7 +166,7 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
     const handleDenyClick = () => {
         showConfirmModal({
             title: 'Confirmar Denegación',
-            message: `¿Estás seguro de que quieres denegar y eliminar la solicitud de ${request.fullName}? Esta acción no se puede deshacer.`,
+            message: `¿Estás seguro de que quieres denegar la solicitud de ${request.fullName}? La solicitud se marcará como 'Denegada' y desaparecerá de esta lista, pero se conservará en la base de datos.`,
             onConfirm: denyAction,
         });
     };

@@ -9,7 +9,7 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle, ShieldCheck, Menu, X, SearchCheck } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle, ShieldCheck, Menu, X, SearchCheck, Calculator } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import ReceiptGenerator from './components/ReceiptGenerator';
@@ -18,6 +18,7 @@ import DataManagement from './components/DataManagement';
 import Setup from './components/Setup';
 import SchemaSetup from './components/SchemaSetup';
 import RequestStatusChecker from './components/RequestStatusChecker';
+import Accounting from './components/Accounting';
 
 const App: React.FC = () => {
     const { 
@@ -124,6 +125,7 @@ const App: React.FC = () => {
             case 'receiptGenerator': return isAuthenticated ? <ReceiptGenerator /> : <Auth />;
             case 'settings': return isAuthenticated ? <SettingsComponent /> : <Auth />;
             case 'dataManagement': return isAuthenticated ? <DataManagement /> : <Auth />;
+            case 'accounting': return isAuthenticated ? <Accounting /> : <Auth />;
             default: return isAuthenticated ? <Dashboard /> : <Welcome />;
         }
     };
@@ -162,6 +164,7 @@ const App: React.FC = () => {
                         <div className="mt-4 pt-4 border-t border-gray-700">
                             <h3 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Herramientas</h3>
                              <ul>
+                                <NavItem icon={<Calculator />} label="Contabilidad" view="accounting" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                                 <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                                 <NavItem icon={<ReceiptText />} label="Generar Recibo" view="receiptGenerator" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                                 <NavItem icon={<DatabaseBackup />} label="Gestión de Datos" view="dataManagement" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />

@@ -65,17 +65,26 @@ export const initializeSupabaseClient = (url: string, anonKey: string): boolean 
 export const verifySchema = async (): Promise<boolean> => {
     if (!supabase) return false;
     try {
-        // This query returns no data but will fail if the table doesn't exist.
-        const { error } = await supabase.from('clients').select('id').limit(0);
+        const tablesToVerify: { [key: string]: string } = {
+            'clients': 'id',
+            'loans': 'id',
+            'requests': 'id',
+            'accounting_entries': 'id',
+            'app_meta': 'key'
+        };
         
-        // If there's an error, check if it's the specific "relation does not exist" error.
-        if (error && error.code === '42P01') {
-            console.warn("Schema verification failed: 'clients' table not found.");
-            return false; // Table does not exist
+        for (const table in tablesToVerify) {
+            const column = tablesToVerify[table];
+            const { error } = await supabase.from(table).select(column).limit(0);
+            
+            // Si hay un error, y es específicamente el de "tabla no existe", la verificación falla.
+            if (error && error.code === '42P01') {
+                console.warn(`Schema verification failed: '${table}' table not found.`);
+                return false; // La tabla no existe
+            }
         }
-        // Other errors (like RLS) might occur, but for this check, their presence means the table *exists*.
-        // A null error means the query succeeded, so the table exists.
-        return true; // Table exists
+        
+        return true; // Si el bucle termina, todas las tablas existen.
     } catch (e) {
         console.error("Unexpected error during schema verification:", e);
         return false;
