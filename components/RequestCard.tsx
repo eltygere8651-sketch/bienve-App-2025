@@ -13,10 +13,10 @@ import { generateRequestSummary } from '../services/geminiService';
 const InfoRow: React.FC<{ icon: React.ReactNode, label: string, value?: string | number }> = ({ icon, label, value }) => (
     value ? (
         <div className="flex items-start text-sm">
-            <div className="text-gray-500 mr-2 mt-0.5">{icon}</div>
+            <div className="text-slate-500 mr-2 mt-0.5">{icon}</div>
             <div>
-                <span className="font-semibold text-gray-700 mr-2">{label}:</span>
-                <span className="text-gray-600">{value}</span>
+                <span className="font-semibold text-slate-700 mr-2">{label}:</span>
+                <span className="text-slate-600">{value}</span>
             </div>
         </div>
     ) : null
@@ -26,7 +26,7 @@ const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
     const baseClasses = "px-2 py-1 text-xs font-semibold rounded-full inline-flex items-center";
     switch (status) {
         case RequestStatus.PENDING:
-            return <span className={`${baseClasses} bg-blue-100 text-blue-700`}><Clock size={12} className="mr-1"/> {status}</span>;
+            return <span className={`${baseClasses} bg-primary-100 text-primary-700`}><Clock size={12} className="mr-1"/> {status}</span>;
         case RequestStatus.UNDER_REVIEW:
             return <span className={`${baseClasses} bg-yellow-100 text-yellow-700`}><Info size={12} className="mr-1"/> {status}</span>;
         default:
@@ -180,11 +180,11 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
             >
                 {summaryModal.isLoading ? (
                     <div className="flex flex-col items-center justify-center min-h-[150px]">
-                        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-                        <p className="mt-4 text-gray-600">Analizando la solicitud...</p>
+                        <Loader2 className="h-10 w-10 animate-spin text-primary-600" />
+                        <p className="mt-4 text-slate-600">Analizando la solicitud...</p>
                     </div>
                 ) : (
-                    <div className="text-sm text-gray-800 font-sans leading-relaxed">
+                    <div className="text-sm text-slate-800 font-sans leading-relaxed">
                         <SimpleMarkdownRenderer text={summaryModal.content} />
                     </div>
                 )}
@@ -193,14 +193,14 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
             <div className="bg-white rounded-lg shadow-md overflow-hidden">
                 <div className="p-4 flex justify-between items-center cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
                     <div>
-                        <h3 className="font-bold text-lg text-gray-800">{request.fullName}</h3>
+                        <h3 className="font-bold text-lg text-slate-800">{request.fullName}</h3>
                         <div className="flex items-center gap-2 mt-1">
-                            <p className="text-sm text-gray-500">Solicitud del {new Date(request.requestDate).toLocaleDateString()}</p>
+                            <p className="text-sm text-slate-500">Solicitud del {new Date(request.requestDate).toLocaleDateString()}</p>
                             <StatusBadge status={request.status} />
                         </div>
                     </div>
                     <div className="flex items-center">
-                        <span className="text-sm font-bold text-blue-600 mr-2 sm:mr-4">
+                        <span className="text-sm font-bold text-primary-600 mr-2 sm:mr-4">
                             {formatCurrency(request.loanAmount)}
                         </span>
                         <button
@@ -208,19 +208,19 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                                 e.stopPropagation();
                                 handleGenerateSummary();
                             }}
-                            className="p-2 rounded-full text-gray-500 hover:bg-yellow-100 hover:text-yellow-600 disabled:opacity-50 disabled:cursor-wait"
+                            className="p-2 rounded-full text-slate-500 hover:bg-yellow-100 hover:text-yellow-600 disabled:opacity-50 disabled:cursor-wait"
                             title="Generar resumen con IA"
                             disabled={summaryModal.isLoading}
                         >
                             {summaryModal.isLoading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
                         </button>
                         <div className="p-2">
-                            {isExpanded ? <ChevronUp className="text-gray-500" /> : <ChevronDown className="text-gray-500" />}
+                            {isExpanded ? <ChevronUp className="text-slate-500" /> : <ChevronDown className="text-slate-500" />}
                         </div>
                     </div>
                 </div>
                 {isExpanded && (
-                    <div className="p-4 border-t border-gray-200 animate-fade-in-down">
+                    <div className="p-4 border-t border-slate-200 animate-fade-in-down">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 mb-4">
                             <InfoRow icon={<Banknote size={16} />} label="Monto Solicitado" value={formatCurrency(request.loanAmount)} />
                             <InfoRow icon={<FileText size={16} />} label="Motivo" value={request.loanReason} />
@@ -234,41 +234,41 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                             </div>
                         </div>
                         
-                        <div className="border-t border-gray-200 mt-4 pt-4">
-                            <h4 className="text-base font-semibold text-gray-700 mb-4">Documentos y Firma</h4>
+                        <div className="border-t border-slate-200 mt-4 pt-4">
+                            <h4 className="text-base font-semibold text-slate-700 mb-4">Documentos y Firma</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <p className="text-sm font-medium text-gray-700 mb-2">Anverso DNI</p>
+                                    <p className="text-sm font-medium text-slate-700 mb-2">Anverso DNI</p>
                                     <ImageViewer imageUrl={request.frontIdUrl} alt="Front ID" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-gray-700 mb-2">Reverso DNI</p>
+                                    <p className="text-sm font-medium text-slate-700 mb-2">Reverso DNI</p>
                                     <ImageViewer imageUrl={request.backIdUrl} alt="Back ID" />
                                 </div>
                             </div>
                             
                             <div>
-                                <p className="text-sm font-medium mb-2 text-gray-700">Firma del Solicitante</p>
+                                <p className="text-sm font-medium mb-2 text-slate-700">Firma del Solicitante</p>
                                 {request.signature ? (
-                                    <div className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                                    <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
                                         <img src={request.signature} alt="Firma del solicitante" className="mx-auto bg-white rounded" style={{ maxHeight: '100px' }} />
                                     </div>
                                 ) : (
-                                    <p className="text-xs text-gray-500">No se proporcionó firma.</p>
+                                    <p className="text-xs text-slate-500">No se proporcionó firma.</p>
                                 )}
                             </div>
                         </div>
 
-                        <div className="border-t border-gray-200 mt-6 pt-4">
-                            <h4 className="text-base font-semibold text-gray-700 mb-4">Acciones</h4>
-                            <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+                        <div className="border-t border-slate-200 mt-6 pt-4">
+                            <h4 className="text-base font-semibold text-slate-700 mb-4">Acciones</h4>
+                            <div className="bg-slate-50 p-4 rounded-lg space-y-4">
                                 <div>
-                                    <p className="text-sm text-gray-700 font-semibold mb-3">Descargar Documentación</p>
+                                    <p className="text-sm text-slate-700 font-semibold mb-3">Descargar Documentación</p>
                                     <div className="flex flex-wrap items-center gap-2">
                                         <button
                                             onClick={handleDownloadDniPdfClick}
                                             disabled={isDownloadingDniPdf}
-                                            className="inline-flex items-center px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded-md hover:bg-gray-100 disabled:opacity-50"
+                                            className="inline-flex items-center px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs font-medium rounded-md hover:bg-slate-100 disabled:opacity-50"
                                         >
                                             {isDownloadingDniPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
                                             {isDownloadingDniPdf ? 'Generando...' : 'DNI (PDF)'}
@@ -276,7 +276,7 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                                         <button
                                             onClick={handleDownloadSummaryClick}
                                             disabled={isDownloadingPdf}
-                                            className="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-md hover:bg-blue-200 disabled:opacity-50"
+                                            className="inline-flex items-center px-3 py-1.5 bg-primary-100 text-primary-700 text-xs font-medium rounded-md hover:bg-primary-200 disabled:opacity-50"
                                         >
                                             {isDownloadingPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
                                             {isDownloadingPdf ? 'Generando...' : 'Resumen (PDF)'}
@@ -284,16 +284,16 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t border-gray-200">
-                                    <p className="text-sm text-gray-700 font-semibold mb-3">Gestionar Solicitud</p>
+                                <div className="pt-4 border-t border-slate-200">
+                                    <p className="text-sm text-slate-700 font-semibold mb-3">Gestionar Solicitud</p>
                                     <div className="flex flex-col md:flex-row items-center gap-4">
                                         <div className="w-full">
-                                            <label className="block text-sm font-medium text-gray-700">Monto a Aprobar (€)</label>
-                                            <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900" />
+                                            <label className="block text-sm font-medium text-slate-700">Monto a Aprobar (€)</label>
+                                            <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900" />
                                         </div>
                                         <div className="w-full">
-                                            <label className="block text-sm font-medium text-gray-700">Plazo (meses)</label>
-                                            <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900" />
+                                            <label className="block text-sm font-medium text-slate-700">Plazo (meses)</label>
+                                            <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-300 rounded-md bg-white text-slate-900" />
                                         </div>
                                     </div>
                                     <div className="flex flex-col sm:flex-row gap-2 justify-end mt-4">

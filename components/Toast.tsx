@@ -43,7 +43,7 @@ const Toast: React.FC<ToastProps> = ({ message, type, onClose }) => {
             icon: <XCircle className="h-6 w-6 text-white" />,
         },
         info: {
-            bg: 'bg-blue-500',
+            bg: 'bg-primary-500',
             icon: <Info className="h-6 w-6 text-white" />,
         },
     };

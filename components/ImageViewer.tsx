@@ -11,7 +11,7 @@ const ImageViewer: React.FC<ImageViewerProps> = ({ imageUrl, alt }) => {
     const [hasError, setHasError] = useState(false);
 
     const placeholder = (icon: React.ReactNode, text: string) => (
-        <div className="rounded-lg w-full h-32 bg-gray-200 flex flex-col items-center justify-center text-xs text-gray-500">
+        <div className="rounded-lg w-full h-32 bg-slate-200 flex flex-col items-center justify-center text-xs text-slate-500">
             {icon}
             <span className="mt-2">{text}</span>
         </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Client, Loan, LoanRequest, LoanStatus, RequestStatus, AccountingEntry, AppMeta, AccountingEntryType } from '../types';
 import { supabase } from '../services/supabaseService';
@@ -9,6 +10,10 @@ const mapClientFromDb = (c: any): Client => ({
     id: c.id,
     name: c.name,
     joinDate: c.join_date,
+    idNumber: c.id_number,
+    phone: c.phone,
+    address: c.address,
+    email: c.email,
 });
 
 const mapLoanFromDb = (l: any): Loan => ({
@@ -228,6 +233,32 @@ export const useAppData = (
         }
     };
 
+    const handleAddClientAndLoan = async (clientData: Omit<Client, 'id' | 'joinDate'>, loanData: { amount: number; term: number }) => {
+        if (!user || !supabase) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
+            return;
+        }
+        try {
+            const { error: rpcError } = await supabase.rpc('create_client_and_loan', {
+                p_client_name: clientData.name,
+                p_client_id_number: clientData.idNumber,
+                p_client_phone: clientData.phone,
+                p_client_address: clientData.address,
+                p_client_email: clientData.email,
+                p_loan_amount: loanData.amount,
+                p_loan_term: loanData.term
+            });
+
+            if (rpcError) throw rpcError;
+
+            showToast(`Cliente ${clientData.name} y su préstamo han sido registrados.`, 'success');
+        } catch (err: any) {
+            console.error("Failed to add client and loan:", err);
+            showToast('Error al registrar el cliente y el préstamo.', 'error');
+            throw err;
+        }
+    };
+
     const handleAddAccountingEntry = async (entry: { type: AccountingEntryType; description: string; amount: number; entry_date: string; }) => {
         if (!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
@@ -240,6 +271,38 @@ export const useAppData = (
         } catch (err) {
             console.error("Failed to add accounting entry:", err);
             showToast('Error al registrar el movimiento.', 'error');
+            throw err;
+        }
+    };
+
+    const handleUpdateAccountingEntry = async (entryId: number, updates: { description: string; amount: number; entry_date: string; }) => {
+        if (!user || !supabase) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
+            return;
+        }
+        try {
+            const { error } = await supabase.from('accounting_entries').update(updates).eq('id', entryId);
+            if (error) throw error;
+            showToast('Movimiento contable actualizado.', 'success');
+        } catch (err) {
+            console.error("Failed to update accounting entry:", err);
+            showToast('Error al actualizar el movimiento.', 'error');
+            throw err;
+        }
+    };
+
+    const handleDeleteAccountingEntry = async (entryId: number) => {
+        if (!user || !supabase) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
+            return;
+        }
+        try {
+            const { error } = await supabase.from('accounting_entries').delete().eq('id', entryId);
+            if (error) throw error;
+            showToast('Movimiento contable eliminado.', 'success');
+        } catch (err) {
+            console.error("Failed to delete accounting entry:", err);
+            showToast('Error al eliminar el movimiento.', 'error');
             throw err;
         }
     };
@@ -279,36 +342,50 @@ export const useAppData = (
         if (!supabase) return;
         setIsLoading(true);
         setError(null);
+
         try {
-            const [
-                { data: clientsData, error: clientsError },
-                { data: loansData, error: loansError },
-                { data: requestsData, error: requestsError },
-                { data: accountingData, error: accountingError },
-                { data: metaData, error: metaError },
-            ] = await Promise.all([
-                supabase.from('clients').select('*'),
-                supabase.from('loans').select('*'),
-                supabase.from('requests').select('*').in('status', [RequestStatus.PENDING, RequestStatus.UNDER_REVIEW]),
-                supabase.from('accounting_entries').select('*'),
-                supabase.from('app_meta').select('*'),
-            ]);
-            
+            // Fetch core data. These are critical.
+            const { data: clientsData, error: clientsError } = await supabase.from('clients').select('*');
             if (clientsError) throw new Error(`Error fetching clients: ${clientsError.message}`);
-            if (loansError) throw new Error(`Error fetching loans: ${loansError.message}`);
-            if (requestsError) throw new Error(`Error fetching requests: ${requestsError.message}`);
-            if (accountingError) throw new Error(`Error fetching accounting entries: ${accountingError.message}`);
-            if (metaError) throw new Error(`Error fetching app meta: ${metaError.message}`);
-            
             setClients((clientsData || []).map(mapClientFromDb));
+
+            const { data: loansData, error: loansError } = await supabase.from('loans').select('*');
+            if (loansError) throw new Error(`Error fetching loans: ${loansError.message}`);
             setLoans((loansData || []).map(mapLoanFromDb));
+
+            const { data: requestsData, error: requestsError } = await supabase.from('requests').select('*').in('status', [RequestStatus.PENDING, RequestStatus.UNDER_REVIEW]);
+            if (requestsError) throw new Error(`Error fetching requests: ${requestsError.message}`);
             setRequests((requestsData || []).map(mapRequestFromDb));
-            setAccountingEntries((accountingData || []).map(mapAccountingEntryFromDb));
-            setAppMeta((metaData || []).map(mapAppMetaFromDb));
+
+            // Fetch optional/new data. If these fail, the app can still mostly work.
+            const { data: accountingData, error: accountingError } = await supabase.from('accounting_entries').select('*');
+            if (accountingError) {
+                // If the table doesn't exist, we can ignore the error and proceed.
+                if (accountingError.code === '42P01') { // '42P01' is undefined_table
+                    console.warn("Accounting features disabled: 'accounting_entries' table not found. Please update your database schema.");
+                    setAccountingEntries([]);
+                } else {
+                    throw new Error(`Error fetching accounting entries: ${accountingError.message}`);
+                }
+            } else {
+                setAccountingEntries((accountingData || []).map(mapAccountingEntryFromDb));
+            }
+
+            const { data: metaData, error: metaError } = await supabase.from('app_meta').select('*');
+             if (metaError) {
+                if (metaError.code === '42P01') {
+                    console.warn("App meta features disabled: 'app_meta' table not found. Please update your database schema.");
+                    setAppMeta([]);
+                } else {
+                    throw new Error(`Error fetching app meta: ${metaError.message}`);
+                }
+            } else {
+                setAppMeta((metaData || []).map(mapAppMetaFromDb));
+            }
 
         } catch (err: any) {
-             console.error("Data fetch error:", err);
-             setError("No se pudieron cargar los datos. Revisa tu conexión y la configuración de Supabase (RLS).");
+            console.error("Data fetch error:", err);
+            setError("No se pudieron cargar los datos. Revisa tu conexión y asegúrate de que tu base de datos de Supabase esté actualizada.");
         } finally {
             setIsLoading(false);
         }
@@ -354,6 +431,10 @@ export const useAppData = (
 
             if (event === 'INSERT') {
                 const newRecord = mapper(payload.new);
+                // For requests, only add if its status is actionable
+                if (table === 'requests' && ![RequestStatus.PENDING, RequestStatus.UNDER_REVIEW].includes(newRecord.status)) {
+                    return;
+                }
                 stateUpdater(currentRecords => {
                     if (currentRecords.some(rec => rec.id === newRecord.id)) {
                         return currentRecords;
@@ -362,7 +443,17 @@ export const useAppData = (
                 });
             } else if (event === 'UPDATE') {
                 const updatedRecord = mapper(payload.new);
-                stateUpdater(currentRecords => currentRecords.map(record => record.id === updatedRecord.id ? updatedRecord : record));
+                if (table === 'requests') {
+                    // If status changes to non-actionable, remove it from the admin's queue
+                    if (![RequestStatus.PENDING, RequestStatus.UNDER_REVIEW].includes(updatedRecord.status)) {
+                        setRequests(currentRecords => currentRecords.filter(record => record.id !== updatedRecord.id));
+                    } else {
+                        // Otherwise, update it in place
+                        setRequests(currentRecords => currentRecords.map(record => record.id === updatedRecord.id ? updatedRecord : record));
+                    }
+                } else {
+                     stateUpdater(currentRecords => currentRecords.map(record => record.id === updatedRecord.id ? updatedRecord : record));
+                }
             } else if (event === 'DELETE') {
                 const oldRecordId = payload.old.id;
                 stateUpdater(currentRecords => currentRecords.filter(record => record.id !== oldRecordId));
@@ -397,7 +488,10 @@ export const useAppData = (
         handleDenyRequest,
         handleUpdateRequestStatus,
         handleRegisterPayment,
+        handleAddClientAndLoan,
         handleAddAccountingEntry,
+        handleUpdateAccountingEntry,
+        handleDeleteAccountingEntry,
         handleSetCapital,
         clientLoanData,
     };

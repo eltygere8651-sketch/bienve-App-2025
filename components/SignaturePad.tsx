@@ -127,12 +127,12 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
                     onTouchStart={startDrawing}
                     onTouchMove={draw}
                     onTouchEnd={stopDrawing}
-                    className="border border-gray-300 rounded-md touch-none bg-gray-50 w-full h-full"
+                    className="border border-slate-300 rounded-md touch-none bg-slate-50 w-full h-full"
                 />
                 <button
                     type="button"
                     onClick={clear}
-                    className="absolute top-2 right-2 p-2 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors"
+                    className="absolute top-2 right-2 p-2 bg-slate-200 text-slate-700 rounded-full hover:bg-slate-300 transition-colors"
                     aria-label="Limpiar firma"
                 >
                     <Eraser size={18} />

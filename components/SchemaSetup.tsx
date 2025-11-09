@@ -1,17 +1,21 @@
+
+
 import React, { useState } from 'react';
 import { Database, Copy, Check, ExternalLink, RefreshCw, Loader2, AlertTriangle, ScrollText, HardDrive } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 
 const SQL_SCRIPT = `-- B.M. Contigo - Script de Inicialización de Base de Datos para Supabase
--- Versión 1.3.0
+-- Versión 1.5.0
 -- Este script es RE-EJECUTABLE.
+-- v1.5.0: Añade campos a la tabla 'clients' y la función 'create_client_and_loan' para registrar clientes desde el panel.
+-- v1.4.0: Cambia la función 'approve_request' para actualizar el estado de la solicitud a 'Aprobado' en lugar de eliminarla, conservando así el historial.
 -- v1.3.0: Añade tablas 'accounting_entries' y 'app_meta' para la nueva funcionalidad de contabilidad.
 -- v1.2.0: Agrega política de lectura pública a la tabla 'requests' para
 --         permitir la consulta de estado de solicitud por DNI/NIE.
 -- v1.1.0: Soluciona el error "violates row-level security policy"
 --         limpiando las políticas antiguas y creando las correctas.
 
--- 1. CREACIÓN DE TABLAS (Se crearán solo si no existen)
+-- 1. CREACIÓN Y MODIFICACIÓN DE TABLAS
 
 -- Tabla para almacenar información de los clientes
 CREATE TABLE IF NOT EXISTS clients (
@@ -20,6 +24,12 @@ CREATE TABLE IF NOT EXISTS clients (
     join_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Nuevos campos para registro manual de clientes
+ALTER TABLE clients
+    ADD COLUMN IF NOT EXISTS id_number TEXT,
+    ADD COLUMN IF NOT EXISTS phone TEXT,
+    ADD COLUMN IF NOT EXISTS address TEXT,
+    ADD COLUMN IF NOT EXISTS email TEXT;
 
 -- Tabla para almacenar las solicitudes de préstamo
 CREATE TABLE IF NOT EXISTS requests (
@@ -129,10 +139,9 @@ CREATE POLICY "Allow public read access on requests" ON requests FOR SELECT TO a
 CREATE POLICY "Allow admin full access on requests" ON requests FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 
--- 5. FUNCIÓN DE BASE DE DATOS PARA TRANSACCIONES
--- Esta función asegura que la aprobación de una solicitud sea una operación atómica:
--- O se crea el cliente, se crea el préstamo Y se elimina la solicitud, o no se hace nada.
+-- 5. FUNCIONES DE BASE DE DATOS PARA TRANSACCIONES
 
+-- Función para aprobar una solicitud
 CREATE OR REPLACE FUNCTION approve_request(
     p_request_id BIGINT,
     p_loan_amount NUMERIC,
@@ -153,40 +162,61 @@ DECLARE
     v_monthly_payment NUMERIC;
     v_total_repayment NUMERIC;
 BEGIN
-    -- Obtener los detalles de la solicitud
-    SELECT * INTO public.requests WHERE id = p_request_id;
-
-    -- Si la solicitud no existe, lanzar un error
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Solicitud con ID % no encontrada', p_request_id;
-    END IF;
-
-    -- Calcular los detalles del préstamo
-    -- Fórmula de cuota de préstamo (amortización francesa)
+    SELECT * INTO v_request FROM public.requests WHERE id = p_request_id;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Solicitud con ID % no encontrada', p_request_id; END IF;
+    
     v_monthly_payment := (p_loan_amount * v_monthly_interest_rate) / (1 - POWER(1 + v_monthly_interest_rate, -p_loan_term));
     v_total_repayment := v_monthly_payment * p_loan_term;
 
-    -- Crear un nuevo cliente
-    INSERT INTO public.clients (name)
-    VALUES (v_request.full_name)
+    INSERT INTO public.clients (name, id_number, phone, address, email)
+    VALUES (v_request.full_name, v_request.id_number, v_request.phone, v_request.address, v_request.email)
     RETURNING id INTO v_new_client_id;
 
-    -- Crear el nuevo préstamo
     INSERT INTO public.loans (client_id, client_name, amount, interest_rate, term, monthly_payment, total_repayment, signature, contract_pdf_url)
+    VALUES (v_new_client_id, v_request.full_name, p_loan_amount, 96, p_loan_term, ROUND(v_monthly_payment, 2), ROUND(v_total_repayment, 2), p_request_signature, p_contract_pdf_url);
+
+    UPDATE public.requests SET status = 'Aprobado' WHERE id = p_request_id;
+END;
+$$;
+
+-- [NUEVO en v1.5.0] Función para crear un cliente y su primer préstamo de forma atómica
+CREATE OR REPLACE FUNCTION create_client_and_loan(
+    p_client_name TEXT,
+    p_client_id_number TEXT,
+    p_client_phone TEXT,
+    p_client_address TEXT,
+    p_client_email TEXT,
+    p_loan_amount NUMERIC,
+    p_loan_term INTEGER
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_new_client_id UUID;
+    v_monthly_interest_rate NUMERIC := 0.08; -- 8% mensual (96% anual)
+    v_monthly_payment NUMERIC;
+    v_total_repayment NUMERIC;
+BEGIN
+    INSERT INTO public.clients (name, id_number, phone, address, email)
+    VALUES (p_client_name, p_client_id_number, p_client_phone, p_client_address, p_client_email)
+    RETURNING id INTO v_new_client_id;
+
+    v_monthly_payment := (p_loan_amount * v_monthly_interest_rate) / (1 - POWER(1 + v_monthly_interest_rate, -p_loan_term));
+    v_total_repayment := v_monthly_payment * p_loan_term;
+
+    INSERT INTO public.loans (client_id, client_name, amount, interest_rate, term, monthly_payment, total_repayment, status)
     VALUES (
         v_new_client_id,
-        v_request.full_name,
+        p_client_name,
         p_loan_amount,
         96, -- Interés anual (8% * 12)
         p_loan_term,
         ROUND(v_monthly_payment, 2),
         ROUND(v_total_repayment, 2),
-        p_request_signature,
-        p_contract_pdf_url
+        'Pendiente' -- El préstamo empieza como pendiente
     );
-
-    -- Eliminar la solicitud original de la tabla de solicitudes
-    DELETE FROM public.requests WHERE id = p_request_id;
 END;
 $$;
 
@@ -220,12 +250,12 @@ const SchemaSetup: React.FC = () => {
     const sqlEditorLink = projectRef ? `https://supabase.com/dashboard/project/${projectRef}/sql/new` : 'https://supabase.com/dashboard';
 
     return (
-         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4 font-sans">
-            <div className="w-full max-w-4xl bg-white p-6 sm:p-8 rounded-2xl shadow-lg text-gray-800">
+         <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 p-4 font-sans">
+            <div className="w-full max-w-4xl bg-white p-6 sm:p-8 rounded-2xl shadow-lg text-slate-800">
                 <div className="text-center mb-6">
-                    <Database className="text-blue-500 h-16 w-16 mx-auto" />
+                    <Database className="text-primary-500 h-16 w-16 mx-auto" />
                     <h1 className="text-2xl sm:text-3xl font-bold mt-4">Pasos Finales de Configuración</h1>
-                    <p className="text-gray-600 mt-2">
+                    <p className="text-slate-600 mt-2">
                         ¡Conexión exitosa! Ahora solo falta preparar tu base de datos y almacenamiento.
                     </p>
                 </div>
@@ -249,7 +279,7 @@ const SchemaSetup: React.FC = () => {
                         <ul className="list-disc list-inside mt-2 space-y-1">
                             <li>En tu panel de Supabase, ve a la sección <strong>Storage</strong> (icono de cilindro).</li>
                             <li>Haz clic en <strong>"Create a new bucket"</strong>.</li>
-                            <li>Nombra el bucket exactamente: <code className="text-xs bg-gray-200 p-1 rounded font-mono">documents</code>.</li>
+                            <li>Nombra el bucket exactamente: <code className="text-xs bg-slate-200 p-1 rounded font-mono">documents</code>.</li>
                             <li><strong>¡Muy importante!</strong> Activa la opción <strong>"Public bucket"</strong> para permitir las subidas desde el formulario.</li>
                         </ul>
                     </div>
@@ -263,9 +293,9 @@ const SchemaSetup: React.FC = () => {
                                 readOnly
                                 value={SQL_SCRIPT}
                                 rows={10}
-                                className="w-full p-3 font-mono text-xs border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                                className="w-full p-3 font-mono text-xs border border-slate-300 rounded-md bg-slate-50 text-slate-600"
                             />
-                            <button onClick={handleCopy} className="absolute top-2 right-2 p-2 bg-gray-200 rounded-md hover:bg-gray-300">
+                            <button onClick={handleCopy} className="absolute top-2 right-2 p-2 bg-slate-200 rounded-md hover:bg-slate-300">
                                 {copySuccess ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
                             </button>
                         </div>
@@ -280,7 +310,7 @@ const SchemaSetup: React.FC = () => {
                     <button
                         onClick={handleRecheck}
                         disabled={isChecking}
-                        className="w-full flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all hover:scale-105 disabled:bg-blue-400 disabled:cursor-not-allowed"
+                        className="w-full flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all hover:scale-105 disabled:bg-primary-400 disabled:cursor-not-allowed"
                     >
                         {isChecking ? (
                             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -290,7 +320,7 @@ const SchemaSetup: React.FC = () => {
                         {isChecking ? 'Verificando...' : 'He completado los pasos, verificar de nuevo'}
                     </button>
                 </div>
-                 <div className="mt-6 text-xs text-gray-500 text-center">
+                 <div className="mt-6 text-xs text-slate-500 text-center">
                     <p>Una vez que completes los pasos pendientes, haz clic en "Verificar de nuevo" para acceder a la aplicación.</p>
                 </div>
             </div>

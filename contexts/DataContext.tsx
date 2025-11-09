@@ -8,6 +8,9 @@ interface ClientLoanData extends Client {
     loans: Loan[];
 }
 
+export type NewClientData = Omit<Client, 'id' | 'joinDate'>;
+export type NewLoanData = { amount: number, term: number };
+
 interface DataContextType {
     clients: Client[];
     loans: Loan[];
@@ -22,7 +25,10 @@ interface DataContextType {
     handleDenyRequest: (request: LoanRequest) => Promise<void>;
     handleUpdateRequestStatus: (requestId: number, status: RequestStatus) => Promise<void>;
     handleRegisterPayment: (loanId: string) => Promise<void>;
+    handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
     handleAddAccountingEntry: (entry: { type: AccountingEntryType; description: string; amount: number; entry_date: string; }) => Promise<void>;
+    handleUpdateAccountingEntry: (entryId: number, updates: { description: string; amount: number; entry_date: string; }) => Promise<void>;
+    handleDeleteAccountingEntry: (entryId: number) => Promise<void>;
     handleSetCapital: (amount: number) => Promise<void>;
 }
 

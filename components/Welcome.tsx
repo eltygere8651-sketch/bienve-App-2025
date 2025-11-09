@@ -8,24 +8,24 @@ const Welcome: React.FC = () => {
 
     return (
         <div className="space-y-8 animate-fade-in">
-            <div className="bg-white p-8 rounded-2xl shadow-lg">
-                <h1 className="text-3xl sm:text-4xl font-bold text-gray-800">
-                    Bienvenido a <span className="text-blue-600">B.M Contigo</span>
+            <div className="bg-white p-8 rounded-xl shadow-lg">
+                <h1 className="text-3xl sm:text-4xl font-bold text-slate-800">
+                    Bienvenido a <span className="text-primary-600">B.M Contigo</span>
                 </h1>
-                <p className="mt-2 text-lg text-gray-600">Tu aliado para alcanzar tus metas financieras.</p>
+                <p className="mt-2 text-lg text-slate-600">Tu aliado para alcanzar tus metas financieras.</p>
             </div>
             
-            <div className="bg-white p-6 rounded-2xl shadow-md">
-                 <div className="flex items-center text-blue-600">
+            <div className="bg-white p-6 rounded-xl shadow-md">
+                 <div className="flex items-center text-primary-600">
                     <HeartHandshake className="h-8 w-8 mr-3" />
                     <h2 className="text-xl font-bold">Nuestro Compromiso</h2>
                  </div>
-                 <p className="mt-4 text-gray-600">
+                 <p className="mt-4 text-slate-600">
                     En B.M Contigo, creemos en las relaciones basadas en la confianza y el apoyo mutuo. No somos solo un servicio de préstamos; somos una comunidad que te ayuda a construir tus sueños y a navegar tus necesidades financieras con seguridad y transparencia.
                  </p>
                  <button 
                     onClick={() => setCurrentView('loanRequest')}
-                    className="mt-6 w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+                    className="mt-6 w-full inline-flex items-center justify-center px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-md hover:bg-primary-700 transition-colors"
                  >
                     <FileText size={16} className="mr-2" />
                     Iniciar una Solicitud

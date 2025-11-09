@@ -1,0 +1,18 @@
+{
+  "name": "B.M Contigo",
+  "short_name": "BM Contigo",
+  "description": "Una aplicación completa y sencilla para gestionar préstamos a amigos, familiares y conocidos. Incluye un programa de lealtad y herramientas para atraer nuevos clientes, todo con una interfaz moderna y fácil de usar.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#1f2937",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/assets/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

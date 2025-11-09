@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppView } from './types';
 import Dashboard from './components/Dashboard';
@@ -19,6 +20,7 @@ import Setup from './components/Setup';
 import SchemaSetup from './components/SchemaSetup';
 import RequestStatusChecker from './components/RequestStatusChecker';
 import Accounting from './components/Accounting';
+import NewClientForm from './components/NewClientForm';
 
 const App: React.FC = () => {
     const { 
@@ -67,9 +69,9 @@ const App: React.FC = () => {
 
     if (initializationStatus === 'pending' || (isConfigReady && schemaVerificationStatus === 'verifying')) {
         return (
-            <div className="flex flex-col justify-center items-center h-screen bg-gray-100">
-                <Loader2 className="h-16 w-16 animate-spin text-blue-600" />
-                <p className="mt-4 text-gray-600">Inicializando aplicación...</p>
+            <div className="flex flex-col justify-center items-center h-screen bg-slate-100">
+                <Loader2 className="h-16 w-16 animate-spin text-primary-600" />
+                <p className="mt-4 text-slate-600">Inicializando aplicación...</p>
             </div>
         );
     }
@@ -77,10 +79,10 @@ const App: React.FC = () => {
     if (initializationStatus === 'failed') {
         return (
             <div className="flex items-center justify-center min-h-screen bg-red-50 p-4">
-                <div className="w-full max-w-lg bg-white p-8 rounded-2xl shadow-lg text-center">
+                <div className="w-full max-w-lg bg-white p-8 rounded-xl shadow-lg text-center">
                      <AlertTriangle className="text-red-500 h-16 w-16 mx-auto" />
-                     <h1 className="text-2xl font-bold mt-4 text-gray-800">Error Crítico de Configuración</h1>
-                     <p className="text-gray-600 mt-2">
+                     <h1 className="text-2xl font-bold mt-4 text-slate-800">Error Crítico de Configuración</h1>
+                     <p className="text-slate-600 mt-2">
                         La aplicación no pudo conectarse. Por favor, verifica tu configuración de Supabase.
                      </p>
                 </div>
@@ -100,7 +102,7 @@ const App: React.FC = () => {
         if (isLoading && isAuthenticated) {
             return (
                 <div className="flex justify-center items-center h-full">
-                    <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+                    <Loader2 className="h-12 w-12 animate-spin text-primary-600" />
                 </div>
             );
         }
@@ -118,6 +120,7 @@ const App: React.FC = () => {
             case 'welcome': return <Welcome />;
             case 'dashboard': return <Dashboard />;
             case 'clients': return isAuthenticated ? <ClientList /> : <Auth />;
+            case 'newClient': return isAuthenticated ? <NewClientForm /> : <Auth />;
             case 'loanRequest': return <LoanRequestForm />;
             case 'requestStatusChecker': return <RequestStatusChecker />;
             case 'requests': return isAuthenticated ? <RequestList /> : <Auth />;
@@ -133,11 +136,11 @@ const App: React.FC = () => {
     const SidebarContent = () => (
         <>
             <div 
-                className="flex items-center justify-center p-4 border-b border-gray-700 h-16 cursor-pointer"
+                className="flex items-center justify-center p-4 border-b border-slate-700 h-16 cursor-pointer"
                 onClick={handleLogoClick}
                 title="Ir al inicio"
             >
-                 <Handshake className="text-blue-400 h-8 w-8" />
+                 <Handshake className="text-primary-400 h-8 w-8" />
                  {(isSidebarOpen || isMobileMenuOpen) && <h1 className="text-xl font-bold ml-2">B.M Contigo</h1>}
             </div>
             <nav className="flex-1 p-4">
@@ -161,8 +164,8 @@ const App: React.FC = () => {
                 </ul>
                  {isAuthenticated && (isSidebarOpen || isMobileMenuOpen) && (
                     <>
-                        <div className="mt-4 pt-4 border-t border-gray-700">
-                            <h3 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Herramientas</h3>
+                        <div className="mt-4 pt-4 border-t border-slate-700">
+                            <h3 className="px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">Herramientas</h3>
                              <ul>
                                 <NavItem icon={<Calculator />} label="Contabilidad" view="accounting" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                                 <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
@@ -173,11 +176,11 @@ const App: React.FC = () => {
                     </>
                 )}
             </nav>
-             <div className="p-4 border-t border-gray-700">
+             <div className="p-4 border-t border-slate-700">
                 {isAuthenticated ? (
                      <button
                         onClick={logout}
-                        className="w-full flex items-center justify-center p-3 my-1 rounded-lg cursor-pointer text-gray-300 hover:bg-gray-700 hover:text-white"
+                        className="w-full flex items-center justify-center p-3 my-1 rounded-lg cursor-pointer text-slate-300 hover:bg-slate-700 hover:text-white"
                         aria-label="Cerrar sesión"
                     >
                         <LogOut />
@@ -188,7 +191,7 @@ const App: React.FC = () => {
                 ) : (
                     <button
                         onClick={() => setCurrentView('auth')}
-                        className="w-full flex items-center justify-center p-3 my-1 rounded-lg cursor-pointer text-gray-300 hover:bg-gray-700 hover:text-white"
+                        className="w-full flex items-center justify-center p-3 my-1 rounded-lg cursor-pointer text-slate-300 hover:bg-slate-700 hover:text-white"
                         aria-label="Acceder o registrarse"
                     >
                         <LogIn />
@@ -197,7 +200,7 @@ const App: React.FC = () => {
                         </span>
                     </button>
                 )}
-                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-full hidden md:flex justify-center p-2 rounded-lg text-gray-300 hover:bg-gray-700 hover:text-white mt-2">
+                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-full hidden md:flex justify-center p-2 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white mt-2">
                     {isSidebarOpen ? <ChevronLeft /> : <ChevronRight />}
                 </button>
             </div>
@@ -214,11 +217,11 @@ const App: React.FC = () => {
                 onConfirm={confirmState.onConfirm}
                 onCancel={hideConfirmModal}
             />
-            <div className="flex h-screen bg-gray-100">
+            <div className="flex h-screen bg-slate-50">
                  {/* Mobile Header */}
-                <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-gray-800 text-white flex items-center justify-between px-4 z-30 shadow-lg">
+                <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900 text-white flex items-center justify-between px-4 z-30 shadow-lg">
                     <div className="flex items-center gap-2">
-                         <Handshake className="text-blue-400 h-7 w-7" />
+                         <Handshake className="text-primary-400 h-7 w-7" />
                          <h1 className="text-lg font-bold">B.M Contigo</h1>
                     </div>
                     <button onClick={() => setIsMobileMenuOpen(true)} className="p-2">
@@ -229,13 +232,13 @@ const App: React.FC = () => {
                 {/* Mobile Sidebar (Overlay) */}
                 <div className={`md:hidden fixed inset-0 z-40 transition-transform transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                      <div className="fixed inset-0 bg-black/60" onClick={() => setIsMobileMenuOpen(false)}></div>
-                     <aside className="relative bg-gray-800 text-white w-64 h-full flex flex-col">
+                     <aside className="relative bg-slate-900 text-white w-64 h-full flex flex-col">
                         <SidebarContent />
                      </aside>
                 </div>
 
                  {/* Desktop Sidebar */}
-                 <aside className={`bg-gray-800 text-white hidden md:flex flex-col transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+                 <aside className={`bg-slate-900 text-white hidden md:flex flex-col transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
                     <SidebarContent />
                 </aside>
                 

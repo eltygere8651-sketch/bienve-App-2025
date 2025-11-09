@@ -9,6 +9,7 @@ export enum RequestStatus {
     PENDING = 'Pendiente',
     UNDER_REVIEW = 'En Estudio',
     DENIED = 'Denegado',
+    APPROVED = 'Aprobado',
 }
 
 export interface Loan {
@@ -31,6 +32,10 @@ export interface Client {
     id: string;
     name: string;
     joinDate: string;
+    idNumber?: string;
+    phone?: string;
+    address?: string;
+    email?: string;
 }
 
 export interface LoanRequest {
@@ -52,7 +57,7 @@ export interface LoanRequest {
 }
 
 
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'setup' | 'auth' | 'requestStatusChecker' | 'accounting';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'setup' | 'auth' | 'requestStatusChecker' | 'accounting' | 'newClient';
 
 export type FilterStatus = LoanStatus | 'Todos';
 

@@ -40,32 +40,32 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
             case 'Vencido':
                 return <AlertTriangle className="text-red-500" size={16} />;
             default:
-                return <Clock className="text-gray-500" size={16} />;
+                return <Clock className="text-slate-500" size={16} />;
         }
     };
 
     return (
         <div>
-            <h4 className="text-md font-semibold text-gray-700 mb-3">Historial de Pagos</h4>
-            <div className="max-h-60 overflow-y-auto pr-2 border-l-2 border-gray-200 pl-4 space-y-3">
+            <h4 className="text-md font-semibold text-slate-700 mb-3">Historial de Pagos</h4>
+            <div className="max-h-60 overflow-y-auto pr-2 border-l-2 border-slate-200 pl-4 space-y-3">
                 {payments.map(payment => (
                     <div key={payment.paymentNumber} className="flex justify-between items-center text-sm">
                         <div className="flex items-center">
                             <StatusIcon status={payment.status} />
                             <div className="ml-3">
-                                <p className="font-medium text-gray-800">
+                                <p className="font-medium text-slate-800">
                                     Cuota #{payment.paymentNumber}
                                 </p>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-slate-500">
                                     Vencimiento: {payment.dueDate}
                                 </p>
                             </div>
                         </div>
                         <div className="text-right">
-                             <p className="font-semibold text-gray-800">{formatCurrency(payment.amount)}</p>
+                             <p className="font-semibold text-slate-800">{formatCurrency(payment.amount)}</p>
                              <p className={`text-xs font-bold ${
                                  payment.status === 'Pagado' ? 'text-green-500' :
-                                 payment.status === 'Vencido' ? 'text-red-500' : 'text-gray-500'
+                                 payment.status === 'Vencido' ? 'text-red-500' : 'text-slate-500'
                              }`}>
                                 {payment.status}
                              </p>

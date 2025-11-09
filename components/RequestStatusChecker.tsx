@@ -49,8 +49,8 @@ const RequestStatusChecker: React.FC = () => {
         if (isLoading) {
             return (
                 <div className="text-center p-4">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
-                    <p className="mt-2 text-gray-600">Buscando...</p>
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary-600" />
+                    <p className="mt-2 text-slate-600">Buscando...</p>
                 </div>
             );
         }
@@ -89,16 +89,16 @@ const RequestStatusChecker: React.FC = () => {
 
     return (
         <div className="max-w-2xl mx-auto">
-             <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-md">
+             <div className="bg-white p-6 sm:p-8 rounded-xl shadow-md">
                 <div className="text-center">
-                    <Search className="mx-auto h-12 w-12 text-blue-600" />
-                    <h1 className="mt-4 text-2xl sm:text-3xl font-bold text-gray-800">Consultar Estado de Solicitud</h1>
-                    <p className="mt-2 text-gray-600">Introduce el DNI o NIE que usaste en tu solicitud para ver su estado actual.</p>
+                    <Search className="mx-auto h-12 w-12 text-primary-600" />
+                    <h1 className="mt-4 text-2xl sm:text-3xl font-bold text-slate-800">Consultar Estado de Solicitud</h1>
+                    <p className="mt-2 text-slate-600">Introduce el DNI o NIE que usaste en tu solicitud para ver su estado actual.</p>
                 </div>
 
                 <form onSubmit={handleCheckStatus} className="mt-8 space-y-4">
                      <div>
-                        <label htmlFor="idNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="idNumber" className="block text-sm font-medium text-slate-700 mb-1">
                             DNI / NIE
                         </label>
                         <input
@@ -108,13 +108,13 @@ const RequestStatusChecker: React.FC = () => {
                             onChange={(e) => setIdNumber(e.target.value)}
                             required
                             placeholder="Ej: 12345678A"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900"
                         />
                     </div>
                      <button
                         type="submit"
                         disabled={isLoading || !idNumber.trim()}
-                        className="w-full inline-flex items-center justify-center px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105 disabled:bg-blue-400 disabled:cursor-not-allowed"
+                        className="w-full inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-transform hover:scale-105 disabled:bg-primary-400 disabled:cursor-not-allowed"
                     >
                          {isLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Search className="mr-2 h-5 w-5" />)}
                          {isLoading ? 'Consultando...' : 'Consultar'}
