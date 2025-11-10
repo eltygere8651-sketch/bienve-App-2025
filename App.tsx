@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppView } from './types';
 import Dashboard from './components/Dashboard';
@@ -22,8 +19,6 @@ import DataManagement from './components/DataManagement';
 import Accounting from './components/Accounting';
 import NewClientForm from './components/NewClientForm';
 import InstallNavItem from './components/InstallNavItem';
-// FIX: Import RequestStatusChecker to render the view.
-import RequestStatusChecker from './components/RequestStatusChecker';
 
 const App: React.FC = () => {
     const { 
@@ -117,8 +112,6 @@ const App: React.FC = () => {
             case 'settings': return isAuthenticated ? <SettingsComponent /> : <Auth />;
             case 'dataManagement': return isAuthenticated ? <DataManagement /> : <Auth />;
             case 'accounting': return isAuthenticated ? <Accounting /> : <Auth />;
-            // FIX: Add case to render the RequestStatusChecker component.
-            case 'requestStatusChecker': return <RequestStatusChecker />;
             default: return isAuthenticated ? <Dashboard /> : <Welcome />;
         }
     };
@@ -148,7 +141,6 @@ const App: React.FC = () => {
                             {/* Public Order */}
                             <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                             <NavItem icon={<FileText />} label="Iniciar una Solicitud" view="loanRequest" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                            <NavItem icon={<Search />} label="Consultar Estado" view="requestStatusChecker" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         </>
                     )}
                     <InstallNavItem isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />

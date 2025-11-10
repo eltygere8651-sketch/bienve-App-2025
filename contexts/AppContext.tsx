@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { AppView } from '../types';
 import { User } from '@supabase/supabase-js';
@@ -43,10 +44,6 @@ interface AppContextType {
     isSchemaReady: boolean;
     isStorageReady: boolean;
     supabaseConfig: { url: string; anonKey: string } | null;
-    // FIX: Add 'setSupabaseConfig' to the context type to resolve the error in Setup.tsx.
-    setSupabaseConfig: (config: { url: string; anonKey: string } | null) => void;
-    // FIX: Add 'verifySetups' to the context type to resolve the error in SchemaSetup.tsx.
-    verifySetups: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -94,9 +91,10 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             setUser(currentUser);
             setIsAuthenticated(!!currentUser);
             if (currentUser) {
-                setCurrentView(v => (v === 'auth' || v === 'welcome' || v === 'loanRequest') ? 'dashboard' : v);
+                const nonAdminViews: AppView[] = ['auth', 'welcome', 'loanRequest'];
+                setCurrentView(v => nonAdminViews.includes(v) ? 'dashboard' : v);
             } else {
-                const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth', 'dashboard', 'requestStatusChecker'];
+                const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth'];
                 setCurrentView(v => publicViews.includes(v) ? v : 'welcome');
             }
         });
@@ -139,12 +137,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setConfirmState(prev => ({ ...prev, isOpen: false }));
     };
 
-    // FIX: Add a placeholder 'verifySetups' function as the original logic has been removed, but the SchemaSetup component still calls it.
-    const verifySetups = async (): Promise<void> => {
-        // This function is a placeholder. The app now assumes schema/storage are ready.
-        console.warn('verifySetups called, but verification is now skipped.');
-    };
-
     const value = { 
         toast,
         showToast,
@@ -163,9 +155,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isSchemaReady,
         isStorageReady,
         supabaseConfig,
-        // FIX: Expose the Supabase config setter to resolve the error in Setup.tsx.
-        setSupabaseConfig: setSupabaseConfigState,
-        verifySetups,
     };
 
     return (

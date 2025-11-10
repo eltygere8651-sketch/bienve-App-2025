@@ -58,8 +58,7 @@ export interface LoanRequest {
 }
 
 
-// FIX: Add 'requestStatusChecker' to AppView to allow for this view type.
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'accounting' | 'newClient' | 'requestStatusChecker';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'accounting' | 'newClient';
 
 export type FilterStatus = LoanStatus | 'Todos';
 

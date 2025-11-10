@@ -1,19 +1,21 @@
-
-
 import React, { useState } from 'react';
 import { Database, Copy, Check, ExternalLink, RefreshCw, Loader2, AlertTriangle, ScrollText, HardDrive } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 
 const SQL_SCRIPT = `-- B.M. Contigo - Script de Inicialización de Base de Datos para Supabase
--- Versión 1.5.2
+-- Versión 1.5.6
 -- Este script es RE-EJECUTABLE.
--- v1.5.2: [FIX CRÍTICO] Añade política de INSERT en Storage para usuarios autenticados, solucionando el error de aprobación de préstamos.
--- v1.5.1: Corrige error de RLS en funciones al cambiar de SECURITY DEFINER a SECURITY INVOKER (por defecto).
--- v1.5.0: Añade campos a la tabla 'clients' y la función 'create_client_and_loan' para registrar clientes desde el panel.
--- v1.4.0: Cambia la función 'approve_request' para actualizar el estado de la solicitud a 'Aprobado' en lugar de eliminarla.
--- v1.3.0: Añade tablas 'accounting_entries' y 'app_meta' para la nueva funcionalidad de contabilidad.
+-- v1.5.6: [SOLUCIÓN DEFINITIVA] Se revierte a un enfoque 'SECURITY DEFINER' limpio y estándar, que es el método canónico de PostgreSQL para que las funciones se ejecuten con privilegios de superusuario, omitiendo RLS. Se elimina 'SET LOCAL ROLE' para evitar posibles conflictos. Este método es el más robusto y debería solucionar el error de forma permanente.
+-- v1.5.5: Establece explícitamente el rol a 'postgres' dentro de las funciones SECURITY DEFINER para forzar el bypass de RLS.
+-- v1.5.4: Re-applying SECURITY DEFINER to functions.
+-- v1.5.3: Restaura SECURITY DEFINER en las funciones para resolver errores de RLS en inserciones.
+-- v1.5.2: Añade política de INSERT en Storage para usuarios autenticados.
+-- v1.5.1: Corrige error de RLS en funciones.
+-- v1.5.0: Añade campos a la tabla 'clients' y la función 'create_client_and_loan'.
+-- v1.4.0: Cambia la función 'approve_request' para actualizar el estado.
+-- v1.3.0: Añade tablas 'accounting_entries' y 'app_meta'.
 -- v1.2.0: Agrega política de lectura pública a la tabla 'requests'.
--- v1.1.0: Soluciona el error "violates row-level security policy" limpiando las políticas antiguas.
+-- v1.1.0: Soluciona el error "violates row-level security policy".
 
 -- 1. CREACIÓN Y MODIFICACIÓN DE TABLAS
 
@@ -95,24 +97,43 @@ CREATE POLICY "Allow admin full access on requests" ON requests FOR ALL TO authe
 CREATE OR REPLACE FUNCTION approve_request(
     p_request_id BIGINT, p_loan_amount NUMERIC, p_loan_term INTEGER, p_contract_pdf_url TEXT,
     p_request_signature TEXT, p_front_id_url TEXT, p_back_id_url TEXT
-) RETURNS void LANGUAGE plpgsql AS $$
+) 
+RETURNS void 
+LANGUAGE plpgsql 
+SECURITY DEFINER 
+-- Set a secure search path to prevent hijacking
+SET search_path = public
+AS $$
 DECLARE
-    v_request record; v_new_client_id UUID; v_monthly_interest_rate NUMERIC := 0.08;
-    v_monthly_payment NUMERIC; v_total_repayment NUMERIC;
+    v_request record;
+    v_new_client_id UUID;
+    v_monthly_interest_rate NUMERIC := 0.08; -- 8% monthly interest
+    v_monthly_payment NUMERIC;
+    v_total_repayment NUMERIC;
 BEGIN
+    -- This function runs with the privileges of the user who created it (the 'postgres' superuser).
+    -- This allows it to bypass Row Level Security (RLS) policies to perform the required inserts and updates across tables atomically.
+
+    -- 1. Find the original request
     SELECT * INTO v_request FROM public.requests WHERE id = p_request_id;
-    IF NOT FOUND THEN RAISE EXCEPTION 'Solicitud con ID % no encontrada', p_request_id; END IF;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Request with ID % not found', p_request_id;
+    END IF;
     
+    -- 2. Calculate loan terms
     v_monthly_payment := (p_loan_amount * v_monthly_interest_rate) / (1 - POWER(1 + v_monthly_interest_rate, -p_loan_term));
     v_total_repayment := v_monthly_payment * p_loan_term;
 
+    -- 3. Create a new client from the request data
     INSERT INTO public.clients (name, id_number, phone, address, email)
     VALUES (v_request.full_name, v_request.id_number, v_request.phone, v_request.address, v_request.email)
     RETURNING id INTO v_new_client_id;
 
+    -- 4. Create the new loan linked to the new client
     INSERT INTO public.loans (client_id, client_name, amount, interest_rate, term, monthly_payment, total_repayment, signature, contract_pdf_url)
     VALUES (v_new_client_id, v_request.full_name, p_loan_amount, 96, p_loan_term, ROUND(v_monthly_payment, 2), ROUND(v_total_repayment, 2), p_request_signature, p_contract_pdf_url);
 
+    -- 5. Update the request status to 'Approved'
     UPDATE public.requests SET status = 'Aprobado' WHERE id = p_request_id;
 END;
 $$;
@@ -120,18 +141,29 @@ $$;
 CREATE OR REPLACE FUNCTION create_client_and_loan(
     p_client_name TEXT, p_client_id_number TEXT, p_client_phone TEXT, p_client_address TEXT, p_client_email TEXT,
     p_loan_amount NUMERIC, p_loan_term INTEGER
-) RETURNS void LANGUAGE plpgsql AS $$
+) 
+RETURNS void 
+LANGUAGE plpgsql 
+SECURITY DEFINER 
+SET search_path = public
+AS $$
 DECLARE
-    v_new_client_id UUID; v_monthly_interest_rate NUMERIC := 0.08;
-    v_monthly_payment NUMERIC; v_total_repayment NUMERIC;
+    v_new_client_id UUID;
+    v_monthly_interest_rate NUMERIC := 0.08;
+    v_monthly_payment NUMERIC;
+    v_total_repayment NUMERIC;
 BEGIN
+    -- This function runs with superuser privileges to bypass RLS.
+    -- 1. Create the new client
     INSERT INTO public.clients (name, id_number, phone, address, email)
     VALUES (p_client_name, p_client_id_number, p_client_phone, p_client_address, p_client_email)
     RETURNING id INTO v_new_client_id;
 
+    -- 2. Calculate loan terms
     v_monthly_payment := (p_loan_amount * v_monthly_interest_rate) / (1 - POWER(1 + v_monthly_interest_rate, -p_loan_term));
     v_total_repayment := v_monthly_payment * p_loan_term;
 
+    -- 3. Create the new loan linked to the client
     INSERT INTO public.loans (client_id, client_name, amount, interest_rate, term, monthly_payment, total_repayment, status)
     VALUES (v_new_client_id, p_client_name, p_loan_amount, 96, p_loan_term, ROUND(v_monthly_payment, 2), ROUND(v_total_repayment, 2), 'Pendiente');
 END;

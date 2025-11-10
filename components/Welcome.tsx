@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { PenSquare, Handshake } from 'lucide-react';
+import { PenSquare, Handshake, Search } from 'lucide-react';
 import BudgetCalculator from './BudgetCalculator';
 import { useAppContext } from '../contexts/AppContext';
 
@@ -41,6 +42,7 @@ const Welcome: React.FC = () => {
             </div>
 
             <BudgetCalculator />
+
         </div>
     );
 };
