@@ -12,11 +12,11 @@ interface LoanDetailsModalProps {
 }
 
 const DetailItem: React.FC<{ icon: React.ReactNode, label: string, value: string | number }> = ({ icon, label, value }) => (
-    <div className="flex items-center space-x-3 bg-slate-50 p-3 rounded-lg">
-        <div className="text-primary-600">{icon}</div>
+    <div className="flex items-center space-x-3 bg-slate-700/50 p-3 rounded-lg">
+        <div className="text-primary-400">{icon}</div>
         <div>
-            <p className="text-xs text-slate-500 font-medium">{label}</p>
-            <p className="text-sm font-semibold text-slate-800">{value}</p>
+            <p className="text-xs text-slate-400 font-medium">{label}</p>
+            <p className="text-sm font-semibold text-slate-100">{value}</p>
         </div>
     </div>
 );
@@ -31,10 +31,10 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         return (
             <div>
                 <div className="flex justify-between items-center mb-1">
-                    <p className="text-sm font-semibold text-slate-700">Progreso del Pago</p>
-                    <p className="text-sm font-bold text-slate-800">{loan.paymentsMade} / {loan.term} cuotas</p>
+                    <p className="text-sm font-semibold text-slate-200">Progreso del Pago</p>
+                    <p className="text-sm font-bold text-slate-100">{loan.paymentsMade} / {loan.term} cuotas</p>
                 </div>
-                <div className="w-full bg-slate-200 rounded-full h-2.5">
+                <div className="w-full bg-slate-700 rounded-full h-2.5">
                     <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
                 </div>
             </div>
@@ -47,15 +47,15 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         switch (status) {
             case LoanStatus.PAID:
                 icon = <ThumbsUp size={14} className="mr-2"/>;
-                textClasses = 'bg-green-100 text-green-700';
+                textClasses = 'bg-green-500/10 text-green-400';
                 break;
             case LoanStatus.PENDING:
                 icon = <Clock size={14} className="mr-2"/>;
-                 textClasses = 'bg-primary-100 text-primary-700';
+                 textClasses = 'bg-primary-500/10 text-primary-400';
                  break;
             case LoanStatus.OVERDUE:
                 icon = <AlertTriangle size={14} className="mr-2"/>;
-                 textClasses = 'bg-red-100 text-red-700';
+                 textClasses = 'bg-red-500/10 text-red-400';
                  break;
         }
         return <span className={`${baseClasses} ${textClasses}`}>{icon} {status}</span>;
@@ -63,17 +63,17 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
 
     return (
         <div 
-            className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-0 sm:p-4" 
+            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-0 sm:p-4 animate-modal-backdrop" 
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-none sm:rounded-xl shadow-xl w-full h-full sm:h-auto sm:max-w-2xl transform transition-all animate-fade-in flex flex-col"
+                className="bg-slate-800 rounded-none sm:rounded-xl shadow-xl w-full h-full sm:h-auto sm:max-w-2xl transform transition-all animate-modal-content flex flex-col border border-slate-700"
                 onClick={e => e.stopPropagation()}
             >
-                <div className="p-4 sm:p-6 flex justify-between items-center border-b border-slate-200 flex-shrink-0">
-                    <h2 className="text-xl font-bold text-slate-900">Detalles del Préstamo</h2>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100">
-                        <X className="h-6 w-6 text-slate-500" />
+                <div className="p-4 sm:p-6 flex justify-between items-center border-b border-slate-700 flex-shrink-0">
+                    <h2 className="text-xl font-bold text-slate-100">Detalles del Préstamo</h2>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-700">
+                        <X className="h-6 w-6 text-slate-400" />
                     </button>
                 </div>
 
@@ -102,20 +102,5 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         </div>
     );
 };
-
-if (!document.getElementById('modal-animations')) {
-    const style = document.createElement('style');
-    style.id = 'modal-animations';
-    style.innerHTML = `
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in {
-            animation: fadeIn 0.2s ease-out forwards;
-        }
-    `;
-    document.head.appendChild(style);
-}
 
 export default LoanDetailsModal;

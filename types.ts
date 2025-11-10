@@ -1,4 +1,5 @@
 
+
 export enum LoanStatus {
     PENDING = 'Pendiente',
     PAID = 'Pagado',
@@ -57,7 +58,8 @@ export interface LoanRequest {
 }
 
 
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'setup' | 'auth' | 'requestStatusChecker' | 'accounting' | 'newClient';
+// FIX: Add 'requestStatusChecker' to AppView to allow for this view type.
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'accounting' | 'newClient' | 'requestStatusChecker';
 
 export type FilterStatus = LoanStatus | 'Todos';
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Loader2, ArrowLeft, FilePlus, Upload, SearchCheck } from 'lucide-react';
+import { CheckCircle, Loader2, ArrowLeft, FilePlus, Upload } from 'lucide-react';
 import { LoanRequest } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
@@ -136,18 +136,11 @@ const LoanRequestForm: React.FC = () => {
         return (
             <div className="max-w-2xl mx-auto text-center py-16">
                  <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
-                 <h1 className="mt-4 text-3xl font-bold text-slate-800">¡Solicitud Enviada!</h1>
-                 <p className="mt-2 text-slate-600">
-                    Gracias por tu interés. Tu solicitud ha sido registrada. Puedes consultar su estado en cualquier momento desde la pestaña <strong>'Consultar Solicitud'</strong> utilizando tu DNI/NIE.
+                 <h1 className="mt-4 text-3xl font-bold text-slate-100">¡Solicitud Enviada!</h1>
+                 <p className="mt-2 text-slate-300">
+                    Gracias por tu interés. Tu solicitud ha sido registrada y será revisada pronto.
                  </p>
-                 <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
-                    <button 
-                        onClick={() => setCurrentView('requestStatusChecker')}
-                        className="inline-flex items-center justify-center px-6 py-3 bg-slate-600 text-white font-bold rounded-lg shadow-md hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-transform hover:scale-105"
-                    >
-                        <SearchCheck className="mr-2 h-5 w-5" />
-                        Consultar Estado Ahora
-                    </button>
+                 <div className="mt-8 flex justify-center">
                     <button 
                         onClick={resetForm} 
                         className="inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-transform hover:scale-105"
@@ -162,14 +155,14 @@ const LoanRequestForm: React.FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto">
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2">Solicitud de Préstamo</h1>
-            <p className="text-slate-600 mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 mb-2">Iniciar una Solicitud</h1>
+            <p className="text-slate-400 mb-6">
                 Paso {step} de 2: {step === 1 ? "Completa tus datos" : "Aceptación del Contrato"}
             </p>
             {step === 1 && (
-                 <form onSubmit={handleNextStep} className="bg-white p-4 sm:p-8 rounded-xl shadow-md space-y-8">
+                 <form onSubmit={handleNextStep} className="bg-slate-800 p-4 sm:p-8 rounded-xl shadow-lg space-y-8 border border-slate-700">
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Información Personal</h2>
+                        <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Información Personal</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <InputField label="Nombre Completo" name="fullName" type="text" value={formData.fullName} onChange={handleInputChange} required />
                             <InputField label="DNI / NIE" name="idNumber" type="text" value={formData.idNumber} onChange={handleInputChange} required />
@@ -179,7 +172,7 @@ const LoanRequestForm: React.FC = () => {
                         </div>
                     </div>
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Detalles de la Solicitud</h2>
+                        <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Detalles de la Solicitud</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="md:col-span-2"><InputField label="Monto Solicitado (€)" name="loanAmount" type="number" value={formData.loanAmount} onChange={handleInputChange} required min="1" /></div>
                             <SelectField label="Motivo del Préstamo" name="loanReason" value={formData.loanReason} onChange={handleInputChange} required>
@@ -198,7 +191,7 @@ const LoanRequestForm: React.FC = () => {
                         </div>
                     </div>
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Documento de Identidad</h2>
+                        <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Documento de Identidad</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <FileUploadField label="Foto del Anverso" id="front-id-upload" onChange={(e) => handleFileChange(e, 'front')} previewUrl={frontIdPreview || DNI_FRONT_PLACEHOLDER} fileName={frontId?.name} />
                             <FileUploadField label="Foto del Reverso" id="back-id-upload" onChange={(e) => handleFileChange(e, 'back')} previewUrl={backIdPreview || DNI_BACK_PLACEHOLDER} fileName={backId?.name} />
@@ -213,23 +206,23 @@ const LoanRequestForm: React.FC = () => {
             )}
 
             {step === 2 && (
-                <div className="bg-white p-4 sm:p-8 rounded-xl shadow-md space-y-6">
+                <div className="bg-slate-800 p-4 sm:p-8 rounded-xl shadow-lg space-y-6 border border-slate-700">
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-700 mb-2">Vista Previa del Contrato</h2>
-                        <div className="w-full h-64 overflow-y-auto p-4 border border-slate-300 rounded-md bg-slate-50 text-sm whitespace-pre-wrap font-mono">
+                        <h2 className="text-lg font-semibold text-slate-200 mb-2">Vista Previa del Contrato</h2>
+                        <div className="w-full h-64 overflow-y-auto p-4 border border-slate-600 rounded-md bg-slate-900/50 text-sm whitespace-pre-wrap font-mono text-slate-300">
                             {contractPreview}
                         </div>
                     </div>
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-700 mb-2">Firma Digital</h2>
-                        <p className="text-sm text-slate-600 mb-3">Dibuja tu firma en el recuadro. Al firmar, aceptas los términos del contrato.</p>
+                        <h2 className="text-lg font-semibold text-slate-200 mb-2">Firma Digital</h2>
+                        <p className="text-sm text-slate-400 mb-3">Dibuja tu firma en el recuadro. Al firmar, aceptas los términos del contrato.</p>
                         <div className={`p-1 rounded-lg border-2 ${signatureError ? 'border-red-500' : 'border-transparent'}`}>
                              <SignaturePad ref={signaturePadRef} onDrawEnd={() => setSignatureError(false)} />
                         </div>
                         {signatureError && <p className="text-red-500 text-sm mt-1">La firma es obligatoria.</p>}
                     </div>
                     <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <button onClick={() => setStep(1)} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors">
+                        <button onClick={() => setStep(1)} className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-slate-600 text-slate-100 font-bold rounded-lg hover:bg-slate-700 transition-colors">
                             <ArrowLeft className="mr-2 h-5 w-5" />
                             Volver
                         </button>

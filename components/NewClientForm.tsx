@@ -29,6 +29,7 @@ const NewClientForm: React.FC = () => {
     const loanCalculations = useMemo(() => {
         const amount = parseFloat(loanData.amount);
         const term = parseInt(loanData.term, 10);
+        // Added validation to prevent NaN/Infinity issues.
         if (isNaN(amount) || isNaN(term) || amount <= 0 || term <= 0) {
             return { monthlyPayment: 0, totalRepayment: 0 };
         }
@@ -37,6 +38,7 @@ const NewClientForm: React.FC = () => {
         const monthlyPayment = (amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -term));
         const totalRepayment = monthlyPayment * term;
 
+        // Ensure the results are always finite numbers.
         return {
             monthlyPayment: isFinite(monthlyPayment) ? monthlyPayment : 0,
             totalRepayment: isFinite(totalRepayment) ? totalRepayment : 0,
@@ -83,18 +85,18 @@ const NewClientForm: React.FC = () => {
         <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                    <UserPlus className="h-8 w-8 mr-3 text-primary-600" />
-                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Registrar Cliente y Préstamo</h1>
+                    <UserPlus className="h-8 w-8 mr-3 text-primary-400" />
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Registrar Cliente y Préstamo</h1>
                 </div>
-                 <button onClick={() => setCurrentView('clients')} className="inline-flex items-center justify-center px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors text-sm">
+                 <button onClick={() => setCurrentView('clients')} className="inline-flex items-center justify-center px-4 py-2 bg-slate-700 text-slate-200 font-bold rounded-lg hover:bg-slate-600 transition-colors text-sm">
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Volver
                 </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="bg-white p-4 sm:p-8 rounded-xl shadow-md space-y-8">
+            <form onSubmit={handleSubmit} className="bg-slate-800 p-4 sm:p-8 rounded-xl shadow-lg space-y-8 border border-slate-700">
                 <div>
-                    <h2 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Información del Cliente</h2>
+                    <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Información del Cliente</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <InputField label="Nombre Completo" name="name" type="text" value={clientData.name} onChange={handleClientChange} required />
                         <InputField label="DNI / NIE" name="idNumber" type="text" value={clientData.idNumber} onChange={handleClientChange} required />
@@ -106,39 +108,39 @@ const NewClientForm: React.FC = () => {
                     </div>
                 </div>
                 <div>
-                    <h2 className="text-lg font-semibold text-slate-700 mb-4 border-b pb-2">Detalles del Préstamo Inicial</h2>
+                    <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Detalles del Préstamo Inicial</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <InputField label="Monto a Prestar (€)" name="amount" type="number" value={loanData.amount} onChange={handleLoanChange} required min="1" />
                         <InputField label="Plazo (en meses)" name="term" type="number" value={loanData.term} onChange={handleLoanChange} required min="1" />
                     </div>
-                    <div className="mt-6 bg-slate-50 p-4 rounded-lg">
-                        <h3 className="text-base font-semibold text-slate-700 mb-3">Resumen del Préstamo</h3>
+                    <div className="mt-6 bg-slate-700/50 p-4 rounded-lg">
+                        <h3 className="text-base font-semibold text-slate-200 mb-3">Resumen del Préstamo</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="flex items-center space-x-3">
-                                <Banknote className="h-6 w-6 text-green-500"/>
+                                <Banknote className="h-6 w-6 text-green-400"/>
                                 <div>
-                                    <p className="text-xs text-slate-500">Cuota Mensual</p>
-                                    <p className="text-base font-bold text-slate-800">{formatCurrency(loanCalculations.monthlyPayment)}</p>
+                                    <p className="text-xs text-slate-400">Cuota Mensual</p>
+                                    <p className="text-base font-bold text-slate-100">{formatCurrency(loanCalculations.monthlyPayment)}</p>
                                 </div>
                             </div>
                              <div className="flex items-center space-x-3">
-                                <BarChart className="h-6 w-6 text-blue-500"/>
+                                <BarChart className="h-6 w-6 text-primary-400"/>
                                 <div>
-                                    <p className="text-xs text-slate-500">Total a Pagar</p>
-                                    <p className="text-base font-bold text-slate-800">{formatCurrency(loanCalculations.totalRepayment)}</p>
+                                    <p className="text-xs text-slate-400">Total a Pagar</p>
+                                    <p className="text-base font-bold text-slate-100">{formatCurrency(loanCalculations.totalRepayment)}</p>
                                 </div>
                             </div>
                             <div className="flex items-center space-x-3">
-                                <Calendar className="h-6 w-6 text-purple-500"/>
+                                <Calendar className="h-6 w-6 text-purple-400"/>
                                 <div>
-                                    <p className="text-xs text-slate-500">Interés Mensual</p>
-                                    <p className="text-base font-bold text-slate-800">{INTEREST_RATE_CONFIG.MONTHLY}%</p>
+                                    <p className="text-xs text-slate-400">Interés Mensual</p>
+                                    <p className="text-base font-bold text-slate-100">{INTEREST_RATE_CONFIG.MONTHLY}%</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                 <div className="text-right pt-4 border-t">
+                 <div className="text-right pt-4 border-t border-slate-700">
                      <button type="submit" disabled={isSubmitting} className="inline-flex items-center justify-center px-6 py-3 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform hover:scale-105 disabled:bg-green-400">
                          {isSubmitting ? (<><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Registrando...</>) : (<><UserPlus className="mr-2 h-5 w-5" /> Registrar Cliente y Préstamo</>)}
                     </button>

@@ -35,13 +35,13 @@ const Settings: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="flex items-center">
-                <SettingsIcon className="h-8 w-8 mr-3 text-primary-600" />
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Ajustes</h1>
+                <SettingsIcon className="h-8 w-8 mr-3 text-primary-400" />
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Ajustes</h1>
             </div>
 
-            <div className="bg-white p-4 sm:p-8 rounded-xl shadow-md">
-                <h2 className="text-xl font-bold text-slate-800 mb-4">Plantilla de Contrato de Préstamo</h2>
-                <p className="text-slate-600 mb-4">
+            <div className="bg-slate-800 p-4 sm:p-8 rounded-xl shadow-lg border border-slate-700">
+                <h2 className="text-xl font-bold text-slate-100 mb-4">Plantilla de Contrato de Préstamo</h2>
+                <p className="text-slate-300 mb-4">
                     Modifica el texto del contrato que se genera para cada nueva solicitud. Utiliza los placeholders disponibles para insertar datos dinámicamente.
                 </p>
 
@@ -51,17 +51,17 @@ const Settings: React.FC = () => {
                             value={template}
                             onChange={(e) => setTemplate(e.target.value)}
                             rows={20}
-                            className="w-full p-3 font-mono text-sm border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900"
+                            className="w-full p-3 font-mono text-sm border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-900 text-slate-200"
                             placeholder="Escribe aquí tu plantilla de contrato..."
                         />
                     </div>
                     <div>
-                        <h3 className="text-lg font-semibold text-slate-700 mb-2">Placeholders Disponibles</h3>
+                        <h3 className="text-lg font-semibold text-slate-200 mb-2">Placeholders Disponibles</h3>
                         <div className="space-y-2">
                             {placeholders.map(p => (
-                                <div key={p.key} className="p-2 bg-slate-100 rounded-md">
-                                    <p className="font-mono text-sm text-primary-600">{p.key}</p>
-                                    <p className="text-xs text-slate-500">{p.desc}</p>
+                                <div key={p.key} className="p-2 bg-slate-700 rounded-md">
+                                    <p className="font-mono text-sm text-primary-400">{p.key}</p>
+                                    <p className="text-xs text-slate-400">{p.desc}</p>
                                 </div>
                             ))}
                         </div>
@@ -71,7 +71,7 @@ const Settings: React.FC = () => {
                 <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
                     <button
                         onClick={handleReset}
-                        className="inline-flex items-center justify-center px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors"
+                        className="inline-flex items-center justify-center px-4 py-2 bg-slate-600 text-slate-100 font-bold rounded-lg hover:bg-slate-700 transition-colors"
                     >
                         <RotateCcw size={18} className="mr-2" />
                         Restaurar por Defecto

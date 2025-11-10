@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Loan } from '../types';
 import { formatCurrency } from '../services/utils';
 import { CheckCircle, Clock, AlertTriangle } from 'lucide-react';
@@ -8,30 +8,35 @@ interface PaymentHistoryProps {
 }
 
 const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
-    const payments = [];
-    const startDate = new Date(loan.startDate);
+    // Optimization: Calculate payments only when loan data changes.
+    const payments = useMemo(() => {
+        const p = [];
+        const startDate = new Date(loan.startDate);
 
-    for (let i = 1; i <= loan.term; i++) {
-        const dueDate = new Date(startDate);
-        dueDate.setMonth(startDate.getMonth() + i);
+        for (let i = 1; i <= loan.term; i++) {
+            const dueDate = new Date(startDate);
+            dueDate.setMonth(startDate.getMonth() + i);
 
-        let status: 'Pagado' | 'Pendiente' | 'Vencido' = 'Pendiente';
-        const isPaid = i <= loan.paymentsMade;
-        const isOverdue = !isPaid && new Date() > dueDate;
+            let status: 'Pagado' | 'Pendiente' | 'Vencido' = 'Pendiente';
+            const isPaid = i <= loan.paymentsMade;
+            const isOverdue = !isPaid && new Date() > dueDate;
 
-        if (isPaid) {
-            status = 'Pagado';
-        } else if (isOverdue) {
-            status = 'Vencido';
+            if (isPaid) {
+                status = 'Pagado';
+            } else if (isOverdue) {
+                status = 'Vencido';
+            }
+
+            p.push({
+                paymentNumber: i,
+                dueDate: dueDate.toLocaleDateString('es-ES'),
+                amount: loan.monthlyPayment,
+                status: status,
+            });
         }
+        return p;
+    }, [loan.term, loan.startDate, loan.paymentsMade, loan.monthlyPayment]);
 
-        payments.push({
-            paymentNumber: i,
-            dueDate: dueDate.toLocaleDateString('es-ES'),
-            amount: loan.monthlyPayment,
-            status: status,
-        });
-    }
 
     const StatusIcon = ({ status }: { status: string }) => {
         switch (status) {
@@ -46,26 +51,26 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
 
     return (
         <div>
-            <h4 className="text-md font-semibold text-slate-700 mb-3">Historial de Pagos</h4>
-            <div className="max-h-60 overflow-y-auto pr-2 border-l-2 border-slate-200 pl-4 space-y-3">
+            <h4 className="text-md font-semibold text-slate-200 mb-3">Historial de Pagos</h4>
+            <div className="max-h-60 overflow-y-auto pr-2 border-l-2 border-slate-700 pl-4 space-y-3">
                 {payments.map(payment => (
                     <div key={payment.paymentNumber} className="flex justify-between items-center text-sm">
                         <div className="flex items-center">
                             <StatusIcon status={payment.status} />
                             <div className="ml-3">
-                                <p className="font-medium text-slate-800">
+                                <p className="font-medium text-slate-200">
                                     Cuota #{payment.paymentNumber}
                                 </p>
-                                <p className="text-xs text-slate-500">
+                                <p className="text-xs text-slate-400">
                                     Vencimiento: {payment.dueDate}
                                 </p>
                             </div>
                         </div>
                         <div className="text-right">
-                             <p className="font-semibold text-slate-800">{formatCurrency(payment.amount)}</p>
+                             <p className="font-semibold text-slate-100">{formatCurrency(payment.amount)}</p>
                              <p className={`text-xs font-bold ${
-                                 payment.status === 'Pagado' ? 'text-green-500' :
-                                 payment.status === 'Vencido' ? 'text-red-500' : 'text-slate-500'
+                                 payment.status === 'Pagado' ? 'text-green-400' :
+                                 payment.status === 'Vencido' ? 'text-red-400' : 'text-slate-400'
                              }`}>
                                 {payment.status}
                              </p>

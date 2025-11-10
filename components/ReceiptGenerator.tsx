@@ -54,14 +54,14 @@ const ReceiptGenerator: React.FC = () => {
     return (
         <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex items-center">
-                <ReceiptText className="h-8 w-8 mr-3 text-primary-600" />
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Generador de Recibos</h1>
+                <ReceiptText className="h-8 w-8 mr-3 text-primary-400" />
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Generador de Recibos</h1>
             </div>
             
-            <form onSubmit={handleSubmit} className="bg-white p-4 sm:p-8 rounded-xl shadow-md space-y-6">
+            <form onSubmit={handleSubmit} className="bg-slate-800 p-4 sm:p-8 rounded-xl shadow-lg space-y-6 border border-slate-700">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label htmlFor="clientName" className="block text-sm font-medium text-slate-700 mb-1">
+                        <label htmlFor="clientName" className="block text-sm font-medium text-slate-300 mb-1">
                             Nombre del Cliente
                         </label>
                         <input
@@ -71,11 +71,11 @@ const ReceiptGenerator: React.FC = () => {
                             onChange={(e) => setClientName(e.target.value)}
                             required
                             placeholder="Ej: Juan Pérez"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900"
+                            className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100"
                         />
                     </div>
                      <div>
-                        <label htmlFor="loanId" className="block text-sm font-medium text-slate-700 mb-1">
+                        <label htmlFor="loanId" className="block text-sm font-medium text-slate-300 mb-1">
                             ID de Préstamo / Referencia (Opcional)
                         </label>
                         <input
@@ -84,14 +84,14 @@ const ReceiptGenerator: React.FC = () => {
                             value={loanId}
                             onChange={(e) => setLoanId(e.target.value)}
                             placeholder="Ej: loan-12345"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900"
+                            className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100"
                         />
                     </div>
                  </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      <div>
-                        <label htmlFor="previousBalance" className="block text-sm font-medium text-slate-700 mb-1">
+                        <label htmlFor="previousBalance" className="block text-sm font-medium text-slate-300 mb-1">
                             Saldo Anterior (€)
                         </label>
                         <input
@@ -103,11 +103,11 @@ const ReceiptGenerator: React.FC = () => {
                             min="0"
                             step="0.01"
                             placeholder="Ej: 1250.75"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900"
+                            className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100"
                         />
                     </div>
                     <div>
-                        <label htmlFor="paymentAmount" className="block text-sm font-medium text-slate-700 mb-1">
+                        <label htmlFor="paymentAmount" className="block text-sm font-medium text-slate-300 mb-1">
                             Monto del Pago (€)
                         </label>
                         <input
@@ -119,13 +119,13 @@ const ReceiptGenerator: React.FC = () => {
                             min="0.01"
                             step="0.01"
                             placeholder="Ej: 150.00"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900"
+                            className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100"
                         />
                     </div>
                     
                 </div>
                  <div>
-                    <label htmlFor="paymentDate" className="block text-sm font-medium text-slate-700 mb-1">
+                    <label htmlFor="paymentDate" className="block text-sm font-medium text-slate-300 mb-1">
                         Fecha del Pago
                     </label>
                     <input
@@ -134,12 +134,12 @@ const ReceiptGenerator: React.FC = () => {
                         value={paymentDate}
                         onChange={(e) => setPaymentDate(e.target.value)}
                         required
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100"
                     />
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
                         Tipo de Pago
                     </label>
                     <div className="flex flex-wrap gap-4">
@@ -152,9 +152,9 @@ const ReceiptGenerator: React.FC = () => {
                                     value={type}
                                     checked={paymentType === type}
                                     onChange={(e) => setPaymentType(e.target.value)}
-                                    className="h-4 w-4 text-primary-600 border-slate-300 focus:ring-primary-500"
+                                    className="h-4 w-4 text-primary-600 border-slate-500 bg-slate-700 focus:ring-primary-500"
                                 />
-                                <label htmlFor={type} className="ml-2 block text-sm text-slate-900">
+                                <label htmlFor={type} className="ml-2 block text-sm text-slate-200">
                                     {type}
                                 </label>
                             </div>
@@ -163,7 +163,7 @@ const ReceiptGenerator: React.FC = () => {
                 </div>
 
                 <div>
-                    <label htmlFor="notes" className="block text-sm font-medium text-slate-700 mb-1">
+                    <label htmlFor="notes" className="block text-sm font-medium text-slate-300 mb-1">
                         Notas Adicionales (Opcional)
                     </label>
                     <textarea
@@ -171,16 +171,16 @@ const ReceiptGenerator: React.FC = () => {
                         rows={3}
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900"
+                        className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100"
                         placeholder="Ej: Pago adelantado correspondiente a la cuota de..."
                     />
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
                         Firma del Prestamista (Opcional)
                     </label>
-                    <p className="text-xs text-slate-500 mb-2">
+                    <p className="text-xs text-slate-400 mb-2">
                         Dibuja tu firma en el recuadro para añadirla al recibo.
                     </p>
                     <SignaturePad ref={signaturePadRef} />

@@ -221,7 +221,7 @@ export const generateRequestSummaryPDF = (request: LoanRequest) => {
 
     // Title
     doc.setFontSize(18);
-    doc.text(`Resumen de Solicitud de Préstamo`, 105, 20, { align: 'center' });
+    doc.text(`Resumen de Solicitud`, 105, 20, { align: 'center' });
     doc.setFontSize(11);
     doc.text(`Fecha de Solicitud: ${new Date(request.requestDate).toLocaleString('es-ES')}`, 15, 30);
     doc.text(`Estado: ${request.status}`, 195, 30, { align: 'right' });

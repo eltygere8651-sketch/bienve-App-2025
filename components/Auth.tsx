@@ -39,32 +39,32 @@ const Auth: React.FC = () => {
         <div className="flex items-center justify-center p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
-                    <Handshake className="text-primary-600 h-12 w-12 mx-auto" />
-                    <h1 className="text-3xl font-bold text-slate-800 mt-2">B.M Contigo</h1>
-                    <p className="text-slate-600">Acceso exclusivo para administradores.</p>
+                    <Handshake className="text-primary-500 h-12 w-12 mx-auto" />
+                    <h1 className="text-3xl font-bold text-slate-100 mt-2">B.M Contigo</h1>
+                    <p className="text-slate-400">Acceso exclusivo para administradores.</p>
                 </div>
-                <div className="bg-white p-8 rounded-xl shadow-lg">
+                <div className="bg-slate-800 p-8 rounded-xl shadow-lg border border-slate-700">
                     <div className="mb-6 text-center">
-                        <h2 className="text-xl font-bold text-slate-800">Iniciar Sesión</h2>
+                        <h2 className="text-xl font-bold text-slate-100">Iniciar Sesión</h2>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-slate-700">Correo Electrónico</label>
+                            <label htmlFor="email" className="block text-sm font-medium text-slate-300">Correo Electrónico</label>
                             <div className="relative mt-1">
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10 w-full px-4 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900" />
+                                <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-10 w-full px-4 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100" />
                             </div>
                         </div>
                         <div>
-                            <label htmlFor="password"className="block text-sm font-medium text-slate-700">Contraseña</label>
+                            <label htmlFor="password"className="block text-sm font-medium text-slate-300">Contraseña</label>
                              <div className="relative mt-1">
                                 <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 w-full px-4 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-white text-slate-900" />
+                                <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-10 w-full px-4 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100" />
                             </div>
                         </div>
                        
-                        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
                         
                         <div>
                             <button type="submit" disabled={isLoading} className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-primary-400">

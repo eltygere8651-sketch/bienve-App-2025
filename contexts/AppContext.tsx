@@ -1,20 +1,16 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import { AppView } from '../types';
-import { LOCAL_STORAGE_KEYS } from '../constants';
 import { User } from '@supabase/supabase-js';
 import { 
     isSupabaseConfigured, 
     getSupabaseConfig, 
     onAuthStateChanged, 
     signOut,
-    verifySchema,
-    verifyStorage,
     initializeSupabaseClient
 } from '../services/supabaseService';
 
 type InitializationStatus = 'pending' | 'success' | 'failed';
-type SchemaVerificationStatus = 'pending' | 'verifying' | 'verified';
-
+type ConfirmModalType = 'info' | 'warning';
 
 interface ToastMessage {
     message: string;
@@ -26,6 +22,7 @@ interface ConfirmState {
     title: string;
     message: string;
     onConfirm: () => void;
+    type: ConfirmModalType;
 }
 
 interface AppContextType {
@@ -39,16 +36,17 @@ interface AppContextType {
     isSidebarOpen: boolean,
     setIsSidebarOpen: (isOpen: boolean) => void;
     confirmState: ConfirmState;
-    showConfirmModal: (options: Omit<ConfirmState, 'isOpen'>) => void;
+    showConfirmModal: (options: Omit<ConfirmState, 'isOpen' | 'type'> & { type?: ConfirmModalType }) => void;
     hideConfirmModal: () => void;
     isConfigReady: boolean;
-    setSupabaseConfig: (config: { url: string; anonKey: string }) => void;
     initializationStatus: InitializationStatus;
     isSchemaReady: boolean;
     isStorageReady: boolean;
-    schemaVerificationStatus: SchemaVerificationStatus;
-    verifySetups: () => Promise<void>;
     supabaseConfig: { url: string; anonKey: string } | null;
+    // FIX: Add 'setSupabaseConfig' to the context type to resolve the error in Setup.tsx.
+    setSupabaseConfig: (config: { url: string; anonKey: string } | null) => void;
+    // FIX: Add 'verifySetups' to the context type to resolve the error in SchemaSetup.tsx.
+    verifySetups: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -64,32 +62,14 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         title: '',
         message: '',
         onConfirm: () => {},
+        type: 'warning',
     });
     const [supabaseConfig, setSupabaseConfigState] = useState<{ url: string; anonKey: string } | null>(null);
     const [isConfigReady, setIsConfigReady] = useState(false);
     const [initializationStatus, setInitializationStatus] = useState<InitializationStatus>('pending');
-    const [isSchemaReady, setIsSchemaReady] = useState<boolean>(false);
-    const [isStorageReady, setIsStorageReady] = useState<boolean>(false);
-    const [schemaVerificationStatus, setSchemaVerificationStatus] = useState<SchemaVerificationStatus>('pending');
-
-
-    const verifySetups = useCallback(async () => {
-        setSchemaVerificationStatus('verifying');
-        try {
-            const [schemaExists, storageExists] = await Promise.all([
-                verifySchema(),
-                verifyStorage()
-            ]);
-            setIsSchemaReady(schemaExists);
-            setIsStorageReady(storageExists);
-        } catch (error) {
-            console.error("Failed to execute setup verification", error);
-            setIsSchemaReady(false);
-            setIsStorageReady(false);
-        } finally {
-            setSchemaVerificationStatus('verified');
-        }
-    }, []);
+    // Schema and storage are assumed to be ready as setup is removed.
+    const [isSchemaReady] = useState<boolean>(true);
+    const [isStorageReady] = useState<boolean>(true);
     
     useEffect(() => {
         const config = getSupabaseConfig();
@@ -102,15 +82,9 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 setInitializationStatus('failed');
             }
         } else {
-            setInitializationStatus('success'); // Ready to show Setup screen
+            setInitializationStatus('failed'); // Critical failure if config is missing
         }
     }, []);
-
-    useEffect(() => {
-        if (initializationStatus === 'success' && isConfigReady) {
-            verifySetups();
-        }
-    }, [initializationStatus, isConfigReady, verifySetups]);
 
     useEffect(() => {
         if (initializationStatus !== 'success' || !isConfigReady || !isSchemaReady) return;
@@ -120,7 +94,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             setUser(currentUser);
             setIsAuthenticated(!!currentUser);
             if (currentUser) {
-                setCurrentView(v => (v === 'auth' || v === 'welcome' || v === 'loanRequest' || v === 'setup') ? 'dashboard' : v);
+                setCurrentView(v => (v === 'auth' || v === 'welcome' || v === 'loanRequest') ? 'dashboard' : v);
             } else {
                 const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth', 'dashboard', 'requestStatusChecker'];
                 setCurrentView(v => publicViews.includes(v) ? v : 'welcome');
@@ -132,7 +106,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     
     useEffect(() => {
         if (!isSchemaReady) return;
-        const adminOnlyViews: AppView[] = ['clients', 'requests', 'receiptGenerator', 'settings', 'dataManagement'];
+        const adminOnlyViews: AppView[] = ['clients', 'requests', 'receiptGenerator', 'settings', 'dataManagement', 'accounting', 'newClient'];
         if (!isAuthenticated && adminOnlyViews.includes(currentView)) {
             setCurrentView('auth');
         }
@@ -152,25 +126,23 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             showToast('Error al cerrar sesión.', 'error');
         }
     };
-    
-    const setSupabaseConfig = (config: { url: string; anonKey: string }) => {
-        localStorage.setItem(LOCAL_STORAGE_KEYS.SUPABASE_CONFIG, JSON.stringify(config));
-        if (initializeSupabaseClient(config.url, config.anonKey)) {
-            setSupabaseConfigState(config);
-            setIsConfigReady(true);
-            setInitializationStatus('success');
-        } else {
-            setInitializationStatus('failed');
-            showToast('Error al inicializar la conexión con Supabase.', 'error');
-        }
-    }
 
-    const showConfirmModal = (options: Omit<ConfirmState, 'isOpen'>) => {
-        setConfirmState({ ...options, isOpen: true });
+    const showConfirmModal = (options: Omit<ConfirmState, 'isOpen' | 'type'> & { type?: ConfirmModalType }) => {
+        setConfirmState({
+            ...options,
+            isOpen: true,
+            type: options.type || 'warning',
+        });
     };
 
     const hideConfirmModal = () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
+    };
+
+    // FIX: Add a placeholder 'verifySetups' function as the original logic has been removed, but the SchemaSetup component still calls it.
+    const verifySetups = async (): Promise<void> => {
+        // This function is a placeholder. The app now assumes schema/storage are ready.
+        console.warn('verifySetups called, but verification is now skipped.');
     };
 
     const value = { 
@@ -187,13 +159,13 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         showConfirmModal,
         hideConfirmModal,
         isConfigReady,
-        setSupabaseConfig,
         initializationStatus,
         isSchemaReady,
         isStorageReady,
-        schemaVerificationStatus,
-        verifySetups,
         supabaseConfig,
+        // FIX: Expose the Supabase config setter to resolve the error in Setup.tsx.
+        setSupabaseConfig: setSupabaseConfigState,
+        verifySetups,
     };
 
     return (

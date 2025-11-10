@@ -1,56 +1,48 @@
 import React from 'react';
-import { HeartHandshake, FileText } from 'lucide-react';
+import { PenSquare, Handshake } from 'lucide-react';
 import BudgetCalculator from './BudgetCalculator';
 import { useAppContext } from '../contexts/AppContext';
+
+const LargeLogo = () => (
+    <div className="flex items-center justify-center w-full h-full">
+        <div className="bg-slate-700/50 rounded-full w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center shadow-2xl shadow-primary-500/10 border-4 border-slate-700">
+            <Handshake className="text-primary-500 w-32 h-32 sm:w-48 sm:h-48" strokeWidth={1.5} />
+        </div>
+    </div>
+);
+
 
 const Welcome: React.FC = () => {
     const { setCurrentView } = useAppContext();
 
     return (
-        <div className="space-y-8 animate-fade-in">
-            <div className="bg-white p-8 rounded-xl shadow-lg">
-                <h1 className="text-3xl sm:text-4xl font-bold text-slate-800">
-                    Bienvenido a <span className="text-primary-600">B.M Contigo</span>
-                </h1>
-                <p className="mt-2 text-lg text-slate-600">Tu aliado para alcanzar tus metas financieras.</p>
-            </div>
-            
-            <div className="bg-white p-6 rounded-xl shadow-md">
-                 <div className="flex items-center text-primary-600">
-                    <HeartHandshake className="h-8 w-8 mr-3" />
-                    <h2 className="text-xl font-bold">Nuestro Compromiso</h2>
-                 </div>
-                 <p className="mt-4 text-slate-600">
-                    En B.M Contigo, creemos en las relaciones basadas en la confianza y el apoyo mutuo. No somos solo un servicio de préstamos; somos una comunidad que te ayuda a construir tus sueños y a navegar tus necesidades financieras con seguridad y transparencia.
-                 </p>
-                 <button 
-                    onClick={() => setCurrentView('loanRequest')}
-                    className="mt-6 w-full inline-flex items-center justify-center px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-md hover:bg-primary-700 transition-colors"
-                 >
-                    <FileText size={16} className="mr-2" />
-                    Iniciar una Solicitud
-                 </button>
+        <div className="space-y-8 animate-fade-in-down">
+            <div className="bg-slate-800 p-8 rounded-2xl shadow-lg border border-slate-700">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                    <div className="text-center md:text-left">
+                        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-100 tracking-tight">
+                            Tus ideas, <span className="text-primary-400">nuestro impulso.</span>
+                        </h1>
+                        <p className="mt-4 text-lg text-slate-300">
+                            B.M Contigo fortalece lazos de confianza, permitiendo que el apoyo entre personas cercanas sea una realidad tangible y transparente para todos.
+                        </p>
+                         <button 
+                            onClick={() => setCurrentView('loanRequest')}
+                            className="mt-8 w-full md:w-auto inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-transform hover:scale-105"
+                         >
+                            <PenSquare size={18} className="mr-2" />
+                            Iniciar una Solicitud
+                         </button>
+                    </div>
+                    <div className="hidden md:block">
+                        <LargeLogo />
+                    </div>
+                </div>
             </div>
 
             <BudgetCalculator />
         </div>
     );
 };
-
-// Add fade-in animation
-if (!document.getElementById('welcome-animations')) {
-    const style = document.createElement('style');
-    style.id = 'welcome-animations';
-    style.innerHTML = `
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-    `;
-    document.head.appendChild(style);
-}
 
 export default Welcome;

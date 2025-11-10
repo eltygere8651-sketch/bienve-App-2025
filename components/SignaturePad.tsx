@@ -30,7 +30,7 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
             const ctx = canvas.getContext('2d');
             if (ctx) {
                 ctx.scale(ratio, ratio);
-                ctx.strokeStyle = '#000000';
+                ctx.strokeStyle = '#FFFFFF'; // White ink for dark theme
                 ctx.lineWidth = 2;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
@@ -127,12 +127,12 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
                     onTouchStart={startDrawing}
                     onTouchMove={draw}
                     onTouchEnd={stopDrawing}
-                    className="border border-slate-300 rounded-md touch-none bg-slate-50 w-full h-full"
+                    className="border border-slate-600 rounded-md touch-none bg-slate-700 w-full h-full"
                 />
                 <button
                     type="button"
                     onClick={clear}
-                    className="absolute top-2 right-2 p-2 bg-slate-200 text-slate-700 rounded-full hover:bg-slate-300 transition-colors"
+                    className="absolute top-2 right-2 p-2 bg-slate-600 text-slate-200 rounded-full hover:bg-slate-500 transition-colors"
                     aria-label="Limpiar firma"
                 >
                     <Eraser size={18} />

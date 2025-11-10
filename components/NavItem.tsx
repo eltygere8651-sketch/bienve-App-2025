@@ -18,13 +18,15 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, view, currentView, onCli
             onClick={() => onClick(view)}
             className={`w-full flex items-center justify-between p-3 my-1 rounded-lg cursor-pointer transition-all duration-200 text-left ${
                 currentView === view && !isTestButton
-                    ? 'bg-primary-600 text-white shadow-lg'
-                    : isTestButton ? 'text-amber-300 hover:bg-amber-700/50 hover:text-amber-200' :'text-slate-300 hover:bg-slate-700 hover:text-white'
+                    ? 'bg-primary-600 text-white shadow-md'
+                    : isTestButton 
+                    ? 'text-amber-400 hover:bg-amber-500/10 hover:text-amber-300' 
+                    :'text-slate-300 hover:bg-slate-700 hover:text-white'
             }`}
         >
             <div className="flex items-center">
-                {icon}
-                <span className={`ml-4 transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 h-0 w-0 pointer-events-none'}`}>{label}</span>
+                <span className={currentView === view ? 'text-white' : 'text-slate-400'}>{icon}</span>
+                <span className={`ml-4 font-semibold transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 h-0 w-0 pointer-events-none'}`}>{label}</span>
             </div>
             {isSidebarOpen && badge != null && badge > 0 && (
                 <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
