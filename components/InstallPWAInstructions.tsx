@@ -1,6 +1,25 @@
 
 import React from 'react';
-import { X, Share, PlusSquare } from 'lucide-react';
+import { X } from 'lucide-react';
+
+// Specific icons for better visual guidance on iOS
+const IosShareIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mx-1 text-blue-500 align-middle">
+        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+        <polyline points="16 6 12 2 8 6"/>
+        <line x1="12" y1="2" x2="12" y2="15"/>
+    </svg>
+);
+
+const IosAddIcon = () => (
+    <div className="inline-flex items-center justify-center w-7 h-7 bg-slate-200 rounded-md mx-1 align-middle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+    </div>
+);
+
 
 interface InstallPWAInstructionsProps {
     onClose: () => void;
@@ -22,10 +41,24 @@ const InstallPWAInstructions: React.FC<InstallPWAInstructionsProps> = ({ onClose
                 <button onClick={onClose} className="p-1 rounded-full hover:bg-slate-100"><X /></button>
             </div>
             <div className="p-6 space-y-4 text-center">
-                <p className="text-slate-600">Para instalar la aplicación en tu dispositivo iOS, sigue estos pasos:</p>
-                <div className="text-left space-y-3">
-                    <p className="flex items-center"><span className="flex items-center justify-center w-6 h-6 bg-primary-500 text-white rounded-full mr-3 font-bold text-sm">1</span> Toca el botón de <strong>Compartir</strong> <Share className="inline-block mx-1 h-5 w-5 text-primary-600" /> en la barra de herramientas de Safari.</p>
-                    <p className="flex items-center"><span className="flex items-center justify-center w-6 h-6 bg-primary-500 text-white rounded-full mr-3 font-bold text-sm">2</span> Desliza hacia arriba y selecciona <strong>"Añadir a la pantalla de inicio"</strong> <PlusSquare className="inline-block mx-1 h-5 w-5 text-primary-600" />.</p>
+                <p className="text-slate-600">Para instalar la aplicación en tu iPhone o iPad, sigue estos sencillos pasos:</p>
+                <div className="text-left space-y-4">
+                    <div className="flex items-center">
+                        <span className="flex items-center justify-center w-6 h-6 bg-primary-500 text-white rounded-full mr-3 font-bold text-sm flex-shrink-0">1</span>
+                        <div>
+                            <span>Toca el botón de <strong>Compartir</strong></span>
+                            <IosShareIcon />
+                            <span>en la barra de tu navegador.</span>
+                        </div>
+                    </div>
+                     <div className="flex items-center">
+                        <span className="flex items-center justify-center w-6 h-6 bg-primary-500 text-white rounded-full mr-3 font-bold text-sm flex-shrink-0">2</span>
+                         <div>
+                            <span>Busca y selecciona</span>
+                            <IosAddIcon />
+                            <strong>"Añadir a pantalla de inicio"</strong>.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

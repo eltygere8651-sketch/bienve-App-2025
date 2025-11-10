@@ -29,7 +29,7 @@ const InstallNavItem: React.FC<{ isSidebarOpen: boolean }> = ({ isSidebarOpen })
     }, []);
 
     const handleInstallClick = () => {
-        // If we have a deferred prompt, use it
+        // Case 1: The deferred prompt is ready. Use it.
         if (installPrompt) {
             installPrompt.prompt();
             installPrompt.userChoice.then((choiceResult: { outcome: string }) => {
@@ -41,12 +41,17 @@ const InstallNavItem: React.FC<{ isSidebarOpen: boolean }> = ({ isSidebarOpen })
                 // We can't use the prompt again, so clear it
                 setInstallPrompt(null);
             });
-        // If on iOS, show the instructions modal
+        // Case 2: The user is on iOS. Show manual instructions.
         } else if (isIos) {
             setShowIosInstall(true);
-        // If not supported, show a toast
+        // Case 3: The browser is compatible (like Chrome/Edge), but the prompt isn't ready.
+        // This can happen if the PWA criteria aren't met yet or the user dismissed it before.
+        // We provide a helpful hint instead of an error.
+        } else if ('onbeforeinstallprompt' in window || navigator.serviceWorker) {
+             showToast('La instalación está disponible. Búscala en el menú de tu navegador.', 'info');
+        // Case 4: The browser is genuinely not supported.
         } else {
-            showToast('La instalación no es soportada en este navegador. Intenta con Chrome o Safari.', 'info');
+            showToast('La instalación no es soportada en este navegador.', 'info');
         }
     };
 
