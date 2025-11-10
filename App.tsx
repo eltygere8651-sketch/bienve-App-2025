@@ -21,6 +21,7 @@ import SchemaSetup from './components/SchemaSetup';
 import RequestStatusChecker from './components/RequestStatusChecker';
 import Accounting from './components/Accounting';
 import NewClientForm from './components/NewClientForm';
+import InstallNavItem from './components/InstallNavItem';
 
 const App: React.FC = () => {
     const { 
@@ -161,6 +162,7 @@ const App: React.FC = () => {
                             <NavItem icon={<SearchCheck />} label="Consultar Solicitud" view="requestStatusChecker" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         </>
                     )}
+                    <InstallNavItem isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                 </ul>
                  {isAuthenticated && (isSidebarOpen || isMobileMenuOpen) && (
                     <>
