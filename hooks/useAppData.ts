@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Client, Loan, LoanRequest, LoanStatus, RequestStatus, AccountingEntry, AppMeta, AccountingEntryType } from '../types';
 import { supabase } from '../services/supabaseService';
@@ -164,8 +165,11 @@ export const useAppData = (
 
         } catch (err: any) {
             console.error("Failed to approve request:", err);
-            if (err.message && err.message.toLowerCase().includes('bucket not found')) {
+            const errorMessage = err.message || '';
+            if (errorMessage.toLowerCase().includes('bucket not found')) {
                 showToast('Error de Storage: El bucket "documents" no existe. Por favor, créalo en tu panel de Supabase.', 'error');
+            } else if (errorMessage.toLowerCase().includes('violates row-level security policy')) {
+                 showToast('Error de Permisos: El esquema de tu base de datos está desactualizado. Por favor, ejecuta el último script SQL desde el editor de Supabase.', 'error');
             } else {
                 showToast('Error al aprobar el préstamo.', 'error');
             }
@@ -254,7 +258,12 @@ export const useAppData = (
             showToast(`Cliente ${clientData.name} y su préstamo han sido registrados.`, 'success');
         } catch (err: any) {
             console.error("Failed to add client and loan:", err);
-            showToast('Error al registrar el cliente y el préstamo.', 'error');
+            const errorMessage = err.message || '';
+            if (errorMessage.toLowerCase().includes('violates row-level security policy')) {
+                showToast('Error de Permisos: El esquema de tu base de datos está desactualizado. Por favor, ejecuta el último script SQL.', 'error');
+            } else {
+                showToast('Error al registrar el cliente y el préstamo.', 'error');
+            }
             throw err;
         }
     };
@@ -353,7 +362,7 @@ export const useAppData = (
             if (loansError) throw new Error(`Error fetching loans: ${loansError.message}`);
             setLoans((loansData || []).map(mapLoanFromDb));
 
-            const { data: requestsData, error: requestsError } = await supabase.from('requests').select('*').in('status', [RequestStatus.PENDING, RequestStatus.UNDER_REVIEW]);
+            const { data: requestsData, error: requestsError } = await supabase.from('requests').select('*');
             if (requestsError) throw new Error(`Error fetching requests: ${requestsError.message}`);
             setRequests((requestsData || []).map(mapRequestFromDb));
 
@@ -431,10 +440,6 @@ export const useAppData = (
 
             if (event === 'INSERT') {
                 const newRecord = mapper(payload.new);
-                // For requests, only add if its status is actionable
-                if (table === 'requests' && ![RequestStatus.PENDING, RequestStatus.UNDER_REVIEW].includes(newRecord.status)) {
-                    return;
-                }
                 stateUpdater(currentRecords => {
                     if (currentRecords.some(rec => rec.id === newRecord.id)) {
                         return currentRecords;
@@ -443,17 +448,7 @@ export const useAppData = (
                 });
             } else if (event === 'UPDATE') {
                 const updatedRecord = mapper(payload.new);
-                if (table === 'requests') {
-                    // If status changes to non-actionable, remove it from the admin's queue
-                    if (![RequestStatus.PENDING, RequestStatus.UNDER_REVIEW].includes(updatedRecord.status)) {
-                        setRequests(currentRecords => currentRecords.filter(record => record.id !== updatedRecord.id));
-                    } else {
-                        // Otherwise, update it in place
-                        setRequests(currentRecords => currentRecords.map(record => record.id === updatedRecord.id ? updatedRecord : record));
-                    }
-                } else {
-                     stateUpdater(currentRecords => currentRecords.map(record => record.id === updatedRecord.id ? updatedRecord : record));
-                }
+                stateUpdater(currentRecords => currentRecords.map(record => record.id === updatedRecord.id ? updatedRecord : record));
             } else if (event === 'DELETE') {
                 const oldRecordId = payload.old.id;
                 stateUpdater(currentRecords => currentRecords.filter(record => record.id !== oldRecordId));

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LoanRequest, RequestStatus } from '../types';
-import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Loader2, Clock, Download } from 'lucide-react';
+import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Loader2, Clock, Download, CheckCircle, XCircle } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import ImageViewer from './ImageViewer';
@@ -26,6 +26,10 @@ const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
             return <span className={`${baseClasses} bg-primary-500/10 text-primary-400`}><Clock size={12} className="mr-1"/> {status}</span>;
         case RequestStatus.UNDER_REVIEW:
             return <span className={`${baseClasses} bg-yellow-500/10 text-yellow-400`}><Info size={12} className="mr-1"/> {status}</span>;
+        case RequestStatus.APPROVED:
+            return <span className={`${baseClasses} bg-green-500/10 text-green-400`}><CheckCircle size={12} className="mr-1"/> {status}</span>;
+        case RequestStatus.DENIED:
+            return <span className={`${baseClasses} bg-red-500/10 text-red-400`}><XCircle size={12} className="mr-1"/> {status}</span>;
         default:
             return null;
     }
@@ -110,11 +114,13 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
     const handleDenyClick = () => {
         showConfirmModal({
             title: 'Confirmar Denegación',
-            message: `¿Estás seguro de que quieres denegar la solicitud de ${request.fullName}? La solicitud se marcará como 'Denegada' y desaparecerá de esta lista, pero se conservará en la base de datos.`,
+            message: `¿Estás seguro de que quieres denegar la solicitud de ${request.fullName}? La solicitud se marcará como 'Denegada'.`,
             onConfirm: denyAction,
             type: 'warning',
         });
     };
+    
+    const isActionable = [RequestStatus.PENDING, RequestStatus.UNDER_REVIEW].includes(request.status);
 
     return (
         <>
@@ -176,60 +182,62 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                             </div>
                         </div>
 
-                        <div className="border-t border-slate-700 mt-6 pt-4">
-                            <h4 className="text-base font-semibold text-slate-200 mb-4">Acciones</h4>
-                            <div className="bg-slate-700/50 p-4 rounded-lg space-y-4">
-                                <div>
-                                    <p className="text-sm text-slate-200 font-semibold mb-3">Descargar Documentación</p>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <button
-                                            onClick={handleDownloadDniPdfClick}
-                                            disabled={isDownloadingDniPdf}
-                                            className="inline-flex items-center px-3 py-1.5 bg-slate-600 border border-slate-500 text-slate-200 text-xs font-medium rounded-md hover:bg-slate-500 disabled:opacity-50"
-                                        >
-                                            {isDownloadingDniPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
-                                            {isDownloadingDniPdf ? 'Generando...' : 'DNI (PDF)'}
-                                        </button>
-                                        <button
-                                            onClick={handleDownloadSummaryClick}
-                                            disabled={isDownloadingPdf}
-                                            className="inline-flex items-center px-3 py-1.5 bg-primary-500/10 text-primary-300 text-xs font-medium rounded-md hover:bg-primary-500/20 disabled:opacity-50"
-                                        >
-                                            {isDownloadingPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
-                                            {isDownloadingPdf ? 'Generando...' : 'Resumen (PDF)'}
-                                        </button>
+                        {isActionable && (
+                            <div className="border-t border-slate-700 mt-6 pt-4">
+                                <h4 className="text-base font-semibold text-slate-200 mb-4">Acciones</h4>
+                                <div className="bg-slate-700/50 p-4 rounded-lg space-y-4">
+                                    <div>
+                                        <p className="text-sm text-slate-200 font-semibold mb-3">Descargar Documentación</p>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <button
+                                                onClick={handleDownloadDniPdfClick}
+                                                disabled={isDownloadingDniPdf}
+                                                className="inline-flex items-center px-3 py-1.5 bg-slate-600 border border-slate-500 text-slate-200 text-xs font-medium rounded-md hover:bg-slate-500 disabled:opacity-50"
+                                            >
+                                                {isDownloadingDniPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
+                                                {isDownloadingDniPdf ? 'Generando...' : 'DNI (PDF)'}
+                                            </button>
+                                            <button
+                                                onClick={handleDownloadSummaryClick}
+                                                disabled={isDownloadingPdf}
+                                                className="inline-flex items-center px-3 py-1.5 bg-primary-500/10 text-primary-300 text-xs font-medium rounded-md hover:bg-primary-500/20 disabled:opacity-50"
+                                            >
+                                                {isDownloadingPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
+                                                {isDownloadingPdf ? 'Generando...' : 'Resumen (PDF)'}
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div className="pt-4 border-t border-slate-600">
-                                    <p className="text-sm text-slate-200 font-semibold mb-3">Gestionar Solicitud</p>
-                                    <div className="flex flex-col md:flex-row items-center gap-4">
-                                        <div className="w-full">
-                                            <label className="block text-sm font-medium text-slate-300">Monto a Aprobar (€)</label>
-                                            <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100" />
+                                    <div className="pt-4 border-t border-slate-600">
+                                        <p className="text-sm text-slate-200 font-semibold mb-3">Gestionar Solicitud</p>
+                                        <div className="flex flex-col md:flex-row items-center gap-4">
+                                            <div className="w-full">
+                                                <label className="block text-sm font-medium text-slate-300">Monto a Aprobar (€)</label>
+                                                <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100" />
+                                            </div>
+                                            <div className="w-full">
+                                                <label className="block text-sm font-medium text-slate-300">Plazo (meses)</label>
+                                                <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100" />
+                                            </div>
                                         </div>
-                                        <div className="w-full">
-                                            <label className="block text-sm font-medium text-slate-300">Plazo (meses)</label>
-                                            <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100" />
+                                        <div className="flex flex-col sm:flex-row gap-2 justify-end mt-4">
+                                            <button onClick={reviewAction} disabled={isProcessing} className="w-full sm:w-auto bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 flex items-center justify-center disabled:bg-yellow-400">
+                                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Edit2 size={18} className="mr-2" />} 
+                                                {isProcessing ? 'Procesando...' : 'En Estudio'}
+                                            </button>
+                                            <button onClick={handleDenyClick} disabled={isProcessing} className="w-full sm:w-auto bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center disabled:bg-red-400">
+                                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <X size={18} className="mr-2" />} 
+                                                {isProcessing ? 'Procesando...' : 'Denegar'}
+                                            </button>
+                                            <button onClick={handleApproveClick} disabled={isProcessing} className="w-full sm:w-auto bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center disabled:bg-green-400">
+                                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Check size={18} className="mr-2" />} 
+                                                {isProcessing ? 'Procesando...' : 'Aprobar'}
+                                            </button>
                                         </div>
-                                    </div>
-                                    <div className="flex flex-col sm:flex-row gap-2 justify-end mt-4">
-                                        <button onClick={reviewAction} disabled={isProcessing} className="w-full sm:w-auto bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 flex items-center justify-center disabled:bg-yellow-400">
-                                            {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Edit2 size={18} className="mr-2" />} 
-                                            {isProcessing ? 'Procesando...' : 'En Estudio'}
-                                        </button>
-                                        <button onClick={handleDenyClick} disabled={isProcessing} className="w-full sm:w-auto bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center disabled:bg-red-400">
-                                            {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <X size={18} className="mr-2" />} 
-                                            {isProcessing ? 'Procesando...' : 'Denegar'}
-                                        </button>
-                                        <button onClick={handleApproveClick} disabled={isProcessing} className="w-full sm:w-auto bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center disabled:bg-green-400">
-                                            {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Check size={18} className="mr-2" />} 
-                                            {isProcessing ? 'Procesando...' : 'Aprobar'}
-                                        </button>
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
             </div>
