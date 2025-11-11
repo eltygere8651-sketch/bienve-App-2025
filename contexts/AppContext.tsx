@@ -1,5 +1,3 @@
-
-
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { AppView } from '../types';
 import { User } from '@supabase/supabase-js';
@@ -73,17 +71,35 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }, []);
 
     useEffect(() => {
-        const config = getSupabaseConfig();
+        let config: { url: string; anonKey: string } | null = null;
+        
+        // 1. Prioritize environment variables for deployed/shared app
+        // Assumes env vars are set during the build process for a production app
+        const envUrl = process.env.SUPABASE_URL;
+        const envKey = process.env.SUPABASE_ANON_KEY;
+
+        if (envUrl && envKey) {
+            config = { url: envUrl, anonKey: envKey };
+        } else {
+            // 2. Fallback to localStorage for local/admin setup
+            config = getSupabaseConfig();
+        }
+
         if (isSupabaseConfigured(config)) {
             if (initializeSupabaseClient(config!.url, config!.anonKey)) {
                 setSupabaseConfigState(config);
                 setIsConfigReady(true);
             } else {
-                // Config exists but is invalid. Clear it so the user can re-enter.
-                clearSupabaseConfig();
-                showToast('La configuración de Supabase no es válida. Por favor, ingrésala de nuevo.', 'error');
+                // Config exists but is invalid.
+                if (!envUrl) { // Only clear local storage if env vars aren't the source of the problem
+                    clearSupabaseConfig();
+                    showToast('La configuración de Supabase no es válida. Por favor, ingrésala de nuevo.', 'error');
+                } else {
+                    showToast('La configuración de Supabase (variables de entorno) no es válida.', 'error');
+                }
             }
         }
+        
         setInitializationStatus('success'); // Always success, setup screen will handle missing config
     }, [showToast]);
 
@@ -95,10 +111,10 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             setUser(currentUser);
             setIsAuthenticated(!!currentUser);
             if (currentUser) {
-                const nonAdminViews: AppView[] = ['auth', 'welcome', 'loanRequest'];
+                const nonAdminViews: AppView[] = ['auth', 'welcome', 'loanRequest', 'requestStatus'];
                 setCurrentView(v => nonAdminViews.includes(v) ? 'dashboard' : v);
             } else {
-                const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth'];
+                const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth', 'requestStatus'];
                 setCurrentView(v => publicViews.includes(v) ? v : 'welcome');
             }
         });
