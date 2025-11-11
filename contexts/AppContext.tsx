@@ -73,10 +73,11 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     useEffect(() => {
         let config: { url: string; anonKey: string } | null = null;
-        
-        // 1. Prioritize config from supabaseConfig.ts for deployed/shared apps
-        if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-            config = { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
+        const configFromFile = { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
+
+        // 1. Prioritize config from supabaseConfig.ts if it's valid
+        if (isSupabaseConfigured(configFromFile)) {
+            config = configFromFile;
         } else {
             // 2. Fallback to localStorage for initial local admin setup
             config = getSupabaseConfig();

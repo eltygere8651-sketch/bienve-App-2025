@@ -26,10 +26,26 @@ export const clearSupabaseConfig = () => {
 
 export const isSupabaseConfigured = (config: any): boolean => {
     if (!config) return false;
-    return (
-        config.url && typeof config.url === 'string' && config.url.trim() !== '' &&
-        config.anonKey && typeof config.anonKey === 'string' && config.anonKey.trim() !== ''
-    );
+
+    const url = config.url;
+    const anonKey = config.anonKey;
+
+    if (!url || typeof url !== 'string' || url.trim() === '' || url === 'https://tgkhtfhahtozehtjpghd.supabase.co') {
+        return false;
+    }
+
+    if (!anonKey || typeof anonKey !== 'string' || anonKey.trim() === '' || anonKey === 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRna2h0ZmhhaHRvemVodGpwZ2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE4NDE4MTIsImV4cCI6MjA3NzQxNzgxMn0.uHIa6Nf-k9pAUqpOBKWrF0GmYpK5pxzIACkPO44Or7o') {
+        return false;
+    }
+
+    // Check for a valid URL format. The Supabase client itself will throw a more specific error,
+    // but this prevents the app from proceeding with an obviously invalid string.
+    try {
+        const urlObject = new URL(url);
+        return urlObject.protocol === 'http:' || urlObject.protocol === 'https:';
+    } catch (_) {
+        return false;
+    }
 };
 
 export const initializeSupabaseClient = (url: string, anonKey: string): boolean => {
