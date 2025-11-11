@@ -112,9 +112,13 @@ const LoanRequestForm: React.FC = () => {
             
             await handleLoanRequestSubmit(submissionData, { frontId, backId });
             setIsSubmitted(true);
+            const audio = document.getElementById('success-sound') as HTMLAudioElement;
+            if (audio) {
+                audio.play().catch(e => console.warn("Could not play success sound:", e));
+            }
         } catch (error) {
             console.error("Error processing form:", error);
-            showToast("Hubo un error al procesar la solicitud.", 'error');
+            // Toast is now handled by useAppData hook
         } finally {
             setIsSubmitting(false);
         }

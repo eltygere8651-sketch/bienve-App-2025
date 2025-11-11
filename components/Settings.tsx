@@ -4,7 +4,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { DEFAULT_CONTRACT_TEMPLATE } from '../services/pdfService';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 
-const Settings: React.FC = () => {
+const ContractTemplateSettings = () => {
     const { showToast } = useAppContext();
     const [template, setTemplate] = useState('');
 
@@ -20,6 +20,7 @@ const Settings: React.FC = () => {
 
     const handleReset = () => {
         setTemplate(DEFAULT_CONTRACT_TEMPLATE);
+        localStorage.setItem(LOCAL_STORAGE_KEYS.CONTRACT_TEMPLATE, DEFAULT_CONTRACT_TEMPLATE);
         showToast('Plantilla restaurada a la versión por defecto.', 'info');
     };
 
@@ -31,7 +32,58 @@ const Settings: React.FC = () => {
         { key: '${today}', desc: 'Fecha de generación del contrato' },
         { key: '${interestRate}', desc: 'Tasa de interés mensual' },
     ];
+    
+    return (
+        <div className="bg-slate-800 p-4 sm:p-8 rounded-xl shadow-lg border border-slate-700">
+            <h2 className="text-xl font-bold text-slate-100 mb-4">Plantilla de Contrato de Préstamo</h2>
+            <p className="text-slate-300 mb-4">
+                Modifica el texto del contrato que se genera para cada nueva solicitud. Utiliza los placeholders disponibles para insertar datos dinámicamente.
+            </p>
 
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                    <textarea
+                        value={template}
+                        onChange={(e) => setTemplate(e.target.value)}
+                        rows={20}
+                        className="w-full p-3 font-mono text-sm border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-900 text-slate-200"
+                        placeholder="Escribe aquí tu plantilla de contrato..."
+                    />
+                </div>
+                <div>
+                    <h3 className="text-lg font-semibold text-slate-200 mb-2">Placeholders Disponibles</h3>
+                    <div className="space-y-2">
+                        {placeholders.map(p => (
+                            <div key={p.key} className="p-2 bg-slate-700 rounded-md">
+                                <p className="font-mono text-sm text-primary-400">{p.key}</p>
+                                <p className="text-xs text-slate-400">{p.desc}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
+                <button
+                    onClick={handleReset}
+                    className="inline-flex items-center justify-center px-4 py-2 bg-slate-600 text-slate-100 font-bold rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                    <RotateCcw size={18} className="mr-2" />
+                    Restaurar por Defecto
+                </button>
+                <button
+                    onClick={handleSave}
+                    className="inline-flex items-center justify-center px-4 py-2 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 transition-transform hover:scale-105"
+                >
+                    <Save size={18} className="mr-2" />
+                    Guardar Plantilla
+                </button>
+            </div>
+        </div>
+    )
+}
+
+const Settings: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="flex items-center">
@@ -39,52 +91,8 @@ const Settings: React.FC = () => {
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Ajustes</h1>
             </div>
 
-            <div className="bg-slate-800 p-4 sm:p-8 rounded-xl shadow-lg border border-slate-700">
-                <h2 className="text-xl font-bold text-slate-100 mb-4">Plantilla de Contrato de Préstamo</h2>
-                <p className="text-slate-300 mb-4">
-                    Modifica el texto del contrato que se genera para cada nueva solicitud. Utiliza los placeholders disponibles para insertar datos dinámicamente.
-                </p>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2">
-                        <textarea
-                            value={template}
-                            onChange={(e) => setTemplate(e.target.value)}
-                            rows={20}
-                            className="w-full p-3 font-mono text-sm border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-900 text-slate-200"
-                            placeholder="Escribe aquí tu plantilla de contrato..."
-                        />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-slate-200 mb-2">Placeholders Disponibles</h3>
-                        <div className="space-y-2">
-                            {placeholders.map(p => (
-                                <div key={p.key} className="p-2 bg-slate-700 rounded-md">
-                                    <p className="font-mono text-sm text-primary-400">{p.key}</p>
-                                    <p className="text-xs text-slate-400">{p.desc}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row justify-end gap-4 mt-6">
-                    <button
-                        onClick={handleReset}
-                        className="inline-flex items-center justify-center px-4 py-2 bg-slate-600 text-slate-100 font-bold rounded-lg hover:bg-slate-700 transition-colors"
-                    >
-                        <RotateCcw size={18} className="mr-2" />
-                        Restaurar por Defecto
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        className="inline-flex items-center justify-center px-4 py-2 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 transition-transform hover:scale-105"
-                    >
-                        <Save size={18} className="mr-2" />
-                        Guardar Plantilla
-                    </button>
-                </div>
-            </div>
+            <ContractTemplateSettings />
+            
         </div>
     );
 };

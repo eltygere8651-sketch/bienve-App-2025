@@ -25,17 +25,16 @@ const RequestStatusChecker: React.FC = () => {
         try {
             if (!supabase) throw new Error("Servicio de Supabase no disponible.");
 
-            const { data, error: queryError } = await supabase
-                .from('requests')
-                .select('status, request_date')
-                .eq('id_number', idNumber.trim())
-                .order('request_date', { ascending: false }) // Get the latest request
-                .limit(1)
-                .maybeSingle();
+            const { data, error: rpcError } = await supabase
+                .rpc('get_request_status_by_id_number', {
+                    p_id_number: idNumber.trim()
+                });
 
-            if (queryError) throw queryError;
+            if (rpcError) {
+                throw rpcError;
+            }
             
-            setResult(data ? data : 'not_found');
+            setResult(data && data.length > 0 ? data[0] : 'not_found');
 
         } catch (err: any) {
             console.error("Error checking request status:", err);
@@ -68,7 +67,7 @@ const RequestStatusChecker: React.FC = () => {
             return (
                  <div className="mt-6 p-4 bg-yellow-900/30 rounded-lg text-yellow-300 flex items-center border border-yellow-500/30">
                     <Info className="h-5 w-5 mr-3 flex-shrink-0" />
-                    <span>No se encontró ninguna solicitud pendiente con ese DNI/NIE. Es posible que ya haya sido procesada.</span>
+                    <span>No se encontró ninguna solicitud con el DNI/NIE proporcionado.</span>
                 </div>
             );
         }

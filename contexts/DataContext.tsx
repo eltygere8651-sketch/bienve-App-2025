@@ -1,8 +1,7 @@
-
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { useAppContext } from './AppContext';
-import { Client, Loan, LoanRequest, RequestStatus, AccountingEntry, AppMeta, AccountingEntryType } from '../types';
+import { Client, Loan, LoanRequest, RequestStatus } from '../types';
 
 interface ClientLoanData extends Client {
     loans: Loan[];
@@ -15,31 +14,29 @@ interface DataContextType {
     clients: Client[];
     loans: Loan[];
     requests: LoanRequest[];
-    accountingEntries: AccountingEntry[];
-    appMeta: AppMeta[];
     isLoading: boolean;
     error: string | null;
     clientLoanData: ClientLoanData[];
     handleLoanRequestSubmit: (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: File, backId: File }) => Promise<void>;
     handleApproveRequest: (request: LoanRequest, loanAmount: number, loanTerm: number) => Promise<void>;
-    handleDenyRequest: (request: LoanRequest) => Promise<void>;
-    handleUpdateRequestStatus: (requestId: number, status: RequestStatus) => Promise<void>;
+    handleRejectRequest: (request: LoanRequest) => Promise<void>;
+    handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
     handleRegisterPayment: (loanId: string) => Promise<void>;
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
-    handleAddAccountingEntry: (entry: { type: AccountingEntryType; description: string; amount: number; entry_date: string; }) => Promise<void>;
-    handleUpdateAccountingEntry: (entryId: number, updates: { description: string; amount: number; entry_date: string; }) => Promise<void>;
-    handleDeleteAccountingEntry: (entryId: number) => Promise<void>;
-    handleSetCapital: (amount: number) => Promise<void>;
+    handleGenerateTestRequest: () => Promise<void>;
+    handleDeleteTestRequests: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { showToast, user, isSchemaReady } = useAppContext();
-    const appData = useAppData(showToast, user, isSchemaReady);
+    const { showToast, user } = useAppContext();
+    const appData = useAppData(showToast, user);
+
+    const value = useMemo(() => appData, [appData]);
 
     return (
-        <DataContext.Provider value={appData}>
+        <DataContext.Provider value={value as unknown as DataContextType}>
             {children}
         </DataContext.Provider>
     );

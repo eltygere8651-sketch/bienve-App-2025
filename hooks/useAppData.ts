@@ -1,85 +1,161 @@
-
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Client, Loan, LoanRequest, LoanStatus, RequestStatus, AccountingEntry, AppMeta, AccountingEntryType } from '../types';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
 import { supabase } from '../services/supabaseService';
 import { User } from '@supabase/supabase-js';
+import {
+    getCachedClients, getCachedLoans, getCachedRequests,
+    cacheClients, cacheLoans, cacheRequests, clearAllCachedTables
+} from '../services/dbService';
+import { TABLE_NAMES } from '../constants';
 
 // --- Mappers: DB (snake_case) to App (camelCase) ---
 
-const mapClientFromDb = (c: any): Client => ({
-    id: c.id,
-    name: c.name,
-    joinDate: c.join_date,
-    idNumber: c.id_number,
-    phone: c.phone,
-    address: c.address,
-    email: c.email,
-});
+const mapClientFromDb = (c: any): Client | null => {
+    if (
+        !c ||
+        typeof c.id !== 'string' ||
+        typeof c.name !== 'string' ||
+        typeof c.join_date !== 'string'
+    ) {
+        console.warn('Skipping invalid client record from DB: missing or malformed required fields.', c);
+        return null;
+    }
+    return {
+        id: c.id,
+        name: c.name,
+        joinDate: c.join_date,
+        idNumber: c.id_number,
+        phone: c.phone,
+        address: c.address,
+        email: c.email,
+    };
+};
 
-const mapLoanFromDb = (l: any): Loan => ({
-    id: l.id,
-    clientId: l.client_id,
-    clientName: l.client_name,
-    amount: l.amount,
-    interestRate: l.interest_rate,
-    term: l.term,
-    startDate: l.start_date,
-    status: l.status,
-    monthlyPayment: l.monthly_payment,
-    totalRepayment: l.total_repayment,
-    paymentsMade: l.payments_made,
-    signature: l.signature,
-    contractPdfUrl: l.contract_pdf_url,
-});
+const mapLoanFromDb = (l: any): Loan | null => {
+    if (
+        !l ||
+        typeof l.id !== 'string' ||
+        typeof l.client_id !== 'string' ||
+        typeof l.client_name !== 'string' ||
+        typeof l.amount !== 'number' ||
+        typeof l.interest_rate !== 'number' ||
+        typeof l.term !== 'number' ||
+        typeof l.start_date !== 'string' ||
+        typeof l.status !== 'string' ||
+        typeof l.monthly_payment !== 'number' ||
+        typeof l.total_repayment !== 'number' ||
+        typeof l.payments_made !== 'number'
+    ) {
+        console.warn('Skipping invalid loan record from DB: missing or malformed required fields.', l);
+        return null;
+    }
+    return {
+        id: l.id,
+        clientId: l.client_id,
+        clientName: l.client_name,
+        amount: l.amount,
+        interestRate: l.interest_rate,
+        term: l.term,
+        startDate: l.start_date,
+        status: l.status,
+        monthlyPayment: l.monthly_payment,
+        totalRepayment: l.total_repayment,
+        paymentsMade: l.payments_made,
+        signature: l.signature,
+        contractPdfUrl: l.contract_pdf_url,
+    };
+};
 
-const mapRequestFromDb = (r: any): LoanRequest => ({
-    id: r.id,
-    fullName: r.full_name,
-    idNumber: r.id_number,
-    address: r.address,
-    phone: r.phone,
-    email: r.email,
-    loanAmount: r.loan_amount,
-    loanReason: r.loan_reason,
-    employmentStatus: r.employment_status,
-    contractType: r.contract_type,
-    frontIdUrl: r.front_id_url,
-    backIdUrl: r.back_id_url,
-    requestDate: r.request_date,
-    status: r.status,
-    signature: r.signature,
-});
-
-const mapAccountingEntryFromDb = (e: any): AccountingEntry => ({
-    id: e.id,
-    entry_date: e.entry_date,
-    type: e.type,
-    description: e.description,
-    amount: e.amount,
-    created_at: e.created_at,
-});
-
-const mapAppMetaFromDb = (m: any): AppMeta => ({
-    key: m.key,
-    value: m.value,
-});
-
+const mapRequestFromDb = (r: any): LoanRequest | null => {
+    if (
+        !r ||
+        typeof r.id !== 'string' ||
+        typeof r.full_name !== 'string' ||
+        typeof r.id_number !== 'string' ||
+        typeof r.address !== 'string' ||
+        typeof r.phone !== 'string' ||
+        typeof r.loan_amount !== 'number' ||
+        typeof r.loan_reason !== 'string' ||
+        typeof r.employment_status !== 'string' ||
+        typeof r.front_id_url !== 'string' ||
+        typeof r.back_id_url !== 'string' ||
+        typeof r.request_date !== 'string' ||
+        typeof r.status !== 'string'
+    ) {
+        console.warn('Skipping invalid request record from DB: missing or malformed required fields.', r);
+        return null;
+    }
+    
+    return {
+        id: r.id,
+        fullName: r.full_name,
+        idNumber: r.id_number,
+        address: r.address,
+        phone: r.phone,
+        email: r.email,
+        loanAmount: r.loan_amount,
+        loanReason: r.loan_reason,
+        employmentStatus: r.employment_status,
+        contractType: r.contract_type,
+        frontIdUrl: r.front_id_url,
+        backIdUrl: r.back_id_url,
+        requestDate: r.request_date,
+        status: r.status,
+        signature: r.signature,
+    };
+};
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
-    user: User | null,
-    isSchemaReady: boolean
+    user: User | null
 ) => {
     const [clients, setClients] = useState<Client[]>([]);
     const [loans, setLoans] = useState<Loan[]>([]);
     const [requests, setRequests] = useState<LoanRequest[]>([]);
-    const [accountingEntries, setAccountingEntries] = useState<AccountingEntry[]>([]);
-    const [appMeta, setAppMeta] = useState<AppMeta[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const handleLoanRequestSubmit = async (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: File, backId: File }) => {
+    const isInitialLoadRef = useRef(true);
+    const prevRequestsCountRef = useRef(0);
+    const debounceTimerRef = useRef<number | null>(null);
+
+    // Effect for in-app notification sound and toast
+    useEffect(() => {
+        if (!user || isLoading) return; // Don't run on load or if not logged in
+
+        if (isInitialLoadRef.current) {
+            isInitialLoadRef.current = false;
+            prevRequestsCountRef.current = requests.length;
+            return;
+        }
+    
+        if (requests.length > prevRequestsCountRef.current) {
+            showToast('¡Nueva solicitud de préstamo recibida!', 'success');
+            const audio = document.getElementById('notification-sound') as HTMLAudioElement;
+            if (audio) {
+                audio.play().catch(e => console.warn("Could not play notification sound:", e));
+            }
+
+            // New powerful notification logic
+            if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then(registration => {
+                    const title = '¡Nueva Solicitud de Préstamo!';
+                    const options: NotificationOptions = {
+                        body: 'Se ha registrado una nueva solicitud. ¡Revísala ahora!',
+                        icon: 'assets/icon.svg',
+                        badge: 'assets/icon.svg',
+                        tag: 'new-request'
+                    };
+                    registration.showNotification(title, options);
+                });
+            }
+        }
+    
+        prevRequestsCountRef.current = requests.length;
+    }, [requests, user, isLoading, showToast]);
+
+
+    const handleLoanRequestSubmit = useCallback(async (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: File, backId: File }) => {
         if (!supabase) throw new Error("Supabase services not initialized.");
         const requestId = `req-${Date.now()}`;
         const frontIdPath = `${requestId}/frontId_${files.frontId.name}`;
@@ -95,7 +171,7 @@ export const useAppData = (
             const { data: frontUrlData } = supabase.storage.from('documents').getPublicUrl(frontIdPath);
             const { data: backUrlData } = supabase.storage.from('documents').getPublicUrl(backIdPath);
 
-            const newRequestForDb = {
+            const { error: insertError } = await supabase.from(TABLE_NAMES.REQUESTS).insert([{
                 full_name: requestData.fullName,
                 id_number: requestData.idNumber,
                 address: requestData.address,
@@ -107,29 +183,31 @@ export const useAppData = (
                 contract_type: requestData.contractType,
                 front_id_url: frontUrlData.publicUrl,
                 back_id_url: backUrlData.publicUrl,
-                request_date: new Date().toISOString(),
-                status: RequestStatus.PENDING,
                 signature: requestData.signature,
-            };
-            
-            const { error: insertError } = await supabase.from('requests').insert([newRequestForDb]).select();
+            }]);
 
             if (insertError) throw insertError;
+
         } catch (err: any) {
             console.error("Failed to submit loan request:", err);
             if (err.message && (err.message.toLowerCase().includes('bucket not found') || err.message === 'The resource was not found')) {
                  showToast('Error: El bucket "documents" no existe. Por favor, créalo en tu panel de Supabase Storage.', 'error');
             } else {
-                 showToast('Error al enviar la solicitud.', 'error');
+                 showToast(`Error al enviar la solicitud: ${err.message || 'Error desconocido.'}`, 'error');
             }
             throw err;
         }
-    };
+    }, [showToast]);
 
-    const handleApproveRequest = async (request: LoanRequest, loanAmount: number, loanTerm: number) => {
+    const handleApproveRequest = useCallback(async (request: LoanRequest, loanAmount: number, loanTerm: number) => {
+        if (!request.id) {
+            const msg = 'No se puede aprobar una solicitud sin ID.';
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
         if (!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
-            return;
+            throw new Error('Acción no autorizada o servicios no disponibles.');
         }
 
         try {
@@ -142,21 +220,20 @@ export const useAppData = (
             }, request.signature || null);
 
             const contractPath = `contracts/${user.id}/contract-${request.id}.pdf`;
-            const { error: uploadError } = await supabase.storage.from('documents').upload(contractPath, contractPdfBlob);
+            const { error: uploadError } = await supabase.storage.from('documents').upload(contractPath, contractPdfBlob, {
+                upsert: true,
+            });
             if (uploadError) throw uploadError;
 
             const { data: urlData } = supabase.storage.from('documents').getPublicUrl(contractPath);
             const contractPdfUrl = urlData.publicUrl;
             
-            // Calling the transactional database function
             const { error: rpcError } = await supabase.rpc('approve_request', {
                 p_request_id: request.id,
                 p_loan_amount: loanAmount,
                 p_loan_term: loanTerm,
                 p_contract_pdf_url: contractPdfUrl,
-                p_request_signature: request.signature,
-                p_front_id_url: request.frontIdUrl,
-                p_back_id_url: request.backIdUrl
+                p_request_signature: request.signature
             });
 
             if (rpcError) throw rpcError;
@@ -164,61 +241,84 @@ export const useAppData = (
             showToast(`Préstamo Aprobado para ${request.fullName}`, 'success');
 
         } catch (err: any) {
-            console.error("Failed to approve request:", err);
-            const errorMessage = err.message || '';
+            const errorMessage = err?.message || 'Ocurrió un error desconocido.';
+            console.error("Failed to approve request:", errorMessage, err);
             if (errorMessage.toLowerCase().includes('bucket not found')) {
                 showToast('Error de Storage: El bucket "documents" no existe. Por favor, créalo en tu panel de Supabase.', 'error');
             } else if (errorMessage.toLowerCase().includes('violates row-level security policy')) {
                  showToast('Error de Permisos: El esquema de tu base de datos está desactualizado. Por favor, ejecuta el último script SQL desde el editor de Supabase.', 'error');
             } else {
-                showToast('Error al aprobar el préstamo.', 'error');
+                showToast(`Error al aprobar el préstamo: ${errorMessage}`, 'error');
             }
             throw err;
         }
-    };
+    }, [user, showToast]);
     
-    const handleDenyRequest = async (request: LoanRequest) => {
-        if(!user || !supabase) {
+    const handleRejectRequest = useCallback(async (request: LoanRequest) => {
+        if (!request.id) {
+            const msg = 'No se puede rechazar una solicitud sin ID.';
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
+        if (!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
-            return;
+            throw new Error('Acción no autorizada o servicios no disponibles.');
         }
         try {
-            // Se cambia la acción de borrar a actualizar el estado a "Denegado"
-            const { error } = await supabase
-                .from('requests')
-                .update({ status: RequestStatus.DENIED })
+            const { error: dbError } = await supabase
+                .from(TABLE_NAMES.REQUESTS)
+                .delete()
                 .eq('id', request.id);
-
-            if (error) throw error;
-            
-            // Ya no se eliminan los archivos de Storage para mantener el historial.
-            showToast('Solicitud marcada como denegada.', 'info');
-        } catch (err) {
-            console.error("Failed to deny request:", err);
-            showToast('Error al denegar la solicitud.', 'error');
+            if (dbError) throw dbError;
+    
+            const filePaths = [request.frontIdUrl, request.backIdUrl].map(url => {
+                const urlParts = url.split('/documents/');
+                return urlParts.length > 1 ? decodeURIComponent(urlParts[1]) : null;
+            }).filter(Boolean) as string[];
+    
+            if (filePaths.length > 0) {
+                const { error: storageError } = await supabase.storage.from('documents').remove(filePaths);
+                if (storageError) {
+                    console.warn("Request deleted from DB, but failed to delete storage files:", storageError);
+                    showToast('Solicitud eliminada, pero no se pudieron borrar los archivos adjuntos.', 'info');
+                } else {
+                    showToast('Solicitud rechazada y eliminada permanentemente.', 'success');
+                }
+            } else {
+                showToast('Solicitud rechazada y eliminada permanentemente.', 'success');
+            }
+        } catch (err: any) {
+            console.error("Failed to reject request:", err);
+            showToast(`Error al rechazar la solicitud: ${err.message || 'Error desconocido.'}`, 'error');
             throw err;
         }
-    };
+    }, [user, showToast]);
 
-    const handleUpdateRequestStatus = async (requestId: number, status: RequestStatus) => {
+    const handleUpdateRequestStatus = useCallback(async (requestId: string, status: RequestStatus) => {
+        if(!requestId) {
+            const msg = 'No se puede actualizar una solicitud sin ID.';
+            showToast(msg, 'error');
+            throw new Error(msg);
+        }
         if(!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
-            return;
+            throw new Error('Acción no autorizada o servicios no disponibles.');
         }
         try {
-            const { error } = await supabase.from('requests').update({ status }).eq('id', requestId);
+            const { error } = await supabase.from(TABLE_NAMES.REQUESTS).update({ status }).eq('id', requestId);
             if (error) throw error;
             showToast(`Solicitud actualizada a "${status}".`, 'info');
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to update request status:", err);
-            showToast('Error al actualizar el estado.', 'error');
+            showToast(`Error al actualizar el estado: ${err.message || 'Error desconocido.'}`, 'error');
+            throw err;
         }
-    };
+    }, [user, showToast]);
     
-    const handleRegisterPayment = async (loanId: string) => {
+    const handleRegisterPayment = useCallback(async (loanId: string) => {
         if(!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
-            return;
+            throw new Error('Acción no autorizada o servicios no disponibles.');
         }
         const loan = loans.find(l => l.id === loanId);
         if (!loan || loan.status === LoanStatus.PAID) return;
@@ -228,19 +328,19 @@ export const useAppData = (
         const newStatus = isPaidOff ? LoanStatus.PAID : LoanStatus.PENDING;
 
         try {
-            const { error } = await supabase.from('loans').update({ payments_made: newPaymentsMade, status: newStatus }).eq('id', loanId);
+            const { error } = await supabase.from(TABLE_NAMES.LOANS).update({ payments_made: newPaymentsMade, status: newStatus }).eq('id', loanId);
             if (error) throw error;
             showToast('Pago registrado correctamente.', 'success');
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to register payment:", err);
-            showToast('Error al registrar el pago.', 'error');
+            showToast(`Error al registrar el pago: ${err.message || 'Error desconocido.'}`, 'error');
         }
-    };
+    }, [user, loans, showToast]);
 
-    const handleAddClientAndLoan = async (clientData: Omit<Client, 'id' | 'joinDate'>, loanData: { amount: number; term: number }) => {
+    const handleAddClientAndLoan = useCallback(async (clientData: Omit<Client, 'id' | 'joinDate'>, loanData: { amount: number; term: number }) => {
         if (!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
-            return;
+            throw new Error('Acción no autorizada o servicios no disponibles.');
         }
         try {
             const { error: rpcError } = await supabase.rpc('create_client_and_loan', {
@@ -262,75 +362,74 @@ export const useAppData = (
             if (errorMessage.toLowerCase().includes('violates row-level security policy')) {
                 showToast('Error de Permisos: El esquema de tu base de datos está desactualizado. Por favor, ejecuta el último script SQL.', 'error');
             } else {
-                showToast('Error al registrar el cliente y el préstamo.', 'error');
+                showToast(`Error al registrar el cliente y el préstamo: ${errorMessage || 'Error desconocido.'}`, 'error');
             }
             throw err;
         }
-    };
+    }, [user, showToast]);
 
-    const handleAddAccountingEntry = async (entry: { type: AccountingEntryType; description: string; amount: number; entry_date: string; }) => {
-        if (!user || !supabase) {
-            showToast('Acción no autorizada o servicios no disponibles.', 'error');
-            return;
+    const handleGenerateTestRequest = useCallback(async () => {
+        if (!supabase) {
+            showToast('Servicios de Supabase no inicializados.', 'error');
+            throw new Error('Supabase not initialized');
         }
+
         try {
-            const { error } = await supabase.from('accounting_entries').insert([entry]);
-            if (error) throw error;
-            showToast('Movimiento contable registrado.', 'success');
-        } catch (err) {
-            console.error("Failed to add accounting entry:", err);
-            showToast('Error al registrar el movimiento.', 'error');
+            const timestamp = Date.now();
+            const testRequest = {
+                full_name: `Cliente de Prueba ${timestamp}`,
+                id_number: `Y${Math.floor(10000000 + Math.random() * 90000000)}T`,
+                address: `Calle Falsa 123, Ciudad Demo`,
+                phone: `600${Math.floor(100000 + Math.random() * 900000)}`,
+                email: `test.${timestamp}@example.com`,
+                loan_amount: Math.floor(500 + Math.random() * 4500),
+                loan_reason: 'Otro',
+                employment_status: 'Empleado',
+                contract_type: 'Indefinido',
+                front_id_url: 'https://via.placeholder.com/337x212.png?text=DNI+Anverso', // Placeholder URLs
+                back_id_url: 'https://via.placeholder.com/337x212.png?text=DNI+Reverso',
+                request_date: new Date().toISOString(),
+                status: RequestStatus.PENDING,
+                signature: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==', // 1x1 transparent png
+            };
+
+            const { error: insertError } = await supabase
+                .from(TABLE_NAMES.REQUESTS)
+                .insert([testRequest]);
+
+            if (insertError) {
+                throw insertError;
+            }
+
+            showToast('Solicitud de prueba generada correctamente.', 'success');
+
+        } catch (err: any) {
+            console.error("Failed to generate test request:", err);
+            showToast(`Error al generar la solicitud de prueba: ${err.message}`, 'error');
             throw err;
         }
-    };
+    }, [showToast]);
 
-    const handleUpdateAccountingEntry = async (entryId: number, updates: { description: string; amount: number; entry_date: string; }) => {
+    const handleDeleteTestRequests = useCallback(async () => {
         if (!user || !supabase) {
             showToast('Acción no autorizada o servicios no disponibles.', 'error');
-            return;
+            throw new Error('Acción no autorizada o servicios no disponibles.');
         }
         try {
-            const { error } = await supabase.from('accounting_entries').update(updates).eq('id', entryId);
-            if (error) throw error;
-            showToast('Movimiento contable actualizado.', 'success');
-        } catch (err) {
-            console.error("Failed to update accounting entry:", err);
-            showToast('Error al actualizar el movimiento.', 'error');
-            throw err;
-        }
-    };
+            const { error } = await supabase
+                .from(TABLE_NAMES.REQUESTS)
+                .delete()
+                .ilike('full_name', 'Cliente de Prueba %');
 
-    const handleDeleteAccountingEntry = async (entryId: number) => {
-        if (!user || !supabase) {
-            showToast('Acción no autorizada o servicios no disponibles.', 'error');
-            return;
-        }
-        try {
-            const { error } = await supabase.from('accounting_entries').delete().eq('id', entryId);
             if (error) throw error;
-            showToast('Movimiento contable eliminado.', 'success');
-        } catch (err) {
-            console.error("Failed to delete accounting entry:", err);
-            showToast('Error al eliminar el movimiento.', 'error');
-            throw err;
-        }
-    };
 
-    const handleSetCapital = async (amount: number) => {
-        if (!user || !supabase) {
-            showToast('Acción no autorizada o servicios no disponibles.', 'error');
-            return;
-        }
-        try {
-            const { error } = await supabase.from('app_meta').upsert({ key: 'initial_capital', value: amount.toString() }, { onConflict: 'key' });
-            if (error) throw error;
-            showToast('Capital inicial actualizado.', 'success');
-        } catch (err) {
-            console.error("Failed to set capital:", err);
-            showToast('Error al actualizar el capital.', 'error');
+            showToast('Todas las solicitudes de prueba han sido eliminadas.', 'success');
+        } catch (err: any) {
+            console.error("Failed to delete test requests:", err);
+            showToast(`Error al eliminar las solicitudes de prueba: ${err.message}`, 'error');
             throw err;
         }
-    };
+    }, [user, showToast]);
 
     const clientLoanData = useMemo(() => {
         const loansByClientId = new Map<string, Loan[]>();
@@ -349,145 +448,141 @@ export const useAppData = (
 
     const fetchData = useCallback(async () => {
         if (!supabase) return;
+    
+        if (user) {
+            const [requestsRes, clientsRes, loansRes] = await Promise.all([
+                supabase.from(TABLE_NAMES.REQUESTS).select('*').in('status', [RequestStatus.PENDING, RequestStatus.UNDER_REVIEW]),
+                supabase.from(TABLE_NAMES.CLIENTS).select('*'),
+                supabase.from(TABLE_NAMES.LOANS).select('*'),
+            ]);
+    
+            if (requestsRes.error) throw requestsRes.error;
+            if (clientsRes.error) throw clientsRes.error;
+            if (loansRes.error) throw loansRes.error;
+    
+            const mappedRequests = (requestsRes.data || [])
+                .map(mapRequestFromDb)
+                .filter((r): r is LoanRequest => r !== null);
+            
+            const mappedClients = (clientsRes.data || [])
+                .map(mapClientFromDb)
+                .filter((c): c is Client => c !== null);
+
+            const mappedLoans = (loansRes.data || [])
+                .map(mapLoanFromDb)
+                .filter((l): l is Loan => l !== null);
+    
+            setRequests(mappedRequests);
+            setClients(mappedClients);
+            setLoans(mappedLoans);
+    
+            Promise.all([
+                cacheRequests(mappedRequests),
+                cacheClients(mappedClients),
+                cacheLoans(mappedLoans),
+            ]).catch(cacheError => {
+                console.warn("Failed to update offline cache:", cacheError);
+            });
+        } else {
+            setRequests([]);
+            setClients([]);
+            setLoans([]);
+            clearAllCachedTables().catch(e =>
+                console.warn('Could not clear cache on logout', e)
+            );
+        }
+    }, [user]);
+    
+    const loadAndSyncData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
+        let isCacheEmpty = true;
+
+        if (user) {
+            try {
+                const [cachedClients, cachedLoans, cachedRequests] = await Promise.all([
+                    getCachedClients(),
+                    getCachedLoans(),
+                    getCachedRequests(),
+                ]);
+
+                if (cachedClients.length > 0 || cachedLoans.length > 0 || cachedRequests.length > 0) {
+                    setClients(cachedClients);
+                    setLoans(cachedLoans);
+                    setRequests(cachedRequests);
+                    isCacheEmpty = false;
+                }
+            } catch (cacheError) {
+                console.warn("Could not load data from cache:", cacheError);
+            }
+        }
 
         try {
-            // Fetch core data. These are critical.
-            const { data: clientsData, error: clientsError } = await supabase.from('clients').select('*');
-            if (clientsError) throw new Error(`Error fetching clients: ${clientsError.message}`);
-            setClients((clientsData || []).map(mapClientFromDb));
-
-            const { data: loansData, error: loansError } = await supabase.from('loans').select('*');
-            if (loansError) throw new Error(`Error fetching loans: ${loansError.message}`);
-            setLoans((loansData || []).map(mapLoanFromDb));
-
-            const { data: requestsData, error: requestsError } = await supabase.from('requests').select('*');
-            if (requestsError) throw new Error(`Error fetching requests: ${requestsError.message}`);
-            setRequests((requestsData || []).map(mapRequestFromDb));
-
-            // Fetch optional/new data. If these fail, the app can still mostly work.
-            const { data: accountingData, error: accountingError } = await supabase.from('accounting_entries').select('*');
-            if (accountingError) {
-                // If the table doesn't exist, we can ignore the error and proceed.
-                if (accountingError.code === '42P01') { // '42P01' is undefined_table
-                    console.warn("Accounting features disabled: 'accounting_entries' table not found. Please update your database schema.");
-                    setAccountingEntries([]);
-                } else {
-                    throw new Error(`Error fetching accounting entries: ${accountingError.message}`);
-                }
+            await fetchData();
+        } catch (fetchErr: any) {
+            console.error("Data fetch error:", fetchErr);
+            if (isCacheEmpty) {
+                setError(`No se pudieron cargar los datos: ${fetchErr.message}. Revisa tu conexión.`);
             } else {
-                setAccountingEntries((accountingData || []).map(mapAccountingEntryFromDb));
+                showToast('Sin conexión. Mostrando últimos datos disponibles.', 'info');
             }
-
-            const { data: metaData, error: metaError } = await supabase.from('app_meta').select('*');
-             if (metaError) {
-                if (metaError.code === '42P01') {
-                    console.warn("App meta features disabled: 'app_meta' table not found. Please update your database schema.");
-                    setAppMeta([]);
-                } else {
-                    throw new Error(`Error fetching app meta: ${metaError.message}`);
-                }
-            } else {
-                setAppMeta((metaData || []).map(mapAppMetaFromDb));
-            }
-
-        } catch (err: any) {
-            console.error("Data fetch error:", err);
-            setError("No se pudieron cargar los datos. Revisa tu conexión y asegúrate de que tu base de datos de Supabase esté actualizada.");
         } finally {
             setIsLoading(false);
         }
-    }, [supabase]);
+    }, [user, fetchData, showToast]);
+
+    const handleChanges = useCallback(() => {
+        console.log('Realtime change received, queueing refetch.');
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+        debounceTimerRef.current = window.setTimeout(() => {
+             console.log('Debounced refetch triggered.');
+             fetchData().catch(fetchErr => {
+                console.error("Realtime fetch failed:", fetchErr);
+                showToast("No se pudo sincronizar. Comprueba tu conexión.", 'info');
+            });
+        }, 500);
+    }, [fetchData, showToast]);
 
     useEffect(() => {
-        if (!user || !supabase || !isSchemaReady) {
-            setClients([]);
-            setLoans([]);
-            setRequests([]);
-            setAccountingEntries([]);
-            setAppMeta([]);
+        if (!supabase) {
             setIsLoading(false);
             return;
         }
-        
-        fetchData(); 
+    
+        loadAndSyncData();
+    
+        if (!user) {
+            return;
+        }
 
-        const handleChanges = (payload: any) => {
-            console.log('Realtime change received!', payload);
-            const table = payload.table;
-            const event = payload.eventType;
-
-            const mapper = {
-                clients: mapClientFromDb,
-                loans: mapLoanFromDb,
-                requests: mapRequestFromDb,
-                accounting_entries: mapAccountingEntryFromDb,
-                app_meta: mapAppMetaFromDb,
-            }[table];
-
-            if (!mapper) return;
-            
-            const stateUpdater = {
-                clients: setClients,
-                loans: setLoans,
-                requests: setRequests,
-                accounting_entries: setAccountingEntries,
-                app_meta: setAppMeta,
-            }[table] as React.Dispatch<React.SetStateAction<any[]>>;
-
-            if (!stateUpdater) return;
-
-            if (event === 'INSERT') {
-                const newRecord = mapper(payload.new);
-                stateUpdater(currentRecords => {
-                    if (currentRecords.some(rec => rec.id === newRecord.id)) {
-                        return currentRecords;
-                    }
-                    return [...currentRecords, newRecord];
-                });
-            } else if (event === 'UPDATE') {
-                const updatedRecord = mapper(payload.new);
-                stateUpdater(currentRecords => currentRecords.map(record => record.id === updatedRecord.id ? updatedRecord : record));
-            } else if (event === 'DELETE') {
-                const oldRecordId = payload.old.id;
-                stateUpdater(currentRecords => currentRecords.filter(record => record.id !== oldRecordId));
-            }
-        };
-        
-        const channels = supabase
-            .channel('db-changes')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, handleChanges)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, handleChanges)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, handleChanges)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'accounting_entries' }, handleChanges)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'app_meta' }, handleChanges)
+        const channel = supabase
+            .channel('db-changes-bm-contigo')
+            .on('postgres_changes', { event: '*', schema: 'public', table: TABLE_NAMES.CLIENTS }, handleChanges)
+            .on('postgres_changes', { event: '*', schema: 'public', table: TABLE_NAMES.LOANS }, handleChanges)
+            .on('postgres_changes', { event: '*', schema: 'public', table: TABLE_NAMES.REQUESTS }, handleChanges)
             .subscribe();
 
         return () => {
-            supabase.removeChannel(channels);
+            supabase.removeChannel(channel);
         };
-    }, [user, fetchData, isSchemaReady, supabase]);
-
+    }, [user, loadAndSyncData, handleChanges]);
 
     return {
         clients,
         loans,
         requests,
-        accountingEntries,
-        appMeta,
         isLoading,
         error,
+        clientLoanData,
         handleLoanRequestSubmit,
         handleApproveRequest,
-        handleDenyRequest,
+        handleRejectRequest,
         handleUpdateRequestStatus,
         handleRegisterPayment,
         handleAddClientAndLoan,
-        handleAddAccountingEntry,
-        handleUpdateAccountingEntry,
-        handleDeleteAccountingEntry,
-        handleSetCapital,
-        clientLoanData,
+        handleGenerateTestRequest,
+        handleDeleteTestRequests,
     };
 };

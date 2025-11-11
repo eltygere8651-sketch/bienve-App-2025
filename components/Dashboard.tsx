@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, FilterStatus, Client } from '../types';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, FileWarning } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
+import { useAppContext } from '../contexts/AppContext';
 import { formatCurrency } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
 import { DashboardStats } from '../services/geminiService';
@@ -27,9 +28,38 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
 
 const Dashboard: React.FC = () => {
     const { loans, clients, handleRegisterPayment } = useDataContext();
+    const { showToast } = useAppContext();
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('Todos');
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
-    
+    const [showPermissionBanner, setShowPermissionBanner] = useState(false);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if ('Notification' in window && Notification.permission === 'default') {
+                setShowPermissionBanner(true);
+            }
+        }, 3000);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const handleRequestPermission = () => {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                showToast('¡Notificaciones activadas!', 'success');
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.ready.then(reg => {
+                        reg.showNotification('Notificaciones Activadas', {
+                            body: 'Recibirás alertas de nuevas solicitudes.',
+                            icon: 'assets/icon.svg',
+                        });
+                    });
+                }
+            } else {
+                showToast('No se han activado las notificaciones. Puedes hacerlo desde los ajustes del navegador.', 'info');
+            }
+            setShowPermissionBanner(false);
+        });
+    };
 
     const detailedStats = useMemo((): DashboardStats => {
         const totalLoaned = loans.reduce((acc, loan) => acc + loan.amount, 0);
@@ -92,6 +122,7 @@ const Dashboard: React.FC = () => {
     }, [loans, filterStatus]);
     
     const handleLegendClick = (e: any) => {
+        if (e.payload.name === 'Sin datos') return;
         const clickedStatus = e.payload.name as LoanStatus;
         setFilterStatus(prev => prev === clickedStatus ? 'Todos' : clickedStatus);
     };
@@ -109,6 +140,15 @@ const Dashboard: React.FC = () => {
         return clients.find(c => c.id === selectedLoan.clientId) || null;
     }, [selectedLoan, clients]);
 
+    const onRegisterPayment = async (loanId: string) => {
+        try {
+            await handleRegisterPayment(loanId);
+        } catch (error) {
+            // Toast is shown by the hook, we just need to catch the error
+            console.error("Failed to register payment from Dashboard:", error);
+        }
+    };
+
     return (
         <>
             <LoanDetailsModal
@@ -118,6 +158,17 @@ const Dashboard: React.FC = () => {
                 client={selectedClient}
             />
             <div className="space-y-6">
+                 {showPermissionBanner && (
+                    <div className="bg-primary-900/50 border border-primary-500/30 text-primary-200 p-4 rounded-lg flex flex-col sm:flex-row justify-between items-center gap-4 animate-fade-in-down">
+                        <p className="text-sm text-center sm:text-left">
+                            <span className="font-bold">Activa las notificaciones</span> para recibir alertas instantáneas de nuevas solicitudes de préstamo.
+                        </p>
+                        <div className="flex gap-2 flex-shrink-0">
+                            <button onClick={() => setShowPermissionBanner(false)} className="px-4 py-1.5 text-xs font-semibold rounded-md hover:bg-slate-700">Ahora no</button>
+                            <button onClick={handleRequestPermission} className="px-4 py-1.5 bg-primary-600 text-white text-xs font-semibold rounded-md hover:bg-primary-700">Activar</button>
+                        </div>
+                    </div>
+                )}
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Panel</h1>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -155,7 +206,7 @@ const Dashboard: React.FC = () => {
                                                 <td className="p-3 text-right">
                                                     {loan.status !== LoanStatus.PAID &&
                                                     <button 
-                                                        onClick={(e) => { e.stopPropagation(); handleRegisterPayment(loan.id); }}
+                                                        onClick={(e) => { e.stopPropagation(); onRegisterPayment(loan.id); }}
                                                         className="bg-green-600 text-white px-3 py-1 rounded-md text-xs font-semibold hover:bg-green-700 transition-colors"
                                                     >
                                                         Registrar Pago

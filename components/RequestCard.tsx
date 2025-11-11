@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { LoanRequest, RequestStatus } from '../types';
-import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Loader2, Clock, Download, CheckCircle, XCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Hash, MapPin, Phone, Mail, FileText, Briefcase, Calendar, Check, X, Banknote, Edit2, Info, Loader2, Clock, Download, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import ImageViewer from './ImageViewer';
@@ -36,41 +36,31 @@ const StatusBadge: React.FC<{ status: RequestStatus }> = ({ status }) => {
 };
 
 const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
-    const { handleApproveRequest, handleDenyRequest, handleUpdateRequestStatus } = useDataContext();
-    const { showToast, showConfirmModal } = useAppContext();
+    const { handleApproveRequest, handleRejectRequest, handleUpdateRequestStatus } = useDataContext();
+    const { showToast, showConfirmModal, annualInterestRate } = useAppContext();
     
     const [isExpanded, setIsExpanded] = useState(false);
     const [amount, setAmount] = useState(request.loanAmount || 500);
     const [term, setTerm] = useState(12);
-    const [isProcessing, setIsProcessing] = useState(false);
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
     const [isDownloadingDniPdf, setIsDownloadingDniPdf] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
 
     const approveAction = async () => {
-        setIsProcessing(true);
-        try {
-            await handleApproveRequest(request, amount, term);
-        } finally {
-            setIsProcessing(false);
-        }
+        await handleApproveRequest(request, amount, term);
     };
     
-    const denyAction = async () => {
-        setIsProcessing(true);
-        try {
-            await handleDenyRequest(request);
-        } finally {
-            setIsProcessing(false);
-        }
+    const rejectAction = async () => {
+        await handleRejectRequest(request);
     };
     
     const reviewAction = async () => {
-        setIsProcessing(true);
+        setIsUpdatingStatus(true);
         try {
             await handleUpdateRequestStatus(request.id, RequestStatus.UNDER_REVIEW);
         } finally {
-            setIsProcessing(false);
+            setIsUpdatingStatus(false);
         }
     };
 
@@ -102,7 +92,7 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
         if (amount > 0 && term > 0) {
             showConfirmModal({
                 title: 'Confirmar Aprobación',
-                message: `¿Estás seguro de que quieres aprobar un préstamo de ${formatCurrency(amount)} a ${term} meses para ${request.fullName}?`,
+                message: `¿Estás seguro de que quieres aprobar un préstamo de ${formatCurrency(amount)} a ${term} meses para ${request.fullName}? La tasa de interés anual aplicada será del ${annualInterestRate}%.`,
                 onConfirm: approveAction,
                 type: 'info',
             });
@@ -111,11 +101,11 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
         }
     };
     
-    const handleDenyClick = () => {
+    const handleRejectClick = () => {
         showConfirmModal({
-            title: 'Confirmar Denegación',
-            message: `¿Estás seguro de que quieres denegar la solicitud de ${request.fullName}? La solicitud se marcará como 'Denegada'.`,
-            onConfirm: denyAction,
+            title: 'Confirmar Rechazo',
+            message: `¿Estás seguro de que quieres rechazar la solicitud de ${request.fullName}? La solicitud y todos sus datos serán eliminados permanentemente. Esta acción no se puede deshacer.`,
+            onConfirm: rejectAction,
             type: 'warning',
         });
     };
@@ -143,101 +133,107 @@ const RequestCard: React.FC<{ request: LoanRequest }> = ({ request }) => {
                     </div>
                 </div>
                 {isExpanded && (
-                    <div className="p-4 border-t border-slate-700 animate-fade-in-down">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 mb-4">
-                            <InfoRow icon={<Banknote size={16} />} label="Monto Solicitado" value={formatCurrency(request.loanAmount)} />
-                            <InfoRow icon={<FileText size={16} />} label="Motivo" value={request.loanReason} />
-                            <InfoRow icon={<Hash size={16} />} label="DNI/NIE" value={request.idNumber} />
-                            <InfoRow icon={<Briefcase size={16} />} label="Situación Laboral" value={request.employmentStatus} />
-                            <InfoRow icon={<Phone size={16} />} label="Teléfono" value={request.phone} />
-                            {request.contractType && <InfoRow icon={<Calendar size={16} />} label="Contrato" value={request.contractType} />}
-                            <InfoRow icon={<Mail size={16} />} label="Email" value={request.email} />
-                            <div className="md:col-span-2">
-                                <InfoRow icon={<MapPin size={16} />} label="Dirección" value={request.address} />
-                            </div>
-                        </div>
-                        
-                        <div className="border-t border-slate-700 mt-4 pt-4">
-                            <h4 className="text-base font-semibold text-slate-200 mb-4">Documentos y Firma</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <p className="text-sm font-medium text-slate-200 mb-2">Anverso DNI</p>
-                                    <ImageViewer imageUrl={request.frontIdUrl} alt="Front ID" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-slate-200 mb-2">Reverso DNI</p>
-                                    <ImageViewer imageUrl={request.backIdUrl} alt="Back ID" />
+                    <div className="border-t border-slate-700 animate-fade-in-down">
+                        <div className="p-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-4 mb-4">
+                                <InfoRow icon={<Banknote size={16} />} label="Monto Solicitado" value={formatCurrency(request.loanAmount)} />
+                                <InfoRow icon={<FileText size={16} />} label="Motivo" value={request.loanReason} />
+                                <InfoRow icon={<Hash size={16} />} label="DNI/NIE" value={request.idNumber} />
+                                <InfoRow icon={<Briefcase size={16} />} label="Situación Laboral" value={request.employmentStatus} />
+                                <InfoRow icon={<Phone size={16} />} label="Teléfono" value={request.phone} />
+                                {request.contractType && <InfoRow icon={<Calendar size={16} />} label="Contrato" value={request.contractType} />}
+                                <InfoRow icon={<Mail size={16} />} label="Email" value={request.email} />
+                                <div className="md:col-span-2">
+                                    <InfoRow icon={<MapPin size={16} />} label="Dirección" value={request.address} />
                                 </div>
                             </div>
                             
-                            <div>
-                                <p className="text-sm font-medium mb-2 text-slate-200">Firma del Solicitante</p>
-                                {request.signature ? (
-                                    <div className="p-3 rounded-lg border border-slate-700 bg-slate-900/50">
-                                        <img src={request.signature} alt="Firma del solicitante" className="mx-auto bg-white rounded" style={{ maxHeight: '100px' }} />
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-slate-500">No se proporcionó firma.</p>
-                                )}
-                            </div>
-                        </div>
-
-                        {isActionable && (
-                            <div className="border-t border-slate-700 mt-6 pt-4">
-                                <h4 className="text-base font-semibold text-slate-200 mb-4">Acciones</h4>
-                                <div className="bg-slate-700/50 p-4 rounded-lg space-y-4">
+                            <div className="border-t border-slate-700 mt-4 pt-4">
+                                <h4 className="text-base font-semibold text-slate-200 mb-4">Documentos y Firma</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                     <div>
-                                        <p className="text-sm text-slate-200 font-semibold mb-3">Descargar Documentación</p>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <button
-                                                onClick={handleDownloadDniPdfClick}
-                                                disabled={isDownloadingDniPdf}
-                                                className="inline-flex items-center px-3 py-1.5 bg-slate-600 border border-slate-500 text-slate-200 text-xs font-medium rounded-md hover:bg-slate-500 disabled:opacity-50"
-                                            >
-                                                {isDownloadingDniPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
-                                                {isDownloadingDniPdf ? 'Generando...' : 'DNI (PDF)'}
-                                            </button>
-                                            <button
-                                                onClick={handleDownloadSummaryClick}
-                                                disabled={isDownloadingPdf}
-                                                className="inline-flex items-center px-3 py-1.5 bg-primary-500/10 text-primary-300 text-xs font-medium rounded-md hover:bg-primary-500/20 disabled:opacity-50"
-                                            >
-                                                {isDownloadingPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
-                                                {isDownloadingPdf ? 'Generando...' : 'Resumen (PDF)'}
-                                            </button>
-                                        </div>
+                                        <p className="text-sm font-medium text-slate-200 mb-2">Anverso DNI</p>
+                                        <ImageViewer imageUrl={request.frontIdUrl} alt="Front ID" />
                                     </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-slate-200 mb-2">Reverso DNI</p>
+                                        <ImageViewer imageUrl={request.backIdUrl} alt="Back ID" />
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <p className="text-sm font-medium mb-2 text-slate-200">Firma del Solicitante</p>
+                                    {request.signature ? (
+                                        <div className="p-3 rounded-lg border border-slate-700 bg-slate-900/50">
+                                            <img src={request.signature} alt="Firma del solicitante" className="mx-auto bg-white rounded" style={{ maxHeight: '100px' }} />
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-slate-500">No se proporcionó firma.</p>
+                                    )}
+                                </div>
+                            </div>
 
-                                    <div className="pt-4 border-t border-slate-600">
-                                        <p className="text-sm text-slate-200 font-semibold mb-3">Gestionar Solicitud</p>
-                                        <div className="flex flex-col md:flex-row items-center gap-4">
-                                            <div className="w-full">
-                                                <label className="block text-sm font-medium text-slate-300">Monto a Aprobar (€)</label>
-                                                <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100" />
-                                            </div>
-                                            <div className="w-full">
-                                                <label className="block text-sm font-medium text-slate-300">Plazo (meses)</label>
-                                                <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100" />
+                            {isActionable && (
+                                <div className="border-t border-slate-700 mt-6 pt-4">
+                                    <h4 className="text-base font-semibold text-slate-200 mb-4">Acciones</h4>
+                                    <div className="bg-slate-700/50 p-4 rounded-lg space-y-4">
+                                        <div>
+                                            <p className="text-sm text-slate-200 font-semibold mb-3">Descargar Documentación</p>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <button
+                                                    onClick={handleDownloadDniPdfClick}
+                                                    disabled={isDownloadingDniPdf}
+                                                    className="inline-flex items-center px-3 py-1.5 bg-slate-600 border border-slate-500 text-slate-200 text-xs font-medium rounded-md hover:bg-slate-500 disabled:opacity-50"
+                                                >
+                                                    {isDownloadingDniPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
+                                                    {isDownloadingDniPdf ? 'Generando...' : 'DNI (PDF)'}
+                                                </button>
+                                                <button
+                                                    onClick={handleDownloadSummaryClick}
+                                                    disabled={isDownloadingPdf}
+                                                    className="inline-flex items-center px-3 py-1.5 bg-primary-500/10 text-primary-300 text-xs font-medium rounded-md hover:bg-primary-500/20 disabled:opacity-50"
+                                                >
+                                                    {isDownloadingPdf ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
+                                                    {isDownloadingPdf ? 'Generando...' : 'Resumen (PDF)'}
+                                                </button>
                                             </div>
                                         </div>
-                                        <div className="flex flex-col sm:flex-row gap-2 justify-end mt-4">
-                                            <button onClick={reviewAction} disabled={isProcessing} className="w-full sm:w-auto bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 flex items-center justify-center disabled:bg-yellow-400">
-                                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Edit2 size={18} className="mr-2" />} 
-                                                {isProcessing ? 'Procesando...' : 'En Estudio'}
-                                            </button>
-                                            <button onClick={handleDenyClick} disabled={isProcessing} className="w-full sm:w-auto bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center disabled:bg-red-400">
-                                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <X size={18} className="mr-2" />} 
-                                                {isProcessing ? 'Procesando...' : 'Denegar'}
-                                            </button>
-                                            <button onClick={handleApproveClick} disabled={isProcessing} className="w-full sm:w-auto bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center disabled:bg-green-400">
-                                                {isProcessing ? <Loader2 size={18} className="mr-2 animate-spin"/> : <Check size={18} className="mr-2" />} 
-                                                {isProcessing ? 'Procesando...' : 'Aprobar'}
-                                            </button>
+
+                                        <div className="pt-4 border-t border-slate-600">
+                                            <p className="text-sm text-slate-200 font-semibold mb-3">Gestionar Solicitud</p>
+                                            <div className="flex flex-col md:flex-row items-center gap-4">
+                                                <div className="w-full">
+                                                    <label className="block text-sm font-medium text-slate-300">Monto a Aprobar (€)</label>
+                                                    <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100" />
+                                                </div>
+                                                <div className="w-full">
+                                                    <label className="block text-sm font-medium text-slate-300">Plazo (meses)</label>
+                                                    <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full mt-1 px-3 py-2 border border-slate-600 rounded-md bg-slate-700 text-slate-100" />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col sm:flex-row gap-2 justify-end mt-4">
+                                                <button
+                                                    onClick={reviewAction}
+                                                    disabled={request.status === RequestStatus.UNDER_REVIEW || isUpdatingStatus}
+                                                    className="w-full sm:w-auto bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 flex items-center justify-center disabled:bg-yellow-400 disabled:cursor-not-allowed"
+                                                >
+                                                    {isUpdatingStatus ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Edit2 size={18} className="mr-2" />}
+                                                    {isUpdatingStatus ? 'Actualizando...' : 'En Estudio'}
+                                                </button>
+                                                <button onClick={handleRejectClick} className="w-full sm:w-auto bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 flex items-center justify-center">
+                                                    <X size={18} className="mr-2" />
+                                                    Rechazar
+                                                </button>
+                                                <button onClick={handleApproveClick} className="w-full sm:w-auto bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 flex items-center justify-center">
+                                                    <Check size={18} className="mr-2" />
+                                                    Aprobar
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 )}
             </div>

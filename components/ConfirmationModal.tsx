@@ -1,11 +1,11 @@
-import React from 'react';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
     title: string;
     message: string;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
     onCancel: () => void;
     type: 'info' | 'warning';
 }
@@ -18,24 +18,41 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     onCancel,
     type,
 }) => {
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    // Reset processing state if the modal is closed externally (e.g., by navigation)
+    useEffect(() => {
+        if (!isOpen) {
+            setIsProcessing(false);
+        }
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
-    const handleConfirm = () => {
-        onConfirm();
-        onCancel(); // Close modal after action
+    const handleConfirm = async () => {
+        setIsProcessing(true);
+        try {
+            await onConfirm();
+            onCancel(); // Close modal ONLY on success
+        } catch (error) {
+            console.error("Confirmation action failed:", error);
+            // On error, stop the spinner but keep the modal open.
+            // The user will see the error toast and can then click "Cancel".
+            setIsProcessing(false);
+        }
     };
 
     const isWarning = type === 'warning';
     const iconContainerClasses = isWarning ? 'bg-red-900/50' : 'bg-primary-900/50';
     const iconClasses = isWarning ? 'text-red-400' : 'text-primary-400';
     const buttonClasses = isWarning 
-        ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500' 
-        : 'bg-primary-600 hover:bg-primary-700 focus:ring-primary-500';
+        ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500 disabled:bg-red-400' 
+        : 'bg-primary-600 hover:bg-primary-700 focus:ring-primary-500 disabled:bg-primary-400';
 
     return (
         <div 
             className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4 animate-modal-backdrop" 
-            onClick={onCancel}
+            onClick={!isProcessing ? onCancel : undefined}
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
@@ -70,13 +87,20 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         type="button"
                         className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 text-base font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm ${buttonClasses}`}
                         onClick={handleConfirm}
+                        disabled={isProcessing}
                     >
-                        Confirmar
+                        {isProcessing ? (
+                            <>
+                                <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                                Procesando...
+                            </>
+                        ) : 'Confirmar'}
                     </button>
                     <button
                         type="button"
-                        className="mt-3 w-full inline-flex justify-center rounded-md border border-slate-600 shadow-sm px-4 py-2 bg-slate-700 text-base font-medium text-slate-200 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:w-auto sm:text-sm"
+                        className="mt-3 w-full inline-flex justify-center rounded-md border border-slate-600 shadow-sm px-4 py-2 bg-slate-700 text-base font-medium text-slate-200 hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50"
                         onClick={onCancel}
+                        disabled={isProcessing}
                     >
                         Cancelar
                     </button>

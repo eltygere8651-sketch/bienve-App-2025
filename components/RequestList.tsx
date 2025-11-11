@@ -6,7 +6,7 @@ import { RequestStatus, LoanRequest } from '../types';
 
 const RequestList: React.FC = () => {
     const { requests } = useDataContext();
-    const [filter, setFilter] = useState<RequestStatus | 'All'>(RequestStatus.PENDING);
+    const [filter, setFilter] = useState<RequestStatus>(RequestStatus.PENDING);
 
     const counts = useMemo(() => {
         return requests.reduce((acc, req) => {
@@ -17,9 +17,6 @@ const RequestList: React.FC = () => {
 
     const filteredRequests = useMemo(() => {
         const sorted = [...requests].sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
-        if (filter === 'All') {
-            return sorted;
-        }
         return sorted.filter(req => req.status === filter);
     }, [requests, filter]);
 
@@ -45,14 +42,12 @@ const RequestList: React.FC = () => {
     return (
         <div>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Solicitudes</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Nuevas Solicitudes</h1>
             </div>
             
             <div className="mb-6 bg-slate-800/50 p-2 rounded-xl border border-slate-700 flex flex-wrap gap-2">
                 <FilterButton status={RequestStatus.PENDING} icon={<Clock size={16} />} label="Pendientes" />
                 <FilterButton status={RequestStatus.UNDER_REVIEW} icon={<Info size={16} />} label="En Estudio" />
-                <FilterButton status={RequestStatus.APPROVED} icon={<CheckCircle size={16} />} label="Aprobadas" />
-                <FilterButton status={RequestStatus.DENIED} icon={<XCircle size={16} />} label="Denegadas" />
             </div>
 
             {requests.length === 0 ? (

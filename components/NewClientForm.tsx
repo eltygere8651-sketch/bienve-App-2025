@@ -1,16 +1,16 @@
 
 
+
 import React, { useState, useMemo } from 'react';
-import { UserPlus, ArrowLeft, Loader2, BarChart, Banknote, Calendar } from 'lucide-react';
+import { UserPlus, ArrowLeft, Loader2, BarChart, Banknote, Calendar, Percent } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField } from './FormFields';
 import { formatCurrency } from '../services/utils';
-import { INTEREST_RATE_CONFIG } from '../config';
 
 const NewClientForm: React.FC = () => {
     const { handleAddClientAndLoan } = useDataContext();
-    const { setCurrentView, showToast } = useAppContext();
+    const { setCurrentView, annualInterestRate } = useAppContext();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [clientData, setClientData] = useState({
@@ -29,21 +29,20 @@ const NewClientForm: React.FC = () => {
     const loanCalculations = useMemo(() => {
         const amount = parseFloat(loanData.amount);
         const term = parseInt(loanData.term, 10);
-        // Added validation to prevent NaN/Infinity issues.
         if (isNaN(amount) || isNaN(term) || amount <= 0 || term <= 0) {
             return { monthlyPayment: 0, totalRepayment: 0 };
         }
 
-        const monthlyRate = INTEREST_RATE_CONFIG.MONTHLY / 100;
+        const monthlyRate = (annualInterestRate / 12) / 100;
         const monthlyPayment = (amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -term));
         const totalRepayment = monthlyPayment * term;
 
-        // Ensure the results are always finite numbers.
         return {
             monthlyPayment: isFinite(monthlyPayment) ? monthlyPayment : 0,
             totalRepayment: isFinite(totalRepayment) ? totalRepayment : 0,
+            monthlyInterestRate: annualInterestRate / 12,
         };
-    }, [loanData.amount, loanData.term]);
+    }, [loanData.amount, loanData.term, annualInterestRate]);
 
     const handleClientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -75,7 +74,6 @@ const NewClientForm: React.FC = () => {
             setCurrentView('clients');
         } catch (error) {
             console.error("Error creating client and loan:", error);
-            showToast("Error al registrar el cliente.", "error");
         } finally {
             setIsSubmitting(false);
         }
@@ -131,10 +129,10 @@ const NewClientForm: React.FC = () => {
                                 </div>
                             </div>
                             <div className="flex items-center space-x-3">
-                                <Calendar className="h-6 w-6 text-purple-400"/>
+                                <Percent className="h-6 w-6 text-purple-400"/>
                                 <div>
                                     <p className="text-xs text-slate-400">Interés Mensual</p>
-                                    <p className="text-base font-bold text-slate-100">{INTEREST_RATE_CONFIG.MONTHLY}%</p>
+                                    <p className="text-base font-bold text-slate-100">{loanCalculations.monthlyInterestRate.toFixed(2)}%</p>
                                 </div>
                             </div>
                         </div>

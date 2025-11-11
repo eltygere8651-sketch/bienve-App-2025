@@ -40,12 +40,12 @@ export interface Client {
 }
 
 export interface LoanRequest {
-    id: number;
+    id: string;
     fullName: string;
     idNumber: string;
     address: string;
     phone: string;
-    email: string;
+    email?: string;
     loanAmount: number;
     loanReason: string;
     employmentStatus: string;
@@ -57,23 +57,6 @@ export interface LoanRequest {
     signature?: string;
 }
 
-
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'adminLogin' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'accounting' | 'newClient';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient';
 
 export type FilterStatus = LoanStatus | 'Todos';
-
-export type AccountingEntryType = 'INCOME' | 'EXPENSE' | 'CAPITAL_INJECTION' | 'CAPITAL_WITHDRAWAL';
-
-export interface AccountingEntry {
-    id: number;
-    entry_date: string;
-    type: AccountingEntryType;
-    description: string;
-    amount: number;
-    created_at: string;
-}
-
-export interface AppMeta {
-    key: string;
-    value: string;
-}

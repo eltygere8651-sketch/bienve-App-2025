@@ -1,9 +1,9 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { Loan, Client, LoanRequest } from '../types';
-import { INTEREST_RATE_CONFIG } from '../config';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 import { formatCurrency } from './utils';
+import { INTEREST_RATE_CONFIG } from '../config';
 
 interface ContractData {
     fullName: string;
@@ -40,15 +40,14 @@ CLÁUSULAS:
 export const getContractText = (data: ContractData) => {
     const template = localStorage.getItem(LOCAL_STORAGE_KEYS.CONTRACT_TEMPLATE) || DEFAULT_CONTRACT_TEMPLATE;
     const today = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-    const interestRate = INTEREST_RATE_CONFIG.MONTHLY;
 
     return template
-        .replace(/\$\{fullName\}/g, data.fullName)
-        .replace(/\$\{idNumber\}/g, data.idNumber)
-        .replace(/\$\{address\}/g, data.address)
-        .replace(/\$\{loanAmount\}/g, data.loanAmount.toLocaleString('es-ES'))
-        .replace(/\$\{today\}/g, today)
-        .replace(/\$\{interestRate\}/g, interestRate.toString());
+        .replace(/\${fullName}/g, data.fullName)
+        .replace(/\${idNumber}/g, data.idNumber)
+        .replace(/\${address}/g, data.address)
+        .replace(/\${loanAmount}/g, data.loanAmount.toLocaleString('es-ES'))
+        .replace(/\${today}/g, today)
+        .replace(/\${interestRate}/g, INTEREST_RATE_CONFIG.MONTHLY.toFixed(2));
 };
 
 
@@ -332,17 +331,29 @@ export const generateIdDocumentsPDF = async (request: LoanRequest) => {
     };
 
     try {
-        // Fetch and add front ID
-        const frontResponse = await fetch(request.frontIdUrl);
-        const frontBlob = await frontResponse.blob();
-        const frontBase64 = await blobToBase64(frontBlob);
+        // Fetch images in parallel for efficiency
+        const [frontResponse, backResponse] = await Promise.all([
+            fetch(request.frontIdUrl),
+            fetch(request.backIdUrl)
+        ]);
+
+        if (!frontResponse.ok || !backResponse.ok) {
+            throw new Error('Failed to fetch one or both ID images.');
+        }
+
+        const [frontBlob, backBlob] = await Promise.all([
+            frontResponse.blob(),
+            backResponse.blob()
+        ]);
+        
+        const [frontBase64, backBase64] = await Promise.all([
+            blobToBase64(frontBlob),
+            blobToBase64(backBlob)
+        ]);
+        
         addImageToPage(doc, frontBase64, `Documento de Identidad (Anverso) - ${request.fullName}`);
 
-        // Fetch and add back ID
         doc.addPage();
-        const backResponse = await fetch(request.backIdUrl);
-        const backBlob = await backResponse.blob();
-        const backBase64 = await blobToBase64(backBlob);
         addImageToPage(doc, backBase64, `Documento de Identidad (Reverso) - ${request.fullName}`);
 
         doc.save(`DNI_${request.fullName.replace(/\s/g, '_')}.pdf`);

@@ -30,7 +30,7 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
             const ctx = canvas.getContext('2d');
             if (ctx) {
                 ctx.scale(ratio, ratio);
-                ctx.strokeStyle = '#FFFFFF'; // White ink for dark theme
+                ctx.strokeStyle = '#0f172a'; // Dark ink (slate-900) for visibility on white backgrounds
                 ctx.lineWidth = 2;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';

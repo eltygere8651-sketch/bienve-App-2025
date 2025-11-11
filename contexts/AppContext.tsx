@@ -1,5 +1,6 @@
 
-import React, { createContext, useState, useContext, useEffect } from 'react';
+
+import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { AppView } from '../types';
 import { User } from '@supabase/supabase-js';
 import { 
@@ -7,8 +8,10 @@ import {
     getSupabaseConfig, 
     onAuthStateChanged, 
     signOut,
-    initializeSupabaseClient
+    initializeSupabaseClient,
+    clearSupabaseConfig
 } from '../services/supabaseService';
+import { DEFAULT_ANNUAL_INTEREST_RATE } from '../config';
 
 type InitializationStatus = 'pending' | 'success' | 'failed';
 type ConfirmModalType = 'info' | 'warning';
@@ -22,7 +25,7 @@ interface ConfirmState {
     isOpen: boolean;
     title: string;
     message: string;
-    onConfirm: () => void;
+    onConfirm: () => void | Promise<void>;
     type: ConfirmModalType;
 }
 
@@ -41,9 +44,8 @@ interface AppContextType {
     hideConfirmModal: () => void;
     isConfigReady: boolean;
     initializationStatus: InitializationStatus;
-    isSchemaReady: boolean;
-    isStorageReady: boolean;
     supabaseConfig: { url: string; anonKey: string } | null;
+    annualInterestRate: number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -64,27 +66,29 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [supabaseConfig, setSupabaseConfigState] = useState<{ url: string; anonKey: string } | null>(null);
     const [isConfigReady, setIsConfigReady] = useState(false);
     const [initializationStatus, setInitializationStatus] = useState<InitializationStatus>('pending');
-    // Schema and storage are assumed to be ready as setup is removed.
-    const [isSchemaReady] = useState<boolean>(true);
-    const [isStorageReady] = useState<boolean>(true);
+    const annualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE;
     
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+        setToast({ message, type });
+    }, []);
+
     useEffect(() => {
         const config = getSupabaseConfig();
         if (isSupabaseConfigured(config)) {
             if (initializeSupabaseClient(config!.url, config!.anonKey)) {
                 setSupabaseConfigState(config);
                 setIsConfigReady(true);
-                setInitializationStatus('success');
             } else {
-                setInitializationStatus('failed');
+                // Config exists but is invalid. Clear it so the user can re-enter.
+                clearSupabaseConfig();
+                showToast('La configuración de Supabase no es válida. Por favor, ingrésala de nuevo.', 'error');
             }
-        } else {
-            setInitializationStatus('failed'); // Critical failure if config is missing
         }
-    }, []);
+        setInitializationStatus('success'); // Always success, setup screen will handle missing config
+    }, [showToast]);
 
     useEffect(() => {
-        if (initializationStatus !== 'success' || !isConfigReady || !isSchemaReady) return;
+        if (!isConfigReady) return;
 
         const { data: { subscription } } = onAuthStateChanged((_event, session) => {
             const currentUser = session?.user ?? null;
@@ -100,44 +104,40 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         });
 
         return () => subscription.unsubscribe();
-    }, [initializationStatus, isConfigReady, isSchemaReady]);
+    }, [isConfigReady]);
     
     useEffect(() => {
-        if (!isSchemaReady) return;
-        const adminOnlyViews: AppView[] = ['clients', 'requests', 'receiptGenerator', 'settings', 'dataManagement', 'accounting', 'newClient'];
+        const adminOnlyViews: AppView[] = ['clients', 'receiptGenerator', 'settings', 'dataManagement', 'newClient', 'dashboard', 'requests'];
         if (!isAuthenticated && adminOnlyViews.includes(currentView)) {
             setCurrentView('auth');
         }
-    }, [isAuthenticated, currentView, isSchemaReady]);
+    }, [isAuthenticated, currentView]);
 
-    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-        setToast({ message, type });
-    };
-
-    const logout = async () => {
+    const logout = useCallback(async () => {
         try {
             await signOut();
             showToast('Sesión cerrada.', 'info');
-            setCurrentView('welcome');
         } catch (error) {
             console.error("Error signing out:", error);
             showToast('Error al cerrar sesión.', 'error');
         }
-    };
+    }, [showToast]);
 
-    const showConfirmModal = (options: Omit<ConfirmState, 'isOpen' | 'type'> & { type?: ConfirmModalType }) => {
+    const showConfirmModal = useCallback((options: Omit<ConfirmState, 'isOpen' | 'type'> & { type?: ConfirmModalType }) => {
         setConfirmState({
             ...options,
             isOpen: true,
             type: options.type || 'warning',
         });
-    };
+    }, []);
 
-    const hideConfirmModal = () => {
+    const hideConfirmModal = useCallback(() => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
-    };
+    }, []);
 
-    const value = { 
+
+
+    const value = useMemo(() => ({ 
         toast,
         showToast,
         currentView,
@@ -152,10 +152,13 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         hideConfirmModal,
         isConfigReady,
         initializationStatus,
-        isSchemaReady,
-        isStorageReady,
         supabaseConfig,
-    };
+        annualInterestRate,
+    }), [
+        toast, showToast, currentView, user, isAuthenticated, logout,
+        isSidebarOpen, confirmState, showConfirmModal, hideConfirmModal,
+        isConfigReady, initializationStatus, supabaseConfig, annualInterestRate
+    ]);
 
     return (
         <AppContext.Provider value={value}>
