@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { SUPABASE_URL as PLACEHOLDER_URL, SUPABASE_ANON_KEY as PLACEHOLDER_KEY } from './supabaseConfig';
 
 const SUPABASE_URL_KEY = 'supabaseUrl';
 const SUPABASE_ANON_KEY = 'supabaseAnonKey';
@@ -30,16 +31,15 @@ export const isSupabaseConfigured = (config: any): boolean => {
     const url = config.url;
     const anonKey = config.anonKey;
 
-    if (!url || typeof url !== 'string' || url.trim() === '' || url === 'https://tgkhtfhahtozehtjpghd.supabase.co') {
+    if (!url || typeof url !== 'string' || url.trim() === '' || url === PLACEHOLDER_URL) {
         return false;
     }
 
-    if (!anonKey || typeof anonKey !== 'string' || anonKey.trim() === '' || anonKey === 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRna2h0ZmhhaHRvemVodGpwZ2hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE4NDE4MTIsImV4cCI6MjA3NzQxNzgxMn0.uHIa6Nf-k9pAUqpOBKWrF0GmYpK5pxzIACkPO44Or7o') {
+    if (!anonKey || typeof anonKey !== 'string' || anonKey.trim() === '' || anonKey === PLACEHOLDER_KEY) {
         return false;
     }
 
-    // Check for a valid URL format. The Supabase client itself will throw a more specific error,
-    // but this prevents the app from proceeding with an obviously invalid string.
+    // Check for a valid URL format.
     try {
         const urlObject = new URL(url);
         return urlObject.protocol === 'http:' || urlObject.protocol === 'https:';
