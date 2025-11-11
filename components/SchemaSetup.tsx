@@ -3,7 +3,7 @@ import { Database, Copy, Check, ExternalLink, RefreshCw, Key, Link2, Save } from
 import { saveSupabaseConfig, getSupabaseConfig } from '../services/supabaseService';
 
 const SQL_SCRIPT = `-- B.M. Contigo - Script de Inicialización de Base de Datos para Supabase
--- Versión 1.2.1 (Simplificado, sin Notificaciones Push)
+-- Versión 1.2.2 (Corrección en aprobación de préstamos)
 -- Este script crea las tablas y políticas de seguridad (RLS) necesarias.
 
 -- 1. CREACIÓN DE TABLAS
@@ -45,14 +45,14 @@ CREATE POLICY "Allow public insert on requests" ON requests FOR INSERT TO anon W
 CREATE POLICY "Deny public read on requests" ON requests FOR SELECT TO anon USING (false);
 
 -- 5. FUNCIONES DE BD
-DROP FUNCTION IF EXISTS approve_request(BIGINT, NUMERIC, INTEGER, TEXT, TEXT);
+DROP FUNCTION IF EXISTS approve_request(UUID, NUMERIC, INTEGER, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION approve_request(p_request_id UUID, p_loan_amount NUMERIC, p_loan_term INTEGER, p_contract_pdf_url TEXT, p_request_signature TEXT) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_request record; v_new_client_id UUID; v_monthly_interest_rate NUMERIC := 0.08; v_annual_interest_rate NUMERIC := 96; v_monthly_payment NUMERIC; v_total_repayment NUMERIC;
 BEGIN
     SELECT * INTO v_request FROM public.requests WHERE id = p_request_id; IF NOT FOUND THEN RAISE EXCEPTION 'Request not found'; END IF;
     v_monthly_payment := (p_loan_amount * v_monthly_interest_rate) / (1 - POWER(1 + v_monthly_interest_rate, -p_loan_term)); v_total_repayment := v_monthly_payment * p_loan_term;
     INSERT INTO public.clients (name, id_number, phone, address, email) VALUES (v_request.full_name, v_request.id_number, v_request.phone, v_request.address, v_request.email) RETURNING id INTO v_new_client_id;
-    INSERT INTO public.loans (client_id, client_name, amount, interest_rate, term, monthly_payment, total_repayment, signature, contract_pdf_url) VALUES (v_new_client_id, v_request.full_name, p_loan_amount, v_annual_interest_rate, p_loan_term, ROUND(v_monthly_payment, 2), ROUND(v_total_repayment, 2), p_request_signature, p_contract_pdf_url);
+    INSERT INTO public.loans (client_id, client_name, amount, interest_rate, term, monthly_payment, total_repayment, signature, contract_pdf_url, status) VALUES (v_new_client_id, v_request.full_name, p_loan_amount, v_annual_interest_rate, p_loan_term, ROUND(v_monthly_payment, 2), ROUND(v_total_repayment, 2), p_request_signature, p_contract_pdf_url, 'Pendiente');
     DELETE FROM public.requests WHERE id = p_request_id;
 END;$$;
 

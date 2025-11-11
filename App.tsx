@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect } from 'react';
 import { AppView } from './types';
 import Dashboard from './components/Dashboard';
@@ -20,6 +21,7 @@ import DataManagement from './components/DataManagement';
 import NewClientForm from './components/NewClientForm';
 import InstallNavItem from './components/InstallNavItem';
 import SchemaSetup from './components/SchemaSetup';
+import RequestStatusChecker from './components/RequestStatusChecker';
 
 const App: React.FC = () => {
     const { 
@@ -91,6 +93,7 @@ const App: React.FC = () => {
             case 'receiptGenerator': return isAuthenticated ? <ReceiptGenerator /> : <Auth />;
             case 'settings': return isAuthenticated ? <SettingsComponent /> : <Auth />;
             case 'dataManagement': return isAuthenticated ? <DataManagement /> : <Auth />;
+            case 'requestStatus': return <RequestStatusChecker />;
             default: return isAuthenticated ? <Dashboard /> : <Welcome />;
         }
     };
@@ -120,6 +123,7 @@ const App: React.FC = () => {
                             {/* Public Order */}
                             <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                             <NavItem icon={<FileText />} label="Iniciar una Solicitud" view="loanRequest" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                            <NavItem icon={<Search />} label="Consultar Solicitud" view="requestStatus" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         </>
                     )}
                     <InstallNavItem isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />

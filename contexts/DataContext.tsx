@@ -25,6 +25,8 @@ interface DataContextType {
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
     handleGenerateTestRequest: () => Promise<void>;
     handleDeleteTestRequests: () => Promise<void>;
+    handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
+    handleDeleteLoan: (loanId: string, clientName: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);

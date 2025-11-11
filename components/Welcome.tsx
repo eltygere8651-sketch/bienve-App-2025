@@ -1,7 +1,8 @@
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { PenSquare, Handshake, Download } from 'lucide-react';
+import { PenSquare, Handshake, Download, Search } from 'lucide-react';
 import BudgetCalculator from './BudgetCalculator';
 import { useAppContext } from '../contexts/AppContext';
 import InstallPWAInstructions from './InstallPWAInstructions';
@@ -101,6 +102,26 @@ const Welcome: React.FC = () => {
                         </button>
                     </div>
                 )}
+
+                 <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center">
+                                <div className="bg-emerald-500/10 text-emerald-400 p-3 rounded-full mr-4">
+                                <Search className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <h3 className="font-bold text-slate-100">Consulta el Estado de tu Solicitud</h3>
+                                <p className="text-sm text-slate-400">Verifica el estado actual de tu préstamo utilizando tu DNI/NIE.</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setCurrentView('requestStatus')}
+                            className="w-full sm:w-auto flex-shrink-0 inline-flex items-center justify-center px-5 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow-md hover:bg-emerald-700 transition-transform hover:scale-105"
+                        >
+                            Consultar Ahora
+                        </button>
+                    </div>
+                </div>
 
                 <BudgetCalculator />
             </div>

@@ -368,6 +368,52 @@ export const useAppData = (
         }
     }, [user, showToast]);
 
+    const handleUpdateLoan = useCallback(async (loanId: string, updatedData: Partial<Loan>) => {
+        if (!user || !supabase) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
+            throw new Error('Not authorized or services unavailable.');
+        }
+        try {
+            const dbData: { [key: string]: any } = {
+                amount: updatedData.amount,
+                interest_rate: updatedData.interestRate,
+                term: updatedData.term,
+                start_date: updatedData.startDate,
+                status: updatedData.status,
+                payments_made: updatedData.paymentsMade,
+            };
+            Object.keys(dbData).forEach(key => dbData[key] === undefined && delete dbData[key]);
+
+            if (Object.keys(dbData).length === 0) {
+                showToast('No se proporcionaron datos para actualizar.', 'info');
+                return;
+            }
+            const { error } = await supabase.from(TABLE_NAMES.LOANS).update(dbData).eq('id', loanId);
+            if (error) throw error;
+            showToast('Préstamo actualizado correctamente.', 'success');
+        } catch (err: any) {
+            console.error("Failed to update loan:", err);
+            showToast(`Error al actualizar el préstamo: ${err.message || 'Error desconocido.'}`, 'error');
+            throw err;
+        }
+    }, [user, showToast]);
+
+    const handleDeleteLoan = useCallback(async (loanId: string, clientName: string) => {
+        if (!user || !supabase) {
+            showToast('Acción no autorizada o servicios no disponibles.', 'error');
+            throw new Error('Not authorized or services unavailable.');
+        }
+        try {
+            const { error } = await supabase.from(TABLE_NAMES.LOANS).delete().eq('id', loanId);
+            if (error) throw error;
+            showToast(`Préstamo de ${clientName} eliminado correctamente.`, 'success');
+        } catch (err: any) {
+            console.error("Failed to delete loan:", err);
+            showToast(`Error al eliminar el préstamo: ${err.message || 'Error desconocido.'}`, 'error');
+            throw err;
+        }
+    }, [user, showToast]);
+
     const handleGenerateTestRequest = useCallback(async () => {
         if (!supabase) {
             showToast('Servicios de Supabase no inicializados.', 'error');
@@ -584,5 +630,7 @@ export const useAppData = (
         handleAddClientAndLoan,
         handleGenerateTestRequest,
         handleDeleteTestRequests,
+        handleUpdateLoan,
+        handleDeleteLoan,
     };
 };
