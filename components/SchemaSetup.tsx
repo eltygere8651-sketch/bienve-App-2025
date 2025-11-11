@@ -130,6 +130,12 @@ const SchemaSetup: React.FC = () => {
                 <div className="space-y-4">
                     <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
                          <h3 className="text-lg font-semibold text-slate-100 mb-3">1. Conecta tu Proyecto Supabase</h3>
+                         <div className="bg-slate-900/50 p-3 rounded-md mb-4 text-sm text-slate-300 border-l-4 border-primary-500">
+                            <p><strong className="text-primary-400">Para compartir la aplicación:</strong></p>
+                            <p className="mt-1">Edita el archivo <code className="bg-slate-700 text-amber-300 px-1 rounded-sm text-xs">services/supabaseConfig.ts</code>, añade tus credenciales y despliega la aplicación. Tus clientes no verán esta pantalla.</p>
+                            <p className="mt-2"><strong className="text-slate-400">Para probar localmente:</strong></p>
+                            <p className="mt-1">Usa el siguiente formulario. La configuración se guardará en tu navegador.</p>
+                        </div>
                          <div className="space-y-4">
                             <div>
                                  <label htmlFor="supabase-url" className="block text-sm font-medium text-slate-300 mb-1">URL del Proyecto</label>

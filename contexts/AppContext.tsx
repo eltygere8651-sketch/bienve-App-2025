@@ -10,6 +10,7 @@ import {
     clearSupabaseConfig
 } from '../services/supabaseService';
 import { DEFAULT_ANNUAL_INTEREST_RATE } from '../config';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../services/supabaseConfig';
 
 type InitializationStatus = 'pending' | 'success' | 'failed';
 type ConfirmModalType = 'info' | 'warning';
@@ -73,15 +74,11 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     useEffect(() => {
         let config: { url: string; anonKey: string } | null = null;
         
-        // 1. Prioritize environment variables for deployed/shared app
-        // Assumes env vars are set during the build process for a production app
-        const envUrl = process.env.SUPABASE_URL;
-        const envKey = process.env.SUPABASE_ANON_KEY;
-
-        if (envUrl && envKey) {
-            config = { url: envUrl, anonKey: envKey };
+        // 1. Prioritize config from supabaseConfig.ts for deployed/shared apps
+        if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+            config = { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
         } else {
-            // 2. Fallback to localStorage for local/admin setup
+            // 2. Fallback to localStorage for initial local admin setup
             config = getSupabaseConfig();
         }
 
@@ -90,13 +87,9 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 setSupabaseConfigState(config);
                 setIsConfigReady(true);
             } else {
-                // Config exists but is invalid.
-                if (!envUrl) { // Only clear local storage if env vars aren't the source of the problem
-                    clearSupabaseConfig();
-                    showToast('La configuración de Supabase no es válida. Por favor, ingrésala de nuevo.', 'error');
-                } else {
-                    showToast('La configuración de Supabase (variables de entorno) no es válida.', 'error');
-                }
+                // This path is now mainly for the admin's local setup if they enter bad keys.
+                clearSupabaseConfig();
+                showToast('La configuración de Supabase no es válida. Por favor, ingrésala de nuevo.', 'error');
             }
         }
         
