@@ -1,29 +1,8 @@
-import { createClient, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
-import { SUPABASE_URL as PLACEHOLDER_URL, SUPABASE_ANON_KEY as PLACEHOLDER_KEY } from './supabaseConfig';
 
-const SUPABASE_URL_KEY = 'supabaseUrl';
-const SUPABASE_ANON_KEY = 'supabaseAnonKey';
+
+import { createClient, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 export let supabase: SupabaseClient | null = null;
-
-export const saveSupabaseConfig = (url: string, anonKey: string) => {
-    localStorage.setItem(SUPABASE_URL_KEY, url);
-    localStorage.setItem(SUPABASE_ANON_KEY, anonKey);
-};
-
-export const getSupabaseConfig = (): { url: string; anonKey: string } | null => {
-    const url = localStorage.getItem(SUPABASE_URL_KEY);
-    const anonKey = localStorage.getItem(SUPABASE_ANON_KEY);
-    if (url && anonKey) {
-        return { url, anonKey };
-    }
-    return null;
-};
-
-export const clearSupabaseConfig = () => {
-    localStorage.removeItem(SUPABASE_URL_KEY);
-    localStorage.removeItem(SUPABASE_ANON_KEY);
-};
 
 export const isSupabaseConfigured = (config: any): boolean => {
     if (!config) return false;
@@ -31,11 +10,11 @@ export const isSupabaseConfigured = (config: any): boolean => {
     const url = config.url;
     const anonKey = config.anonKey;
 
-    if (!url || typeof url !== 'string' || url.trim() === '' || url === PLACEHOLDER_URL) {
+    if (!url || typeof url !== 'string' || url.trim() === '') {
         return false;
     }
 
-    if (!anonKey || typeof anonKey !== 'string' || anonKey.trim() === '' || anonKey === PLACEHOLDER_KEY) {
+    if (!anonKey || typeof anonKey !== 'string' || anonKey.trim() === '') {
         return false;
     }
 
@@ -61,6 +40,34 @@ export const initializeSupabaseClient = (url: string, anonKey: string): boolean 
         supabase = null;
         return false;
     }
+};
+
+// Fix: Add missing functions for saving/getting config from localStorage for setup screen.
+const SUPABASE_CONFIG_KEY = 'bmContigoSupabaseConfig';
+
+export const saveSupabaseConfig = (url: string, anonKey: string) => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        const config = { url, anonKey };
+        localStorage.setItem(SUPABASE_CONFIG_KEY, JSON.stringify(config));
+    }
+};
+
+export const getSupabaseConfig = (): { url: string; anonKey: string } | null => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+        const configStr = localStorage.getItem(SUPABASE_CONFIG_KEY);
+        if (!configStr) return null;
+        try {
+            const config = JSON.parse(configStr);
+            if (config && typeof config.url === 'string' && typeof config.anonKey === 'string') {
+                return config;
+            }
+            return null;
+        } catch (e) {
+            console.warn('Could not parse Supabase config from localStorage', e);
+            return null;
+        }
+    }
+    return null;
 };
 
 // --- Auth Wrappers ---

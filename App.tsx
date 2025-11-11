@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { AppView } from './types';
 import Dashboard from './components/Dashboard';
@@ -20,8 +18,9 @@ import SettingsComponent from './components/Settings';
 import DataManagement from './components/DataManagement';
 import NewClientForm from './components/NewClientForm';
 import InstallNavItem from './components/InstallNavItem';
-import SchemaSetup from './components/SchemaSetup';
 import RequestStatusChecker from './components/RequestStatusChecker';
+import AppNotConfigured from './components/AppNotConfigured';
+
 
 const App: React.FC = () => {
     const { 
@@ -61,7 +60,11 @@ const App: React.FC = () => {
     }
     
     if (initializationStatus === 'success' && !isConfigReady) {
-        return <SchemaSetup />;
+        // Si la configuración no está lista después de la inicialización, significa que las
+        // credenciales en supabaseConfig.ts no son válidas. Muestra la pantalla
+        // "no configurado" para informar al propietario de la aplicación.
+        // Esto evita que los usuarios finales vean una pantalla de configuración técnica.
+        return <AppNotConfigured />;
     }
     
     const renderContent = () => {

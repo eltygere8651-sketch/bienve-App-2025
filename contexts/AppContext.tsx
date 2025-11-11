@@ -1,13 +1,12 @@
+
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { AppView } from '../types';
 import { User } from '@supabase/supabase-js';
 import { 
     isSupabaseConfigured, 
-    getSupabaseConfig, 
     onAuthStateChanged, 
     signOut,
-    initializeSupabaseClient,
-    clearSupabaseConfig
+    initializeSupabaseClient
 } from '../services/supabaseService';
 import { DEFAULT_ANNUAL_INTEREST_RATE } from '../config';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../services/supabaseConfig';
@@ -72,30 +71,19 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }, []);
 
     useEffect(() => {
-        let config: { url: string; anonKey: string } | null = null;
         const configFromFile = { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
 
-        // 1. Prioritize config from supabaseConfig.ts if it's valid
         if (isSupabaseConfigured(configFromFile)) {
-            config = configFromFile;
-        } else {
-            // 2. Fallback to localStorage for initial local admin setup
-            config = getSupabaseConfig();
-        }
-
-        if (isSupabaseConfigured(config)) {
-            if (initializeSupabaseClient(config!.url, config!.anonKey)) {
-                setSupabaseConfigState(config);
+            // Intenta inicializar Supabase solo si la configuración del archivo es válida.
+            if (initializeSupabaseClient(configFromFile.url, configFromFile.anonKey)) {
+                setSupabaseConfigState(configFromFile);
                 setIsConfigReady(true);
-            } else {
-                // This path is now mainly for the admin's local setup if they enter bad keys.
-                clearSupabaseConfig();
-                showToast('La configuración de Supabase no es válida. Por favor, ingrésala de nuevo.', 'error');
             }
         }
-        
-        setInitializationStatus('success'); // Always success, setup screen will handle missing config
-    }, [showToast]);
+        // Si la configuración no es válida, isConfigReady seguirá siendo false,
+        // y App.tsx mostrará el mensaje de "Aplicación No Configurada".
+        setInitializationStatus('success');
+    }, []);
 
     useEffect(() => {
         if (!isConfigReady) return;
