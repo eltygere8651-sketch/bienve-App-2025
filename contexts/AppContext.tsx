@@ -76,20 +76,27 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 return;
             }
 
-            // Safety timeout: If Auth check takes too long (e.g. network hang), force success
-            // so the app renders (likely in unauthenticated state).
+            // Safety timeout increased to 5s to allow Firebase Auth to restore session on slow networks
             const safetyTimeout = setTimeout(() => {
                 if (initializationStatus === 'pending') {
                     console.warn("Auth check timed out, forcing initialization");
                     setInitializationStatus('success');
                 }
-            }, 3000);
+            }, 5000);
 
             const unsubscribe = onAuthStateChanged((firebaseUser) => {
                 if (firebaseUser) {
-                    setUser(firebaseUser);
-                    setIsAuthenticated(true);
-                    setHasAdminAccount(true);
+                    // Si el usuario no es anónimo (es admin), restauramos sesión y vista
+                    if (!firebaseUser.isAnonymous) {
+                        setUser(firebaseUser);
+                        setIsAuthenticated(true);
+                        setHasAdminAccount(true);
+                        // REDIRECCIÓN AUTOMÁTICA: Si detectamos login, vamos directo al Dashboard
+                        setCurrentView((prev) => (prev === 'welcome' || prev === 'auth') ? 'dashboard' : prev);
+                    } else {
+                        // Usuario anónimo (cliente enviando solicitud)
+                        setIsAuthenticated(false);
+                    }
                 } else {
                     setUser(null);
                     setIsAuthenticated(false);
@@ -110,9 +117,12 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     useEffect(() => {
         const adminOnlyViews: AppView[] = ['clients', 'receiptGenerator', 'settings', 'dataManagement', 'newClient', 'dashboard', 'requests'];
         if (!isAuthenticated && adminOnlyViews.includes(currentView)) {
-            setCurrentView('auth');
+            // No redirigir inmediatamente si estamos inicializando, para evitar flashes
+            if (initializationStatus === 'success') {
+                setCurrentView('auth');
+            }
         }
-    }, [isAuthenticated, currentView]);
+    }, [isAuthenticated, currentView, initializationStatus]);
 
     const registerAdmin = useCallback(async (email: string, password: string) => {
         try {

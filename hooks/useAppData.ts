@@ -9,6 +9,7 @@ import {
     deleteDocument 
 } from '../services/firebaseService';
 import { orderBy, limit } from 'firebase/firestore';
+import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER } from '../constants';
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -68,29 +69,50 @@ export const useAppData = (
              checkAllLoaded();
         });
 
-        // OPTIMIZACIÓN: Requests contiene imágenes en Base64.
-        const unsubRequests = subscribeToCollection(
-            'requests', 
-            (data) => {
-                setRequests(data as LoanRequest[]);
-                requestsLoaded = true;
-                checkAllLoaded();
-            },
-            [orderBy('requestDate', 'desc'), limit(50)],
-            (err) => {
-                console.error("Error loading requests (likely missing index)", err);
-                // Si falla por índice, intentar carga sin ordenamiento
-                setError("Nota: Algunas funciones de ordenamiento pueden requerir configuración en Firebase Console.");
-                requestsLoaded = true;
-                checkAllLoaded();
-            }
-        );
+        // OPTIMIZACIÓN: Requests con FALLBACK
+        // Intentamos cargar ordenado por fecha. Si falla (falta índice), cargamos sin ordenar.
+        let unsubRequests: () => void = () => {};
+        
+        const loadRequestsSafe = () => {
+            unsubRequests = subscribeToCollection(
+                'requests', 
+                (data) => {
+                    setRequests(data as LoanRequest[]);
+                    requestsLoaded = true;
+                    checkAllLoaded();
+                },
+                [orderBy('requestDate', 'desc'), limit(50)],
+                (err) => {
+                    console.warn("Ordered query failed, trying fallback...", err);
+                    // FALLBACK: Suscribirse SIN ordenamiento
+                    unsubRequests(); // Cancelar la fallida
+                    unsubRequests = subscribeToCollection(
+                        'requests',
+                        (data) => {
+                            setRequests(data as LoanRequest[]);
+                            requestsLoaded = true;
+                            checkAllLoaded();
+                            // Mostrar advertencia suave
+                            if (user) setError("Modo compatibilidad: Ordenamiento limitado.");
+                        },
+                        [limit(50)], // Solo límite, sin orderBy
+                        (err2) => {
+                            console.error("Fallback query also failed", err2);
+                            requestsLoaded = true;
+                            checkAllLoaded();
+                        }
+                    );
+                }
+            );
+        };
+
+        loadRequestsSafe();
 
         return () => {
             clearTimeout(safetyTimeout);
             unsubClients();
             unsubLoans();
-            unsubRequests();
+            if (unsubRequests) unsubRequests();
         };
     }, []);
 
@@ -269,14 +291,52 @@ export const useAppData = (
     }, [showToast]);
 
     const handleGenerateTestRequest = useCallback(async () => {
-        // En modo nube, no generamos solicitudes de prueba locales
-        showToast('Esta función es solo para modo local.', 'info');
+        try {
+            const randomId = Math.floor(Math.random() * 10000);
+            const testRequest = {
+                fullName: `Cliente de Prueba ${randomId}`,
+                idNumber: `TEST-${randomId}`,
+                address: 'Calle Falsa 123, Ciudad de Prueba',
+                phone: '555-000-123',
+                email: 'test@ejemplo.com',
+                loanAmount: 1500,
+                loanReason: 'Prueba de Sistema',
+                employmentStatus: 'Empleado',
+                contractType: 'Indefinido',
+                frontIdUrl: DNI_FRONT_PLACEHOLDER,
+                backIdUrl: DNI_BACK_PLACEHOLDER,
+                status: RequestStatus.PENDING,
+                requestDate: new Date().toISOString()
+            };
+            
+            await addDocument('requests', testRequest);
+            showToast('Solicitud de prueba generada en Firebase.', 'success');
+        } catch (err: any) {
+            console.error("Error generating test request:", err);
+            showToast(`Error al generar prueba: ${err.message}`, 'error');
+        }
     }, [showToast]);
 
     const handleDeleteTestRequests = useCallback(async () => {
-        // En modo nube, no generamos solicitudes de prueba locales
-         showToast('Esta función es solo para modo local.', 'info');
-    }, [showToast]);
+         try {
+            // Find requests locally to avoid complex queries, then delete by ID
+            const testRequests = requests.filter(r => r.fullName.startsWith('Cliente de Prueba'));
+            
+            if (testRequests.length === 0) {
+                showToast('No se encontraron solicitudes de prueba.', 'info');
+                return;
+            }
+
+            // Execute deletions in parallel for speed
+            const deletePromises = testRequests.map(req => deleteDocument('requests', req.id));
+            await Promise.all(deletePromises);
+
+            showToast(`${testRequests.length} solicitudes de prueba eliminadas.`, 'success');
+         } catch (err: any) {
+             console.error("Error deleting test requests:", err);
+             showToast(`Error al eliminar: ${err.message}`, 'error');
+         }
+    }, [requests, showToast]);
 
     const clientLoanData = useMemo(() => {
         const loansByClientId = new Map<string, Loan[]>();

@@ -7,6 +7,8 @@ import {
     signOut as firebaseSignOut, 
     onAuthStateChanged as firebaseOnAuthStateChanged,
     signInAnonymously,
+    setPersistence,
+    browserLocalPersistence,
     User,
     Auth
 } from 'firebase/auth';
@@ -54,9 +56,12 @@ export const initializeFirebase = (config = FIREBASE_CONFIG) => {
         app = initializeApp(config);
         auth = getAuth(app);
         
+        // FORZAR PERSISTENCIA LOCAL: Esto asegura que el login se guarde al cerrar el navegador
+        setPersistence(auth, browserLocalPersistence).catch(error => {
+            console.error("Error setting persistence:", error);
+        });
+        
         // OPTIMIZACIÓN: Inicializar Firestore con caché persistente
-        // Esto permite que la app cargue instantáneamente usando datos locales
-        // mientras se sincroniza en segundo plano.
         try {
             db = initializeFirestore(app, {
                 localCache: persistentLocalCache({

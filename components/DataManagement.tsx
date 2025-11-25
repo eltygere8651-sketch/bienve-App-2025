@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { DatabaseBackup, ShieldCheck, FlaskConical, Trash2, Download, Loader2, Activity, CheckCircle, XCircle } from 'lucide-react';
+import { DatabaseBackup, ShieldCheck, FlaskConical, Trash2, Download, Loader2, Activity, CheckCircle, XCircle, Copy, Lock } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
 import { exportDatabase } from '../services/dbService';
@@ -80,11 +80,68 @@ const DataManagement: React.FC = () => {
         });
     };
 
+    const RULES_CODE = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Permite crear solicitudes a cualquiera (clientes anónimos)
+    // 2. Permite leer/borrar solo al administrador autenticado
+    match /requests/{document=**} {
+      allow create: if true;
+      allow read, write: if request.auth != null;
+    }
+    
+    // El resto (clientes, préstamos) solo para el Admin
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}`;
+
+    const handleCopyRules = () => {
+        navigator.clipboard.writeText(RULES_CODE);
+        showToast('Reglas copiadas al portapapeles', 'success');
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-center">
                 <DatabaseBackup className="h-8 w-8 mr-3 text-primary-400" />
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Gestión de Datos</h1>
+            </div>
+
+            {/* SECCIÓN CRÍTICA: REGLAS DE SEGURIDAD */}
+            <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-amber-500/30 ring-1 ring-amber-500/20">
+                <div className="flex items-start">
+                    <Lock className="h-8 w-8 text-amber-400 mr-4 flex-shrink-0" />
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-100">Configuración de Permisos (Obligatorio)</h2>
+                        <p className="text-slate-300 mt-1 text-sm">
+                            Si no puedes ver las solicitudes de tus clientes, copia este código y pégalo en la consola de Firebase. Esto asegura que el Admin pueda ver todo.
+                        </p>
+                    </div>
+                </div>
+                
+                <div className="mt-4 bg-slate-900 p-4 rounded-lg border border-slate-700 relative group">
+                    <pre className="text-xs sm:text-sm text-green-400 font-mono overflow-x-auto whitespace-pre-wrap">
+                        {RULES_CODE}
+                    </pre>
+                    <button 
+                        onClick={handleCopyRules}
+                        className="absolute top-2 right-2 p-2 bg-slate-700 text-slate-200 rounded hover:bg-slate-600 transition-colors"
+                        title="Copiar código"
+                    >
+                        <Copy size={16} />
+                    </button>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-slate-700 text-sm text-slate-400">
+                    <p className="font-semibold text-slate-300 mb-1">Pasos a seguir:</p>
+                    <ol className="list-decimal list-inside space-y-1">
+                        <li>Ve a <a href="https://console.firebase.google.com" target="_blank" className="text-primary-400 underline" rel="noreferrer">console.firebase.google.com</a></li>
+                        <li>Entra en tu proyecto {'>'} <strong>Firestore Database</strong> {'>'} Pestaña <strong>Reglas</strong>.</li>
+                        <li>Borra todo lo que haya, pega el código de arriba y dale a <strong>Publicar</strong>.</li>
+                    </ol>
+                </div>
             </div>
 
             <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">

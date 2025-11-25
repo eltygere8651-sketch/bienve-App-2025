@@ -1,21 +1,41 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Handshake, LogIn, Key, Loader2, ShieldCheck, UserPlus, Mail } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 
 const Auth: React.FC = () => {
-    const { login, registerAdmin } = useAppContext();
-    const [email, setEmail] = useState('admin@bmcontigo.com');
+    const { login, registerAdmin, isAuthenticated, setCurrentView } = useAppContext();
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isRegistering, setIsRegistering] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
+    // Si ya estamos autenticados, ir al dashboard inmediatamente
+    useEffect(() => {
+        if (isAuthenticated) {
+            setCurrentView('dashboard');
+        }
+    }, [isAuthenticated, setCurrentView]);
+
+    // Cargar email guardado al iniciar
+    useEffect(() => {
+        const savedEmail = localStorage.getItem('adminEmail');
+        if (savedEmail) {
+            setEmail(savedEmail);
+        } else {
+            setEmail('admin@bmcontigo.com');
+        }
+    }, []);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
+
+        // Guardar email para el futuro
+        localStorage.setItem('adminEmail', email);
 
         // Simular pequeño retardo para UX
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -40,8 +60,7 @@ const Auth: React.FC = () => {
             }
             const success = await registerAdmin(email, password);
             if (!success) {
-                // El error ya se muestra en el toast del context, pero podemos poner algo genérico aquí si falla
-                // setError('Error al registrar.');
+                // El error ya se muestra en el toast del context
             }
         }
         setIsLoading(false);
@@ -90,7 +109,9 @@ const Auth: React.FC = () => {
                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                                 <input 
                                     id="auth-email" 
+                                    name="email"
                                     type="email" 
+                                    autoComplete="email"
                                     value={email} 
                                     onChange={(e) => setEmail(e.target.value)} 
                                     required 
@@ -106,7 +127,9 @@ const Auth: React.FC = () => {
                                 <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                                 <input 
                                     id="auth-password" 
+                                    name="password"
                                     type="password" 
+                                    autoComplete="current-password"
                                     value={password} 
                                     onChange={(e) => setPassword(e.target.value)} 
                                     required 
@@ -123,7 +146,9 @@ const Auth: React.FC = () => {
                                     <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                                     <input 
                                         id="confirm-password" 
+                                        name="confirm-password"
                                         type="password" 
+                                        autoComplete="new-password"
                                         value={confirmPassword} 
                                         onChange={(e) => setConfirmPassword(e.target.value)} 
                                         required 
