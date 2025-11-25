@@ -1,10 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { AppView } from './types';
 import Dashboard from './components/Dashboard';
-import ClientList from './components/ClientList';
-import LoanRequestForm from './components/LoanRequestForm';
-import RequestList from './components/RequestList';
 import Auth from './components/Auth';
 import Welcome from './components/Welcome';
 import Toast from './components/Toast';
@@ -13,13 +10,23 @@ import NavItem from './components/NavItem';
 import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Search } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
-import ReceiptGenerator from './components/ReceiptGenerator';
-import SettingsComponent from './components/Settings';
-import DataManagement from './components/DataManagement';
-import NewClientForm from './components/NewClientForm';
 import InstallNavItem from './components/InstallNavItem';
 import RequestStatusChecker from './components/RequestStatusChecker';
+import LoanRequestForm from './components/LoanRequestForm';
 
+// Lazy load heavy components to optimize initial load time
+const ClientList = React.lazy(() => import('./components/ClientList'));
+const RequestList = React.lazy(() => import('./components/RequestList'));
+const ReceiptGenerator = React.lazy(() => import('./components/ReceiptGenerator'));
+const SettingsComponent = React.lazy(() => import('./components/Settings'));
+const DataManagement = React.lazy(() => import('./components/DataManagement'));
+const NewClientForm = React.lazy(() => import('./components/NewClientForm'));
+
+const LoadingFallback = () => (
+    <div className="flex justify-center items-center h-full min-h-[50vh]">
+        <Loader2 className="h-10 w-10 animate-spin text-primary-500" />
+    </div>
+);
 
 const App: React.FC = () => {
     const { 
@@ -36,8 +43,6 @@ const App: React.FC = () => {
         initializationStatus,
     } = useAppContext();
     
-    // El hook useDataContext ahora maneja internamente la carga desde Firebase
-    // Si isConfigReady es false, AppContext ya renderizó AppNotConfigured
     const { requests, isLoading: dataIsLoading, error } = useDataContext();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
@@ -76,20 +81,26 @@ const App: React.FC = () => {
             );
         }
         
-        switch (currentView) {
-            case 'welcome': return <Welcome />;
-            case 'dashboard': return isAuthenticated ? <Dashboard /> : <Auth />;
-            case 'clients': return isAuthenticated ? <ClientList /> : <Auth />;
-            case 'newClient': return isAuthenticated ? <NewClientForm /> : <Auth />;
-            case 'loanRequest': return <LoanRequestForm />;
-            case 'requests': return isAuthenticated ? <RequestList /> : <Auth />;
-            case 'auth': return <Auth />;
-            case 'receiptGenerator': return isAuthenticated ? <ReceiptGenerator /> : <Auth />;
-            case 'settings': return isAuthenticated ? <SettingsComponent /> : <Auth />;
-            case 'dataManagement': return isAuthenticated ? <DataManagement /> : <Auth />;
-            case 'requestStatus': return <RequestStatusChecker />;
-            default: return isAuthenticated ? <Dashboard /> : <Welcome />;
-        }
+        return (
+            <Suspense fallback={<LoadingFallback />}>
+                {(() => {
+                    switch (currentView) {
+                        case 'welcome': return <Welcome />;
+                        case 'dashboard': return isAuthenticated ? <Dashboard /> : <Auth />;
+                        case 'clients': return isAuthenticated ? <ClientList /> : <Auth />;
+                        case 'newClient': return isAuthenticated ? <NewClientForm /> : <Auth />;
+                        case 'loanRequest': return <LoanRequestForm />;
+                        case 'requests': return isAuthenticated ? <RequestList /> : <Auth />;
+                        case 'auth': return <Auth />;
+                        case 'receiptGenerator': return isAuthenticated ? <ReceiptGenerator /> : <Auth />;
+                        case 'settings': return isAuthenticated ? <SettingsComponent /> : <Auth />;
+                        case 'dataManagement': return isAuthenticated ? <DataManagement /> : <Auth />;
+                        case 'requestStatus': return <RequestStatusChecker />;
+                        default: return isAuthenticated ? <Dashboard /> : <Welcome />;
+                    }
+                })()}
+            </Suspense>
+        );
     };
 
     const SidebarContent = () => (

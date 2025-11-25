@@ -3,8 +3,10 @@ import { initializeApp, FirebaseApp } from 'firebase/app';
 import { 
     getAuth, 
     signInWithEmailAndPassword, 
+    createUserWithEmailAndPassword,
     signOut as firebaseSignOut, 
     onAuthStateChanged as firebaseOnAuthStateChanged,
+    signInAnonymously,
     User,
     Auth
 } from 'firebase/auth';
@@ -18,9 +20,15 @@ import {
     doc, 
     query, 
     where, 
+    limit,
+    orderBy,
     Firestore,
     Timestamp,
-    onSnapshot
+    onSnapshot,
+    initializeFirestore,
+    persistentLocalCache,
+    persistentMultipleTabManager,
+    QueryConstraint
 } from 'firebase/firestore';
 import { FIREBASE_CONFIG } from './firebaseConfig';
 
@@ -35,7 +43,6 @@ export const initializeFirebase = (config = FIREBASE_CONFIG) => {
     try {
         // Check if config is dummy
         if (config.apiKey === "TU_API_KEY_AQUI") {
-            // Try load from local storage
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
                 config = JSON.parse(saved);
@@ -46,7 +53,21 @@ export const initializeFirebase = (config = FIREBASE_CONFIG) => {
 
         app = initializeApp(config);
         auth = getAuth(app);
-        db = getFirestore(app);
+        
+        // OPTIMIZACIÓN: Inicializar Firestore con caché persistente
+        // Esto permite que la app cargue instantáneamente usando datos locales
+        // mientras se sincroniza en segundo plano.
+        try {
+            db = initializeFirestore(app, {
+                localCache: persistentLocalCache({
+                    tabManager: persistentMultipleTabManager()
+                })
+            });
+        } catch (e) {
+            // Fallback for environments where persistence might fail
+            db = getFirestore(app);
+        }
+
         return true;
     } catch (e) {
         console.error("Firebase init error:", e);
@@ -56,7 +77,6 @@ export const initializeFirebase = (config = FIREBASE_CONFIG) => {
 
 export const saveFirebaseConfig = (config: any) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-    // Intentar inicializar inmediatamente
     return initializeFirebase(config);
 };
 
@@ -75,6 +95,11 @@ export const signIn = (email: string, pass: string) => {
     return signInWithEmailAndPassword(auth, email, pass);
 };
 
+export const signUp = (email: string, pass: string) => {
+    if (!auth) throw new Error("Firebase no inicializado");
+    return createUserWithEmailAndPassword(auth, email, pass);
+};
+
 export const signOut = () => {
     if (!auth) throw new Error("Firebase no inicializado");
     return firebaseSignOut(auth);
@@ -85,10 +110,16 @@ export const onAuthStateChanged = (cb: (user: User | null) => void) => {
     return firebaseOnAuthStateChanged(auth, cb);
 };
 
+export const ensurePublicAuth = async () => {
+    if (!auth) throw new Error("Firebase no inicializado");
+    if (!auth.currentUser) {
+        await signInAnonymously(auth);
+    }
+};
+
 // --- DATABASE HELPERS ---
 const mapDoc = (doc: any) => {
     const data = doc.data();
-    // Convert Timestamps to ISO strings for frontend compatibility
     const converted: any = { id: doc.id, ...data };
     
     Object.keys(converted).forEach(key => {
@@ -106,21 +137,43 @@ export const getCollection = async (collectionName: string) => {
     return snapshot.docs.map(mapDoc);
 };
 
-export const subscribeToCollection = (collectionName: string, callback: (data: any[]) => void) => {
+// OPTIMIZACIÓN: Ahora acepta restricciones (limit, orderBy) para no descargar toda la BD
+export const subscribeToCollection = (
+    collectionName: string, 
+    callback: (data: any[]) => void,
+    constraints: QueryConstraint[] = [],
+    onError?: (error: any) => void
+) => {
     if (!db) return () => {};
-    const q = query(collection(db, collectionName));
+    
+    const q = query(collection(db, collectionName), ...constraints);
+    
     return onSnapshot(q, (snapshot) => {
         const data = snapshot.docs.map(mapDoc);
         callback(data);
+    }, (error) => {
+        console.error(`Error subscribing to ${collectionName}:`, error);
+        if (onError) onError(error);
     });
+};
+
+const cleanData = (data: any) => {
+    const cleaned: any = {};
+    Object.keys(data).forEach(key => {
+        if (data[key] !== undefined) {
+            cleaned[key] = data[key];
+        } else {
+            cleaned[key] = null;
+        }
+    });
+    return cleaned;
 };
 
 export const addDocument = async (collectionName: string, data: any) => {
     if (!db) throw new Error("DB no inicializada");
-    // Ensure dates are valid for Firestore or let it handle strings
-    // Las imágenes ya deben venir como base64 strings dentro de `data`
+    await ensurePublicAuth();
     return addDoc(collection(db, collectionName), {
-        ...data,
+        ...cleanData(data),
         createdAt: new Date()
     });
 };
@@ -128,7 +181,7 @@ export const addDocument = async (collectionName: string, data: any) => {
 export const updateDocument = async (collectionName: string, id: string, data: any) => {
     if (!db) throw new Error("DB no inicializada");
     const docRef = doc(db, collectionName, id);
-    return updateDoc(docRef, data);
+    return updateDoc(docRef, cleanData(data));
 };
 
 export const deleteDocument = async (collectionName: string, id: string) => {
@@ -139,7 +192,24 @@ export const deleteDocument = async (collectionName: string, id: string) => {
 
 export const findRequestsById = async (idNumber: string) => {
     if (!db) throw new Error("DB no inicializada");
+    await ensurePublicAuth();
     const q = query(collection(db, 'requests'), where('idNumber', '==', idNumber));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(mapDoc);
+};
+
+export const testConnection = async () => {
+    if (!db) return false;
+    try {
+        await ensurePublicAuth();
+        const docRef = await addDoc(collection(db, 'diagnostics'), {
+            test: true,
+            timestamp: new Date()
+        });
+        await deleteDoc(docRef);
+        return true;
+    } catch (e) {
+        console.error("Connection Test Failed:", e);
+        return false;
+    }
 };

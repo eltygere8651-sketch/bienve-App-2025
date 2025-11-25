@@ -8,6 +8,7 @@ import {
     updateDocument, 
     deleteDocument 
 } from '../services/firebaseService';
+import { orderBy, limit } from 'firebase/firestore';
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -25,21 +26,68 @@ export const useAppData = (
     // Cargar datos en tiempo real con Firebase
     useEffect(() => {
         setIsLoading(true);
-        
+        let clientsLoaded = false;
+        let loansLoaded = false;
+        let requestsLoaded = false;
+
+        const checkAllLoaded = () => {
+            if (clientsLoaded && loansLoaded && requestsLoaded) {
+                setIsLoading(false);
+            }
+        };
+
+        // SAFETY TIMEOUT:
+        // Si Firebase tarda más de 3 segundos (por mala conexión o falta de índices),
+        // forzamos la carga para que la app no se quede en negro.
+        const safetyTimeout = setTimeout(() => {
+            if (isLoading) {
+                console.warn("Firebase loading timed out - Forcing app render");
+                setIsLoading(false);
+            }
+        }, 3000);
+
+        // Clientes: Cargar todos
         const unsubClients = subscribeToCollection('clients', (data) => {
             setClients(data as Client[]);
+            clientsLoaded = true;
+            checkAllLoaded();
+        }, [], (err) => {
+            console.error("Error loading clients", err);
+            clientsLoaded = true; // Mark as loaded even on error to unblock UI
+            checkAllLoaded();
         });
 
+        // Préstamos: Cargar todos
         const unsubLoans = subscribeToCollection('loans', (data) => {
             setLoans(data as Loan[]);
+            loansLoaded = true;
+            checkAllLoaded();
+        }, [], (err) => {
+             console.error("Error loading loans", err);
+             loansLoaded = true;
+             checkAllLoaded();
         });
 
-        const unsubRequests = subscribeToCollection('requests', (data) => {
-            setRequests(data as LoanRequest[]);
-            setIsLoading(false);
-        });
+        // OPTIMIZACIÓN: Requests contiene imágenes en Base64.
+        const unsubRequests = subscribeToCollection(
+            'requests', 
+            (data) => {
+                setRequests(data as LoanRequest[]);
+                requestsLoaded = true;
+                checkAllLoaded();
+            },
+            [orderBy('requestDate', 'desc'), limit(50)],
+            (err) => {
+                console.error("Error loading requests (likely missing index)", err);
+                // Si falla por índice, intentar carga sin ordenamiento
+                setError("Nota: Algunas funciones de ordenamiento pueden requerir configuración en Firebase Console.");
+                requestsLoaded = true;
+                checkAllLoaded();
+            }
+        );
 
         return () => {
+            clearTimeout(safetyTimeout);
             unsubClients();
             unsubLoans();
             unsubRequests();

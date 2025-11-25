@@ -1,12 +1,14 @@
 
 import React, { useState } from 'react';
-import { Handshake, LogIn, Key, Loader2, ShieldCheck, UserPlus } from 'lucide-react';
+import { Handshake, LogIn, Key, Loader2, ShieldCheck, UserPlus, Mail } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 
 const Auth: React.FC = () => {
-    const { login, registerAdmin, hasAdminAccount } = useAppContext();
+    const { login, registerAdmin } = useAppContext();
+    const [email, setEmail] = useState('admin@bmcontigo.com');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [isRegistering, setIsRegistering] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -18,16 +20,16 @@ const Auth: React.FC = () => {
         // Simular pequeño retardo para UX
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        if (hasAdminAccount) {
+        if (!isRegistering) {
             // Login mode
-            const success = login(password);
+            const success = await login(email, password);
             if (!success) {
-                setError('Contraseña incorrecta.');
+                setError('Credenciales incorrectas o usuario no encontrado.');
             }
         } else {
             // Register mode
-            if (password.length < 4) {
-                setError('La contraseña debe tener al menos 4 caracteres.');
+            if (password.length < 6) {
+                setError('La contraseña debe tener al menos 6 caracteres.');
                 setIsLoading(false);
                 return;
             }
@@ -36,9 +38,20 @@ const Auth: React.FC = () => {
                 setIsLoading(false);
                 return;
             }
-            registerAdmin(password);
+            const success = await registerAdmin(email, password);
+            if (!success) {
+                // El error ya se muestra en el toast del context, pero podemos poner algo genérico aquí si falla
+                // setError('Error al registrar.');
+            }
         }
         setIsLoading(false);
+    };
+
+    const toggleMode = () => {
+        setIsRegistering(!isRegistering);
+        setError('');
+        setPassword('');
+        setConfirmPassword('');
     };
 
     return (
@@ -48,7 +61,7 @@ const Auth: React.FC = () => {
                     <Handshake className="text-primary-500 h-16 w-16 mx-auto" />
                     <h1 className="text-3xl font-bold text-slate-100 mt-4">B.M Contigo</h1>
                     <p className="text-slate-400 mt-2">
-                        {hasAdminAccount ? 'Acceso Administrativo' : 'Configuración Inicial'}
+                        Gestión de Préstamos y Clientes
                     </p>
                 </div>
                 
@@ -58,19 +71,35 @@ const Auth: React.FC = () => {
 
                     <div className="mb-6 text-center relative z-10">
                         <div className="bg-slate-900/50 w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 border border-slate-600">
-                             {hasAdminAccount ? <ShieldCheck className="text-green-400 h-8 w-8" /> : <UserPlus className="text-primary-400 h-8 w-8" />}
+                             {!isRegistering ? <ShieldCheck className="text-green-400 h-8 w-8" /> : <UserPlus className="text-primary-400 h-8 w-8" />}
                         </div>
                         <h2 className="text-xl font-bold text-slate-100">
-                            {hasAdminAccount ? 'Verificar Identidad' : 'Crear Contraseña Admin'}
+                            {isRegistering ? 'Crear Cuenta de Admin' : 'Acceso Administrativo'}
                         </h2>
                         <p className="text-sm text-slate-400 mt-2">
-                            {hasAdminAccount 
-                                ? 'Introduce tu contraseña para acceder al panel.' 
-                                : 'Establece una contraseña segura para proteger los datos locales.'}
+                            {isRegistering 
+                                ? 'Registra un nuevo usuario para gestionar la aplicación.' 
+                                : 'Introduce tus credenciales para acceder al panel.'}
                         </p>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+                    <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
+                         <div>
+                            <label htmlFor="auth-email" className="block text-sm font-medium text-slate-300">Correo Electrónico</label>
+                            <div className="relative mt-1">
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                <input 
+                                    id="auth-email" 
+                                    type="email" 
+                                    value={email} 
+                                    onChange={(e) => setEmail(e.target.value)} 
+                                    required 
+                                    placeholder="admin@ejemplo.com"
+                                    className="pl-10 w-full px-4 py-3 border border-slate-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-900/50 text-slate-100 placeholder-slate-500 transition-all focus:bg-slate-900" 
+                                />
+                            </div>
+                        </div>
+
                         <div>
                             <label htmlFor="auth-password"className="block text-sm font-medium text-slate-300">Contraseña</label>
                             <div className="relative mt-1">
@@ -87,7 +116,7 @@ const Auth: React.FC = () => {
                             </div>
                         </div>
 
-                        {!hasAdminAccount && (
+                        {isRegistering && (
                             <div className="animate-fade-in">
                                 <label htmlFor="confirm-password"className="block text-sm font-medium text-slate-300">Confirmar Contraseña</label>
                                 <div className="relative mt-1">
@@ -117,13 +146,22 @@ const Auth: React.FC = () => {
                                 disabled={isLoading} 
                                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-primary-400 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
                             >
-                                {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : <><LogIn size={18} className="mr-2"/> {hasAdminAccount ? 'Entrar' : 'Registrar y Entrar'}</>}
+                                {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : <><LogIn size={18} className="mr-2"/> {isRegistering ? 'Registrar y Entrar' : 'Entrar'}</>}
                             </button>
                         </div>
                     </form>
+
+                    <div className="mt-6 text-center">
+                        <button 
+                            onClick={toggleMode}
+                            className="text-sm text-primary-400 hover:text-primary-300 hover:underline transition-colors"
+                        >
+                            {isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+                        </button>
+                    </div>
                 </div>
-                <p className="text-center text-xs text-slate-500 mt-6">
-                    Tus datos se almacenan de forma segura en este dispositivo.<br/>No se comparten con ningún servidor externo.
+                 <p className="text-center text-xs text-slate-500 mt-6">
+                    Tus datos se almacenan de forma segura en Google Cloud (Firebase).
                 </p>
             </div>
         </div>

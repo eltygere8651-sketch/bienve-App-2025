@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { findRequestsByIdNumber } from '../services/dbService';
+import { findRequestsById } from '../services/firebaseService';
 import { Search, Loader2, Info, CheckCircle, XCircle } from 'lucide-react';
 import { RequestStatus } from '../types';
 
@@ -27,7 +27,7 @@ const RequestStatusChecker: React.FC = () => {
             // Simular retardo de red para UX consistente
             await new Promise(resolve => setTimeout(resolve, 600));
 
-            const results = await findRequestsByIdNumber(idNumber.trim());
+            const results = await findRequestsById(idNumber.trim());
             
             if (results && results.length > 0) {
                 // Sort by date desc (latest first)
@@ -50,7 +50,7 @@ const RequestStatusChecker: React.FC = () => {
             return (
                 <div className="text-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary-500" />
-                    <p className="mt-2 text-slate-400">Buscando en la base de datos local...</p>
+                    <p className="mt-2 text-slate-400">Buscando en la nube...</p>
                 </div>
             );
         }

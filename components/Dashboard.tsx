@@ -1,7 +1,8 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, FilterStatus, Client } from '../types';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, FileWarning } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, FileWarning, CloudCheck } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCurrency } from '../services/utils';
@@ -169,7 +170,13 @@ const Dashboard: React.FC = () => {
                         </div>
                     </div>
                 )}
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Panel</h1>
+                <div className="flex justify-between items-center">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Panel</h1>
+                    <div className="flex items-center text-emerald-400 bg-emerald-900/20 px-3 py-1 rounded-full text-xs font-medium border border-emerald-500/20">
+                        <CloudCheck size={16} className="mr-2" />
+                        Conectado a la Nube
+                    </div>
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <StatCard title="Total Prestado" value={formatCurrency(detailedStats.totalLoaned)} icon={<Banknote />} />

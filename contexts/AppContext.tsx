@@ -2,7 +2,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { AppView } from '../types';
 import { DEFAULT_ANNUAL_INTEREST_RATE } from '../config';
-import { initializeFirebase, onAuthStateChanged, signOut, signIn } from '../services/firebaseService';
+import { initializeFirebase, onAuthStateChanged, signOut, signIn, signUp } from '../services/firebaseService';
 import AppNotConfigured from '../components/AppNotConfigured';
 
 type InitializationStatus = 'pending' | 'success' | 'failed' | 'not_configured';
@@ -28,8 +28,8 @@ interface AppContextType {
     setCurrentView: (view: AppView) => void;
     user: any | null; 
     isAuthenticated: boolean;
-    login: (password: string, email?: string) => Promise<boolean>;
-    registerAdmin: (password: string, email?: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<boolean>;
+    registerAdmin: (email: string, password: string) => Promise<boolean>;
     logout: () => void;
     hasAdminAccount: boolean;
     isSidebarOpen: boolean,
@@ -50,7 +50,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [currentView, setCurrentView] = useState<AppView>('welcome');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [hasAdminAccount, setHasAdminAccount] = useState(true); // En Firebase, asumimos que la cuenta se crea en la consola o Auth screen
+    const [hasAdminAccount, setHasAdminAccount] = useState(true); 
     
     const [confirmState, setConfirmState] = useState<ConfirmState>({
         isOpen: false,
@@ -76,6 +76,15 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 return;
             }
 
+            // Safety timeout: If Auth check takes too long (e.g. network hang), force success
+            // so the app renders (likely in unauthenticated state).
+            const safetyTimeout = setTimeout(() => {
+                if (initializationStatus === 'pending') {
+                    console.warn("Auth check timed out, forcing initialization");
+                    setInitializationStatus('success');
+                }
+            }, 3000);
+
             const unsubscribe = onAuthStateChanged((firebaseUser) => {
                 if (firebaseUser) {
                     setUser(firebaseUser);
@@ -86,9 +95,13 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                     setIsAuthenticated(false);
                 }
                 setInitializationStatus('success');
+                clearTimeout(safetyTimeout);
             });
 
-            return () => unsubscribe();
+            return () => {
+                clearTimeout(safetyTimeout);
+                unsubscribe();
+            };
         };
 
         init();
@@ -101,13 +114,23 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     }, [isAuthenticated, currentView]);
 
-    const registerAdmin = useCallback(async (password: string, email: string = 'admin@bmcontigo.com') => {
-        // En esta versión simplificada, usamos el login normal como registro si no existe
-        // Pero para el flujo de UI, redirigimos a login
-        showToast('Por favor, crea el usuario en la consola de Firebase o usa Login.', 'info');
+    const registerAdmin = useCallback(async (email: string, password: string) => {
+        try {
+            await signUp(email, password);
+            showToast('Cuenta creada con éxito.', 'success');
+            return true;
+        } catch (error: any) {
+            console.error("Registration failed", error);
+            if (error.code === 'auth/email-already-in-use') {
+                 showToast('El email ya está registrado. Por favor inicia sesión.', 'error');
+            } else {
+                 showToast('Error al registrar: ' + error.message, 'error');
+            }
+            return false;
+        }
     }, [showToast]);
 
-    const login = useCallback(async (password: string, email: string = 'admin@bmcontigo.com') => {
+    const login = useCallback(async (email: string, password: string) => {
         try {
             await signIn(email, password);
             showToast('Bienvenido, Admin.', 'success');

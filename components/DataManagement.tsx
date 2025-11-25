@@ -1,14 +1,16 @@
 
 import React, { useState } from 'react';
-import { DatabaseBackup, ShieldCheck, FlaskConical, Trash2, Download, Loader2 } from 'lucide-react';
+import { DatabaseBackup, ShieldCheck, FlaskConical, Trash2, Download, Loader2, Activity, CheckCircle, XCircle } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
 import { exportDatabase } from '../services/dbService';
+import { testConnection } from '../services/firebaseService';
 
 const DataManagement: React.FC = () => {
     const { showConfirmModal, showToast } = useAppContext();
     const { handleGenerateTestRequest, handleDeleteTestRequests } = useDataContext();
     const [isExporting, setIsExporting] = useState(false);
+    const [isTesting, setIsTesting] = useState(false);
 
     const handleExportBackup = async () => {
         setIsExporting(true);
@@ -42,6 +44,22 @@ const DataManagement: React.FC = () => {
         }
     };
 
+    const handleTestConnection = async () => {
+        setIsTesting(true);
+        try {
+            const success = await testConnection();
+            if (success) {
+                showToast('¡Conexión a Firebase exitosa! La base de datos responde.', 'success');
+            } else {
+                showToast('Falló la prueba de conexión.', 'error');
+            }
+        } catch (e: any) {
+            showToast('Error de conexión: ' + e.message, 'error');
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
     const onGenerateTestRequest = () => {
         showConfirmModal({
             title: 'Generar Solicitud de Prueba',
@@ -71,17 +89,42 @@ const DataManagement: React.FC = () => {
 
             <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
                 <div className="flex items-start sm:items-center">
-                    <ShieldCheck className="h-10 w-10 text-green-400 mr-4 flex-shrink-0" />
+                    <Activity className="h-10 w-10 text-emerald-400 mr-4 flex-shrink-0" />
                     <div>
-                        <h2 className="text-xl font-bold text-slate-100">Copia de Seguridad Local</h2>
+                        <h2 className="text-xl font-bold text-slate-100">Diagnóstico de Conexión</h2>
                         <p className="text-slate-300 mt-1">
-                            Al ser una aplicación local, es vital que guardes copias de tus datos regularmente.
+                            Verifica que tu aplicación está conectada correctamente a los servidores de Google Firebase.
+                        </p>
+                    </div>
+                </div>
+                <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+                     <p className="text-sm text-slate-400">
+                        Esta prueba intenta escribir y borrar un documento temporal en la nube.
+                    </p>
+                    <button
+                        onClick={handleTestConnection}
+                        disabled={isTesting}
+                        className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-emerald-600 text-white font-bold rounded-lg shadow-md hover:bg-emerald-700 disabled:bg-emerald-400 transition-all hover:scale-105"
+                    >
+                        {isTesting ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Activity size={18} className="mr-2" />}
+                        {isTesting ? 'Probando...' : 'Probar Conexión a la Nube'}
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
+                <div className="flex items-start sm:items-center">
+                    <ShieldCheck className="h-10 w-10 text-primary-400 mr-4 flex-shrink-0" />
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-100">Copia de Seguridad</h2>
+                        <p className="text-slate-300 mt-1">
+                            Descarga una copia local de todos tus datos almacenados en la nube.
                         </p>
                     </div>
                 </div>
                 <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <p className="text-sm text-slate-400">
-                        El archivo descargado contiene toda la base de datos, incluidas las imágenes, en formato JSON.
+                        El archivo descargado contiene toda la base de datos en formato JSON.
                     </p>
                     <button
                         onClick={handleExportBackup}
