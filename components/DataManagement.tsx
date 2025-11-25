@@ -1,11 +1,46 @@
-import React from 'react';
-import { DatabaseBackup, ShieldCheck, FlaskConical, Trash2 } from 'lucide-react';
+
+import React, { useState } from 'react';
+import { DatabaseBackup, ShieldCheck, FlaskConical, Trash2, Download, Loader2 } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
+import { exportDatabase } from '../services/dbService';
 
 const DataManagement: React.FC = () => {
-    const { showConfirmModal } = useAppContext();
+    const { showConfirmModal, showToast } = useAppContext();
     const { handleGenerateTestRequest, handleDeleteTestRequests } = useDataContext();
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleExportBackup = async () => {
+        setIsExporting(true);
+        try {
+            const data = await exportDatabase();
+
+            const backupData = {
+                timestamp: new Date().toISOString(),
+                version: '3.0 (IndexedDB)',
+                app: 'B.M Contigo',
+                data: data
+            };
+
+            const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bm_contigo_local_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast('Copia de seguridad descargada correctamente.', 'success');
+
+        } catch (error: any) {
+            console.error("Backup error:", error);
+            showToast(`Error al crear la copia de seguridad: ${error.message || 'Error desconocido'}`, 'error');
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     const onGenerateTestRequest = () => {
         showConfirmModal({
@@ -35,35 +70,41 @@ const DataManagement: React.FC = () => {
             </div>
 
             <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
-                <div className="flex items-center">
-                    <ShieldCheck className="h-10 w-10 text-green-400 mr-4" />
+                <div className="flex items-start sm:items-center">
+                    <ShieldCheck className="h-10 w-10 text-green-400 mr-4 flex-shrink-0" />
                     <div>
-                        <h2 className="text-xl font-bold text-slate-100">Tus Datos están Seguros en la Nube</h2>
+                        <h2 className="text-xl font-bold text-slate-100">Copia de Seguridad Local</h2>
                         <p className="text-slate-300 mt-1">
-                            Esta aplicación utiliza Supabase para almacenar y gestionar todos los datos de forma segura. Ya no necesitas preocuparte por copias de seguridad manuales.
+                            Al ser una aplicación local, es vital que guardes copias de tus datos regularmente.
                         </p>
                     </div>
                 </div>
-                <div className="mt-4 pt-4 border-t border-slate-700">
+                <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <p className="text-sm text-slate-400">
-                        Las herramientas para exportar colecciones completas de datos (clientes, préstamos, etc.) directamente desde la aplicación estarán disponibles en una futura actualización. Por ahora, puedes acceder y gestionar todos tus datos directamente desde tu panel de control de Supabase.
+                        El archivo descargado contiene toda la base de datos, incluidas las imágenes, en formato JSON.
                     </p>
+                    <button
+                        onClick={handleExportBackup}
+                        disabled={isExporting}
+                        className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 disabled:bg-primary-400 transition-all hover:scale-105"
+                    >
+                        {isExporting ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Download size={18} className="mr-2" />}
+                        {isExporting ? 'Exportando...' : 'Descargar Copia Completa'}
+                    </button>
                 </div>
             </div>
 
             <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
                  <h2 className="text-xl font-bold text-slate-100 mb-2">Herramientas de Depuración</h2>
                  <p className="text-slate-300 mb-4">
-                    Usa estas herramientas si encuentras problemas con los datos.
+                    Usa estas herramientas si encuentras problemas con los datos o para realizar pruebas.
                  </p>
                  <div className="mt-4 pt-4 border-t border-slate-700">
                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
                         <div>
                              <h3 className="font-semibold text-amber-400">Generar Solicitud de Prueba</h3>
                              <p className="text-sm text-slate-400 mt-1">
-                                Si tu lista de solicitudes está vacía, usa este botón para crear una entrada de prueba.
-                                <br />
-                                Si la solicitud de prueba aparece, el problema está en el formulario público. Si no aparece, el problema está en la lectura de datos o en las políticas de seguridad.
+                                Crea una solicitud con datos ficticios para verificar el funcionamiento del sistema.
                              </p>
                         </div>
                         <button

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle, Loader2, ArrowLeft, FilePlus, Upload } from 'lucide-react';
 import { LoanRequest } from '../types';
@@ -7,6 +8,7 @@ import { InputField, SelectField, FileUploadField } from './FormFields';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 import { getContractText } from '../services/pdfService';
 import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER } from '../constants';
+import { compressImage } from '../services/utils';
 
 const initialFormData = {
     fullName: '', idNumber: '', address: '', phone: '', email: '',
@@ -15,7 +17,7 @@ const initialFormData = {
 
 const LoanRequestForm: React.FC = () => {
     const { handleLoanRequestSubmit } = useDataContext();
-    const { showToast, setCurrentView } = useAppContext();
+    const { showToast } = useAppContext();
     
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState(initialFormData);
@@ -43,7 +45,6 @@ const LoanRequestForm: React.FC = () => {
     }, [step, formData.fullName, formData.idNumber, formData.address, formData.loanAmount]);
 
     // Separate useEffect hooks to correctly manage the lifecycle of each object URL.
-    // This prevents one preview from being revoked when the other one changes.
     useEffect(() => {
         return () => {
             if (frontIdPreview) URL.revokeObjectURL(frontIdPreview);
@@ -64,7 +65,6 @@ const LoanRequestForm: React.FC = () => {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'front' | 'back') => {
         const file = e.target.files?.[0];
         if (file) {
-            // The old preview URL is revoked by the useEffect cleanup when the state changes.
             const newPreviewUrl = URL.createObjectURL(file);
             if (type === 'front') {
                 setFrontId(file);
@@ -99,6 +99,10 @@ const LoanRequestForm: React.FC = () => {
         setSignatureError(false);
         setIsSubmitting(true);
         try {
+            // Comprimir imágenes antes de enviar
+            const frontIdBase64 = await compressImage(frontId);
+            const backIdBase64 = await compressImage(backId);
+
             const { contractType, ...restData } = formData;
             const submissionData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'> = {
                 ...restData,
@@ -110,7 +114,8 @@ const LoanRequestForm: React.FC = () => {
                 (submissionData as any).contractType = contractType;
             }
             
-            await handleLoanRequestSubmit(submissionData, { frontId, backId });
+            // Enviamos los strings base64 en lugar de los objetos File
+            await handleLoanRequestSubmit(submissionData, { frontId: frontIdBase64, backId: backIdBase64 });
             setIsSubmitted(true);
             const audio = document.getElementById('success-sound') as HTMLAudioElement;
             if (audio) {
@@ -118,7 +123,6 @@ const LoanRequestForm: React.FC = () => {
             }
         } catch (error) {
             console.error("Error processing form:", error);
-            // Toast is now handled by useAppData hook
         } finally {
             setIsSubmitting(false);
         }
@@ -196,6 +200,7 @@ const LoanRequestForm: React.FC = () => {
                     </div>
                     <div>
                         <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Documento de Identidad</h2>
+                        <p className="text-sm text-slate-400 mb-4">Las imágenes se comprimirán automáticamente para facilitar su envío.</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <FileUploadField label="Foto del Anverso" id="front-id-upload" onChange={(e) => handleFileChange(e, 'front')} previewUrl={frontIdPreview || DNI_FRONT_PLACEHOLDER} fileName={frontId?.name} />
                             <FileUploadField label="Foto del Reverso" id="back-id-upload" onChange={(e) => handleFileChange(e, 'back')} previewUrl={backIdPreview || DNI_BACK_PLACEHOLDER} fileName={backId?.name} />

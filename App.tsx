@@ -10,7 +10,7 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Wrench, AlertTriangle, ShieldCheck, Menu, X, Search } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Search } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import ReceiptGenerator from './components/ReceiptGenerator';
@@ -19,7 +19,6 @@ import DataManagement from './components/DataManagement';
 import NewClientForm from './components/NewClientForm';
 import InstallNavItem from './components/InstallNavItem';
 import RequestStatusChecker from './components/RequestStatusChecker';
-import AppNotConfigured from './components/AppNotConfigured';
 
 
 const App: React.FC = () => {
@@ -32,13 +31,13 @@ const App: React.FC = () => {
         setIsSidebarOpen,
         showToast,
         hideConfirmModal,
-        user,
         isAuthenticated,
         logout,
         initializationStatus,
-        isConfigReady,
     } = useAppContext();
     
+    // El hook useDataContext ahora maneja internamente la carga desde Firebase
+    // Si isConfigReady es false, AppContext ya renderizó AppNotConfigured
     const { requests, isLoading: dataIsLoading, error } = useDataContext();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
@@ -54,17 +53,9 @@ const App: React.FC = () => {
         return (
             <div className="flex flex-col justify-center items-center h-screen bg-slate-900">
                 <Loader2 className="h-16 w-16 animate-spin text-primary-500" />
-                <p className="mt-4 text-slate-400">Inicializando aplicación...</p>
+                <p className="mt-4 text-slate-400">Conectando con la nube...</p>
             </div>
         );
-    }
-    
-    if (initializationStatus === 'success' && !isConfigReady) {
-        // Si la configuración no está lista después de la inicialización, significa que las
-        // credenciales en supabaseConfig.ts no son válidas. Muestra la pantalla
-        // "no configurado" para informar al propietario de la aplicación.
-        // Esto evita que los usuarios finales vean una pantalla de configuración técnica.
-        return <AppNotConfigured />;
     }
     
     const renderContent = () => {
@@ -79,7 +70,7 @@ const App: React.FC = () => {
         if (error) {
             return (
                 <div className="bg-red-900/30 border-l-4 border-red-500 text-red-300 p-6 rounded-lg shadow-md">
-                    <h3 className="font-bold text-lg text-red-200">Error de Carga</h3>
+                    <h3 className="font-bold text-lg text-red-200">Error de Conexión</h3>
                     <p className="mt-2">{error}</p>
                 </div>
             );
@@ -164,7 +155,7 @@ const App: React.FC = () => {
                     >
                         <LogIn />
                         <span className={`ml-4 transition-opacity duration-300 ${(isSidebarOpen || isMobileMenuOpen) ? 'opacity-100' : 'opacity-0 h-0 w-0'}`}>
-                            Acceder
+                            Admin
                         </span>
                     </button>
                 )}

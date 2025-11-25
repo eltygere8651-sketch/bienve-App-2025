@@ -1,11 +1,12 @@
+
 import React, { useState } from 'react';
-import { supabase } from '../services/supabaseService';
+import { findRequestsByIdNumber } from '../services/dbService';
 import { Search, Loader2, Info, CheckCircle, XCircle } from 'lucide-react';
 import { RequestStatus } from '../types';
 
 interface StatusResult {
     status: RequestStatus;
-    request_date: string;
+    requestDate: string;
 }
 
 const RequestStatusChecker: React.FC = () => {
@@ -23,22 +24,22 @@ const RequestStatusChecker: React.FC = () => {
         setResult(null);
 
         try {
-            if (!supabase) throw new Error("Servicio de Supabase no disponible.");
+            // Simular retardo de red para UX consistente
+            await new Promise(resolve => setTimeout(resolve, 600));
 
-            const { data, error: rpcError } = await supabase
-                .rpc('get_request_status_by_id_number', {
-                    p_id_number: idNumber.trim()
-                });
-
-            if (rpcError) {
-                throw rpcError;
-            }
+            const results = await findRequestsByIdNumber(idNumber.trim());
             
-            setResult(data && data.length > 0 ? data[0] : 'not_found');
+            if (results && results.length > 0) {
+                // Sort by date desc (latest first)
+                results.sort((a: any, b: any) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
+                setResult(results[0] as StatusResult);
+            } else {
+                setResult('not_found');
+            }
 
         } catch (err: any) {
             console.error("Error checking request status:", err);
-            setError("No se pudo realizar la consulta. Inténtalo de nuevo más tarde.");
+            setError("No se pudo realizar la consulta. Inténtalo de nuevo.");
         } finally {
             setIsLoading(false);
         }
@@ -49,7 +50,7 @@ const RequestStatusChecker: React.FC = () => {
             return (
                 <div className="text-center p-4">
                     <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary-500" />
-                    <p className="mt-2 text-slate-400">Buscando...</p>
+                    <p className="mt-2 text-slate-400">Buscando en la base de datos local...</p>
                 </div>
             );
         }
@@ -79,7 +80,7 @@ const RequestStatusChecker: React.FC = () => {
                     Solicitud Encontrada
                 </h3>
                 <div className="space-y-1">
-                    <p><strong>Fecha de Solicitud:</strong> {new Date(result.request_date).toLocaleDateString('es-ES')}</p>
+                    <p><strong>Fecha de Solicitud:</strong> {new Date(result.requestDate).toLocaleDateString('es-ES')}</p>
                     <p><strong>Estado Actual:</strong> <span className="font-bold px-2 py-1 bg-slate-700 text-slate-100 rounded-md">{result.status}</span></p>
                 </div>
             </div>

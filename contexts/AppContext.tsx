@@ -1,17 +1,11 @@
 
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { AppView } from '../types';
-import { User } from '@supabase/supabase-js';
-import { 
-    isSupabaseConfigured, 
-    onAuthStateChanged, 
-    signOut,
-    initializeSupabaseClient
-} from '../services/supabaseService';
 import { DEFAULT_ANNUAL_INTEREST_RATE } from '../config';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../services/supabaseConfig';
+import { initializeFirebase, onAuthStateChanged, signOut, signIn } from '../services/firebaseService';
+import AppNotConfigured from '../components/AppNotConfigured';
 
-type InitializationStatus = 'pending' | 'success' | 'failed';
+type InitializationStatus = 'pending' | 'success' | 'failed' | 'not_configured';
 type ConfirmModalType = 'info' | 'warning';
 
 interface ToastMessage {
@@ -32,9 +26,12 @@ interface AppContextType {
     showToast: (message: string, type: 'success' | 'error' | 'info') => void;
     currentView: AppView;
     setCurrentView: (view: AppView) => void;
-    user: User | null;
+    user: any | null; 
     isAuthenticated: boolean;
+    login: (password: string, email?: string) => Promise<boolean>;
+    registerAdmin: (password: string, email?: string) => Promise<void>;
     logout: () => void;
+    hasAdminAccount: boolean;
     isSidebarOpen: boolean,
     setIsSidebarOpen: (isOpen: boolean) => void;
     confirmState: ConfirmState;
@@ -42,7 +39,6 @@ interface AppContextType {
     hideConfirmModal: () => void;
     isConfigReady: boolean;
     initializationStatus: InitializationStatus;
-    supabaseConfig: { url: string; anonKey: string } | null;
     annualInterestRate: number;
 }
 
@@ -50,10 +46,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [toast, setToast] = useState<ToastMessage>({ message: '', type: 'info' });
-    const [user, setUser] = useState<User | null>(null);
+    const [user, setUser] = useState<any | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
     const [currentView, setCurrentView] = useState<AppView>('welcome');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [hasAdminAccount, setHasAdminAccount] = useState(true); // En Firebase, asumimos que la cuenta se crea en la consola o Auth screen
+    
     const [confirmState, setConfirmState] = useState<ConfirmState>({
         isOpen: false,
         title: '',
@@ -61,8 +59,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         onConfirm: () => {},
         type: 'warning',
     });
-    const [supabaseConfig, setSupabaseConfigState] = useState<{ url: string; anonKey: string } | null>(null);
-    const [isConfigReady, setIsConfigReady] = useState(false);
+    
     const [initializationStatus, setInitializationStatus] = useState<InitializationStatus>('pending');
     const annualInterestRate = DEFAULT_ANNUAL_INTEREST_RATE;
     
@@ -70,39 +67,32 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setToast({ message, type });
     }, []);
 
+    // Inicialización de Firebase
     useEffect(() => {
-        const configFromFile = { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY };
-
-        if (isSupabaseConfigured(configFromFile)) {
-            // Intenta inicializar Supabase solo si la configuración del archivo es válida.
-            if (initializeSupabaseClient(configFromFile.url, configFromFile.anonKey)) {
-                setSupabaseConfigState(configFromFile);
-                setIsConfigReady(true);
+        const init = async () => {
+            const configured = initializeFirebase();
+            if (!configured) {
+                setInitializationStatus('not_configured');
+                return;
             }
-        }
-        // Si la configuración no es válida, isConfigReady seguirá siendo false,
-        // y App.tsx mostrará el mensaje de "Aplicación No Configurada".
-        setInitializationStatus('success');
+
+            const unsubscribe = onAuthStateChanged((firebaseUser) => {
+                if (firebaseUser) {
+                    setUser(firebaseUser);
+                    setIsAuthenticated(true);
+                    setHasAdminAccount(true);
+                } else {
+                    setUser(null);
+                    setIsAuthenticated(false);
+                }
+                setInitializationStatus('success');
+            });
+
+            return () => unsubscribe();
+        };
+
+        init();
     }, []);
-
-    useEffect(() => {
-        if (!isConfigReady) return;
-
-        const { data: { subscription } } = onAuthStateChanged((_event, session) => {
-            const currentUser = session?.user ?? null;
-            setUser(currentUser);
-            setIsAuthenticated(!!currentUser);
-            if (currentUser) {
-                const nonAdminViews: AppView[] = ['auth', 'welcome', 'loanRequest', 'requestStatus'];
-                setCurrentView(v => nonAdminViews.includes(v) ? 'dashboard' : v);
-            } else {
-                const publicViews: AppView[] = ['welcome', 'loanRequest', 'auth', 'requestStatus'];
-                setCurrentView(v => publicViews.includes(v) ? v : 'welcome');
-            }
-        });
-
-        return () => subscription.unsubscribe();
-    }, [isConfigReady]);
     
     useEffect(() => {
         const adminOnlyViews: AppView[] = ['clients', 'receiptGenerator', 'settings', 'dataManagement', 'newClient', 'dashboard', 'requests'];
@@ -111,14 +101,30 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     }, [isAuthenticated, currentView]);
 
-    const logout = useCallback(async () => {
+    const registerAdmin = useCallback(async (password: string, email: string = 'admin@bmcontigo.com') => {
+        // En esta versión simplificada, usamos el login normal como registro si no existe
+        // Pero para el flujo de UI, redirigimos a login
+        showToast('Por favor, crea el usuario en la consola de Firebase o usa Login.', 'info');
+    }, [showToast]);
+
+    const login = useCallback(async (password: string, email: string = 'admin@bmcontigo.com') => {
         try {
-            await signOut();
-            showToast('Sesión cerrada.', 'info');
-        } catch (error) {
-            console.error("Error signing out:", error);
-            showToast('Error al cerrar sesión.', 'error');
+            await signIn(email, password);
+            showToast('Bienvenido, Admin.', 'success');
+            setCurrentView('dashboard');
+            return true;
+        } catch (error: any) {
+            console.error("Login failed", error);
+            return false;
         }
+    }, [showToast]);
+
+    const logout = useCallback(async () => {
+        await signOut();
+        setUser(null);
+        setIsAuthenticated(false);
+        showToast('Sesión cerrada.', 'info');
+        setCurrentView('welcome');
     }, [showToast]);
 
     const showConfirmModal = useCallback((options: Omit<ConfirmState, 'isOpen' | 'type'> & { type?: ConfirmModalType }) => {
@@ -133,8 +139,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setConfirmState(prev => ({ ...prev, isOpen: false }));
     }, []);
 
-
-
     const value = useMemo(() => ({ 
         toast,
         showToast,
@@ -142,21 +146,27 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setCurrentView,
         user,
         isAuthenticated,
+        login,
+        registerAdmin,
         logout,
+        hasAdminAccount,
         isSidebarOpen,
         setIsSidebarOpen,
         confirmState,
         showConfirmModal,
         hideConfirmModal,
-        isConfigReady,
+        isConfigReady: initializationStatus !== 'not_configured',
         initializationStatus,
-        supabaseConfig,
         annualInterestRate,
     }), [
-        toast, showToast, currentView, user, isAuthenticated, logout,
+        toast, showToast, currentView, user, isAuthenticated, login, registerAdmin, logout, hasAdminAccount,
         isSidebarOpen, confirmState, showConfirmModal, hideConfirmModal,
-        isConfigReady, initializationStatus, supabaseConfig, annualInterestRate
+        initializationStatus, annualInterestRate
     ]);
+
+    if (initializationStatus === 'not_configured') {
+        return <AppNotConfigured />;
+    }
 
     return (
         <AppContext.Provider value={value}>
