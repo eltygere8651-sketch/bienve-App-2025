@@ -1,106 +1,139 @@
 
 import React, { useState, useMemo } from 'react';
 import { useDataContext } from '../contexts/DataContext';
-import { FileText, Clock, Info, Inbox, RefreshCw, Layers, LayoutList } from 'lucide-react';
+import { FileText, Clock, Info, Inbox, RefreshCw, Layers, LayoutList, CheckCircle, XCircle, List, CloudFog, Loader2 } from 'lucide-react';
 import RequestCard from './RequestCard';
 import { RequestStatus } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 
 const RequestList: React.FC = () => {
-    const { requests } = useDataContext();
+    const { requests, reloadRequests } = useDataContext();
     const { setCurrentView } = useAppContext();
-    const [filter, setFilter] = useState<RequestStatus>(RequestStatus.PENDING);
+    const [filter, setFilter] = useState<RequestStatus | 'ALL'>('ALL'); // Default to ALL to ensure visibility
     const [expandAll, setExpandAll] = useState(false);
+    const [isManualLoading, setIsManualLoading] = useState(false);
 
     const counts = useMemo(() => {
-        return requests.reduce((acc, req) => {
+        const c = requests.reduce((acc, req) => {
             acc[req.status] = (acc[req.status] || 0) + 1;
             return acc;
-        }, {} as Record<RequestStatus, number>);
+        }, {} as Record<string, number>);
+        c['ALL'] = requests.length;
+        return c;
     }, [requests]);
 
     const filteredRequests = useMemo(() => {
-        const sorted = [...requests].sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
+        // Sort client-side here since we removed orderBy from Firestore
+        const sorted = [...requests].sort((a, b) => {
+             // Handle potentially missing dates safely
+             const dateA = a.requestDate ? new Date(a.requestDate).getTime() : 0;
+             const dateB = b.requestDate ? new Date(b.requestDate).getTime() : 0;
+             return dateB - dateA;
+        });
+
+        if (filter === 'ALL') return sorted;
         return sorted.filter(req => req.status === filter);
     }, [requests, filter]);
 
-    const FilterButton: React.FC<{ status: RequestStatus; icon: React.ReactNode; label: string }> = ({ status, icon, label }) => {
+    const FilterTab: React.FC<{ status: RequestStatus | 'ALL'; label: string }> = ({ status, label }) => {
         const isActive = filter === status;
         const count = counts[status] || 0;
         return (
             <button
                 onClick={() => setFilter(status)}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all border ${
+                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all rounded-full whitespace-nowrap ${
                     isActive 
-                        ? 'bg-primary-600 text-white border-primary-500 shadow-lg shadow-primary-900/30' 
-                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200'
+                        ? 'bg-primary-600 text-white shadow-md' 
+                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'
                 }`}
             >
-                {icon}
                 <span>{label}</span>
                 {count > 0 && (
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-slate-900 text-slate-500'}`}>{count}</span>
+                    <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-400 border border-slate-600'}`}>
+                        {count}
+                    </span>
                 )}
             </button>
         );
     };
 
-    const handleForceRefresh = () => {
-        window.location.reload();
+    const handleForceRefresh = async () => {
+        setIsManualLoading(true);
+        await reloadRequests();
+        setIsManualLoading(false);
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Buzón de Solicitudes</h1>
-                    <p className="text-slate-400 text-sm mt-1">Gestiona las peticiones de préstamo entrantes.</p>
+        <div className="space-y-6 max-w-6xl mx-auto">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-700 pb-4">
+                <div className="flex items-center gap-3">
+                    <div className="bg-primary-500/10 p-2 rounded-lg">
+                        <Inbox className="h-6 w-6 text-primary-400" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+                            Solicitudes
+                            <button 
+                                onClick={handleForceRefresh}
+                                className="p-1.5 rounded-full bg-slate-800 text-slate-400 hover:text-primary-400 hover:bg-slate-700 transition-colors border border-slate-700"
+                                title="Sincronizar ahora"
+                                disabled={isManualLoading}
+                            >
+                                <RefreshCw size={14} className={isManualLoading ? "animate-spin" : ""} />
+                            </button>
+                        </h1>
+                        <p className="text-slate-400 text-xs">
+                            {requests.length} en total &bull; Sincronización en la nube activa
+                        </p>
+                    </div>
                 </div>
-                <div className="flex gap-2">
-                     <button
-                        onClick={() => setExpandAll(!expandAll)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors border ${expandAll ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
-                        title={expandAll ? "Contraer todas" : "Expandir todas"}
-                    >
-                        {expandAll ? <LayoutList size={18} /> : <Layers size={18} />}
-                        <span className="hidden sm:inline">{expandAll ? 'Contraer Todo' : 'Expandir Todo'}</span>
-                    </button>
-                    <button 
-                        onClick={handleForceRefresh}
-                        className="flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-                        title="Forzar actualización de datos"
-                    >
-                        <RefreshCw size={18} />
-                    </button>
-                </div>
+                
+                <button
+                    onClick={() => setExpandAll(!expandAll)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${expandAll ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                >
+                    {expandAll ? <LayoutList size={16} /> : <Layers size={16} />}
+                    <span>{expandAll ? 'Contraer' : 'Expandir'} Detalles</span>
+                </button>
             </div>
             
-            <div className="flex flex-wrap gap-2 pb-2 border-b border-slate-700/50">
-                <FilterButton status={RequestStatus.PENDING} icon={<Clock size={16} />} label="Pendientes" />
-                <FilterButton status={RequestStatus.UNDER_REVIEW} icon={<Info size={16} />} label="En Estudio" />
+            <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                <FilterTab status="ALL" label="Todas" />
+                <FilterTab status={RequestStatus.PENDING} label="Pendientes" />
+                <FilterTab status={RequestStatus.UNDER_REVIEW} label="En Estudio" />
+                <FilterTab status={RequestStatus.APPROVED} label="Aprobadas" />
+                <FilterTab status={RequestStatus.DENIED} label="Rechazadas" />
             </div>
 
             {requests.length === 0 ? (
-                <div className="text-center py-16 bg-slate-800/50 rounded-xl border border-dashed border-slate-700 animate-fade-in">
-                    <div className="bg-slate-800 inline-flex p-4 rounded-full mb-4">
-                        <FileText size={40} className="text-slate-500" />
+                <div className="text-center py-16 bg-slate-800/30 rounded-xl border border-dashed border-slate-700 animate-fade-in flex flex-col items-center">
+                    <div className="bg-slate-800 p-4 rounded-full mb-4 ring-1 ring-slate-700">
+                        <CloudFog size={40} className="text-slate-500" />
                     </div>
-                    <h2 className="text-xl font-bold text-slate-200">No se ven solicitudes</h2>
-                    <p className="mt-2 text-slate-400 max-w-md mx-auto mb-6">
-                        Si tus clientes han enviado datos y no los ves aquí, es probable que necesites configurar los permisos de lectura en la consola.
+                    <h2 className="text-xl font-bold text-slate-200">Buzón Vacío</h2>
+                    <p className="mt-2 text-slate-400 max-w-sm text-sm">
+                        No hemos recibido datos automáticos. Si crees que esto es un error, fuerza una búsqueda manual.
                     </p>
                     <button 
-                        onClick={() => setCurrentView('dataManagement')}
-                        className="px-6 py-2 bg-amber-600/20 text-amber-400 border border-amber-600/50 rounded-lg hover:bg-amber-600/30 font-semibold transition-colors"
+                        onClick={handleForceRefresh}
+                        disabled={isManualLoading}
+                        className="mt-6 px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-bold transition-all shadow-lg flex items-center gap-2 text-sm"
                     >
-                        Ir a Configuración de Permisos
+                        {isManualLoading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                        Buscar Manualmente
+                    </button>
+                    <button 
+                        onClick={() => setCurrentView('dataManagement')}
+                        className="mt-4 text-xs text-slate-500 hover:text-primary-400 underline"
+                    >
+                        Revisar permisos de base de datos
                     </button>
                 </div>
             ) : filteredRequests.length === 0 ? (
-                 <div className="text-center py-16 bg-slate-800/50 rounded-xl border border-dashed border-slate-700">
-                    <Inbox size={48} className="mx-auto text-slate-600" />
-                    <h2 className="mt-4 text-lg font-semibold text-slate-300">Bandeja Vacía</h2>
-                    <p className="mt-1 text-slate-400">No hay solicitudes con el estado seleccionado.</p>
+                 <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-dashed border-slate-700">
+                    <Inbox size={40} className="mx-auto text-slate-600" />
+                    <h2 className="mt-4 text-base font-semibold text-slate-300">Sin resultados en esta categoría</h2>
+                    <p className="mt-1 text-xs text-slate-500">Intenta cambiar el filtro a "Todas".</p>
                 </div>
             ) : (
                 <div className="space-y-4">

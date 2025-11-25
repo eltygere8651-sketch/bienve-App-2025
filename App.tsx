@@ -10,7 +10,6 @@ import NavItem from './components/NavItem';
 import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Search } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
-import InstallNavItem from './components/InstallNavItem';
 import RequestStatusChecker from './components/RequestStatusChecker';
 import LoanRequestForm from './components/LoanRequestForm';
 
@@ -117,11 +116,10 @@ const App: React.FC = () => {
                 <ul>
                    {isAuthenticated ? (
                         <>
-                            {/* Admin Order */}
+                            {/* Admin Order - Simplified */}
                             <NavItem icon={<LayoutDashboard />} label="Panel" view="dashboard" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                            <NavItem icon={<GitPullRequest />} label="Nuevas Solicitudes" view="requests" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} badge={requests.length} />
+                            <NavItem icon={<GitPullRequest />} label="Solicitudes" view="requests" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} badge={requests.length} />
                             <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                            <NavItem icon={<FileText />} label="Nueva Solicitud/Cliente" view="newClient" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         </>
                     ) : (
                         <>
@@ -131,16 +129,15 @@ const App: React.FC = () => {
                             <NavItem icon={<Search />} label="Consultar Solicitud" view="requestStatus" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         </>
                     )}
-                    <InstallNavItem isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                 </ul>
                  {isAuthenticated && (isSidebarOpen || isMobileMenuOpen) && (
                     <>
                         <div className="mt-4 pt-4 border-t border-slate-700">
-                            <h3 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Herramientas</h3>
-                             <ul className="p-2">
-                                <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                            <h3 className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Herramientas</h3>
+                             <ul className="space-y-1">
                                 <NavItem icon={<ReceiptText />} label="Generar Recibo" view="receiptGenerator" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                                 <NavItem icon={<DatabaseBackup />} label="Gestión de Datos" view="dataManagement" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                                <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                             </ul>
                         </div>
                     </>

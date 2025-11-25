@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useMemo } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { useAppContext } from './AppContext';
@@ -17,7 +18,7 @@ interface DataContextType {
     isLoading: boolean;
     error: string | null;
     clientLoanData: ClientLoanData[];
-    handleLoanRequestSubmit: (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: File, backId: File }) => Promise<void>;
+    handleLoanRequestSubmit: (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: string, backId: string }) => Promise<void>;
     handleApproveRequest: (request: LoanRequest, loanAmount: number, loanTerm: number) => Promise<void>;
     handleRejectRequest: (request: LoanRequest) => Promise<void>;
     handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
@@ -27,6 +28,7 @@ interface DataContextType {
     handleDeleteTestRequests: () => Promise<void>;
     handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
     handleDeleteLoan: (loanId: string, clientName: string) => Promise<void>;
+    reloadRequests: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);

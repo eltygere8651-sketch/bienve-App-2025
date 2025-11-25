@@ -6,8 +6,10 @@ import {
     subscribeToCollection, 
     addDocument, 
     updateDocument, 
-    deleteDocument 
+    deleteDocument,
+    getCollection // Importamos getCollection para la carga manual
 } from '../services/firebaseService';
+// Importamos orderBy y limit, pero los usaremos con precaución
 import { orderBy, limit } from 'firebase/firestore';
 import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER } from '../constants';
 
@@ -37,9 +39,7 @@ export const useAppData = (
             }
         };
 
-        // SAFETY TIMEOUT:
-        // Si Firebase tarda más de 3 segundos (por mala conexión o falta de índices),
-        // forzamos la carga para que la app no se quede en negro.
+        // SAFETY TIMEOUT
         const safetyTimeout = setTimeout(() => {
             if (isLoading) {
                 console.warn("Firebase loading timed out - Forcing app render");
@@ -47,18 +47,18 @@ export const useAppData = (
             }
         }, 3000);
 
-        // Clientes: Cargar todos
+        // Clientes
         const unsubClients = subscribeToCollection('clients', (data) => {
             setClients(data as Client[]);
             clientsLoaded = true;
             checkAllLoaded();
         }, [], (err) => {
             console.error("Error loading clients", err);
-            clientsLoaded = true; // Mark as loaded even on error to unblock UI
+            clientsLoaded = true;
             checkAllLoaded();
         });
 
-        // Préstamos: Cargar todos
+        // Préstamos
         const unsubLoans = subscribeToCollection('loans', (data) => {
             setLoans(data as Loan[]);
             loansLoaded = true;
@@ -69,50 +69,33 @@ export const useAppData = (
              checkAllLoaded();
         });
 
-        // OPTIMIZACIÓN: Requests con FALLBACK
-        // Intentamos cargar ordenado por fecha. Si falla (falta índice), cargamos sin ordenar.
-        let unsubRequests: () => void = () => {};
-        
-        const loadRequestsSafe = () => {
-            unsubRequests = subscribeToCollection(
-                'requests', 
-                (data) => {
-                    setRequests(data as LoanRequest[]);
-                    requestsLoaded = true;
-                    checkAllLoaded();
-                },
-                [orderBy('requestDate', 'desc'), limit(50)],
-                (err) => {
-                    console.warn("Ordered query failed, trying fallback...", err);
-                    // FALLBACK: Suscribirse SIN ordenamiento
-                    unsubRequests(); // Cancelar la fallida
-                    unsubRequests = subscribeToCollection(
-                        'requests',
-                        (data) => {
-                            setRequests(data as LoanRequest[]);
-                            requestsLoaded = true;
-                            checkAllLoaded();
-                            // Mostrar advertencia suave
-                            if (user) setError("Modo compatibilidad: Ordenamiento limitado.");
-                        },
-                        [limit(50)], // Solo límite, sin orderBy
-                        (err2) => {
-                            console.error("Fallback query also failed", err2);
-                            requestsLoaded = true;
-                            checkAllLoaded();
-                        }
-                    );
-                }
-            );
-        };
-
-        loadRequestsSafe();
+        // SOLICITUDES - ESTRATEGIA "SIN FILTROS" (Maximum Compatibility)
+        // Eliminamos orderBy y limit de la suscripción automática para evitar 
+        // cualquier error de índice o permisos complejos.
+        const unsubRequests = subscribeToCollection(
+            'requests', 
+            (data) => {
+                const reqs = (data || []) as LoanRequest[];
+                console.log("Solicitudes descargadas (Realtime):", reqs.length);
+                setRequests(reqs);
+                requestsLoaded = true;
+                checkAllLoaded();
+                setError(null);
+            },
+            [], // Sin restricciones (Empty Array)
+            (err) => {
+                console.error("Error loading requests:", err);
+                // No mostramos error bloqueante, permitimos reintentar manual
+                requestsLoaded = true;
+                checkAllLoaded();
+            }
+        );
 
         return () => {
             clearTimeout(safetyTimeout);
             unsubClients();
             unsubLoans();
-            if (unsubRequests) unsubRequests();
+            unsubRequests();
         };
     }, []);
 
@@ -135,10 +118,26 @@ export const useAppData = (
         prevRequestsCountRef.current = requests.length;
     }, [requests.length, isLoading, showToast]);
 
+    // Función para forzar la recarga manual (Bypassing listener)
+    const reloadRequests = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            console.log("Forzando recarga manual de solicitudes...");
+            const data = await getCollection('requests');
+            console.log("Datos manuales recibidos:", data.length);
+            setRequests(data as LoanRequest[]);
+            showToast(`Sincronizado: ${data.length} solicitudes encontradas.`, 'success');
+        } catch (err: any) {
+            console.error("Error en recarga manual:", err);
+            setError(`Error manual: ${err.message}`);
+            showToast("Error al buscar en la nube. Verifica tu conexión.", "error");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [showToast]);
 
     const handleLoanRequestSubmit = useCallback(async (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: string, backId: string }) => {
         try {
-            // Nota: Aquí 'files' ya contiene las imágenes en Base64 comprimidas
             const newRequest = {
                 ...requestData,
                 frontIdUrl: files.frontId, 
@@ -187,7 +186,7 @@ export const useAppData = (
                 totalRepayment,
                 paymentsMade: 0,
                 signature: request.signature,
-                contractPdfUrl: '' // No guardamos PDF en storage
+                contractPdfUrl: ''
             };
             await addDocument('loans', newLoan);
 
@@ -310,7 +309,7 @@ export const useAppData = (
             };
             
             await addDocument('requests', testRequest);
-            showToast('Solicitud de prueba generada en Firebase.', 'success');
+            showToast('Solicitud de prueba generada. Pulsa "Recargar" si no aparece.', 'success');
         } catch (err: any) {
             console.error("Error generating test request:", err);
             showToast(`Error al generar prueba: ${err.message}`, 'error');
@@ -319,7 +318,6 @@ export const useAppData = (
 
     const handleDeleteTestRequests = useCallback(async () => {
          try {
-            // Find requests locally to avoid complex queries, then delete by ID
             const testRequests = requests.filter(r => r.fullName.startsWith('Cliente de Prueba'));
             
             if (testRequests.length === 0) {
@@ -327,7 +325,6 @@ export const useAppData = (
                 return;
             }
 
-            // Execute deletions in parallel for speed
             const deletePromises = testRequests.map(req => deleteDocument('requests', req.id));
             await Promise.all(deletePromises);
 
@@ -370,5 +367,6 @@ export const useAppData = (
         handleDeleteTestRequests,
         handleUpdateLoan,
         handleDeleteLoan,
+        reloadRequests // Exponemos la función de recarga manual
     };
 };

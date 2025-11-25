@@ -1,3 +1,4 @@
+
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { Loan, Client, LoanRequest } from '../types';
@@ -12,29 +13,60 @@ interface ContractData {
     loanAmount: number;
 }
 
-export const DEFAULT_CONTRACT_TEMPLATE = `CONTRATO DE PRÉSTAMO DE DINERO
+export const DEFAULT_CONTRACT_TEMPLATE = `CONTRATO DE PRÉSTAMO DE DINERO CON INTERESES ENTRE PARTICULARES
 
-En la fecha de \${today}, entre:
+En Madrid, a \${today}.
 
-PRESTAMISTA: Bienvenido Neftali feliz tolentino con DNI 18476199T, en adelante "EL PRESTAMISTA".
+REUNIDOS
 
-PRESTATARIO:
-Nombre: \${fullName}
-DNI/NIE: \${idNumber}
-Dirección: \${address}
-en adelante, "EL PRESTATARIO".
+De una parte, como PRESTAMISTA (Acreedor):
+D. BIENVENIDO NEFTALI FELIZ TOLENTINO, mayor de edad, con D.N.I. nº 18476199T, con domicilio a efectos de este contrato en Madrid.
 
-CLÁUSULAS:
+Y de otra parte, como PRESTATARIO (Deudor):
+D./Dña. \${fullName}, mayor de edad, con DNI/NIE \${idNumber} y domicilio a efectos de notificaciones en \${address}.
 
-1. OBJETO DEL CONTRATO: EL PRESTAMISTA entrega a EL PRESTATARIO la suma de \${loanAmount} EUROS (€), en calidad de préstamo.
+Ambas partes intervienen en su propio nombre y derecho, reconociéndose mutuamente la capacidad legal necesaria para formalizar el presente CONTRATO DE PRÉSTAMO, y a tal efecto,
 
-2. INTERESES: El préstamo devengará un interés fijo del \${interestRate}% mensual capitalizable.
+EXPONEN
 
-3. PLAZO Y DEVOLUCIÓN: EL PRESTATARIO se compromete a devolver el capital más los intereses generados en cuotas mensuales, según el plan de pagos que se establecerá al momento de la aprobación final del préstamo.
+I. Que el PRESTAMISTA entrega en este acto al PRESTATARIO la cantidad de \${loanAmount} EUROS (€), mediante transferencia bancaria o efectivo.
 
-4. INCUMPLIMIENTO: La falta de pago de una de las cuotas en la fecha pactada dará lugar a la aplicación de intereses de demora y facultará a EL PRESTAMISTA a exigir la devolución total del saldo pendiente.
+II. Que el PRESTATARIO reconoce haber recibido dicha cantidad a su entera satisfacción, obligándose a su devolución junto con los intereses pactados, con sujeción a las siguientes:
 
-5. ACEPTACIÓN: EL PRESTATARIO declara haber leído y comprendido todas las cláusulas del presente contrato, y lo acepta de plena conformidad, comprometiéndose a su estricto cumplimiento. La aceptación digital de este documento tiene la misma validez que una firma manuscrita.
+CLÁUSULAS
+
+PRIMERA. OBJETO DEL CONTRATO.
+El Prestamista presta al Prestatario la cantidad de \${loanAmount} €, que ingresan en este acto en el patrimonio del deudor. Este documento sirve como eficaz carta de pago y reconocimiento de deuda por el importe mencionado.
+
+SEGUNDA. INTERESES REMUNERATORIOS.
+El capital prestado devengará un interés fijo pactado del \${interestRate}% MENSUAL. El Prestatario acepta expresamente este tipo de interés, declarando conocer y asumir el coste financiero de la operación, el cual no considera desproporcionado dadas las características del préstamo y el riesgo asumido.
+
+TERCERA. FORMA DE DEVOLUCIÓN (AMORTIZACIÓN).
+El Prestatario devolverá el capital más los intereses mediante el pago de cuotas mensuales consecutivas. El pago se realizará preferiblemente mediante transferencia bancaria a la cuenta que designe el Prestamista o en efectivo contra recibo. El impago de cualquier cuota generará mora automática.
+
+CUARTA. VENCIMIENTO ANTICIPADO.
+De conformidad con lo establecido en la legislación vigente, el Prestamista se reserva la facultad de dar por vencido anticipadamente el préstamo y exigir judicialmente la devolución de la TOTALIDAD del capital pendiente más los intereses devengados hasta la fecha, si el Prestatario dejara de pagar UNA SOLA de las cuotas a su vencimiento.
+
+QUINTA. INTERESES DE DEMORA.
+En caso de impago a su vencimiento, la cantidad adeudada devengará, de forma automática y sin necesidad de requerimiento previo, un interés de demora adicional equivalente al tipo de interés legal del dinero vigente incrementado en 10 puntos porcentuales.
+
+SEXTA. GASTOS Y COSTAS JUDICIALES.
+Serán de cuenta exclusiva del Prestatario todos los gastos derivados del presente contrato. En caso de incumplimiento, el Prestatario asume expresamente el pago de todos los gastos judiciales y extrajudiciales (incluyendo honorarios de Abogado y Procurador, burofaxes y gastos de gestión de cobro) que el Prestamista deba realizar para recuperar su dinero.
+
+SÉPTIMA. OBLIGACIONES FISCALES.
+Las partes declaran conocer la obligación de presentar este contrato ante la oficina liquidadora competente del Impuesto sobre Transmisiones Patrimoniales y Actos Jurídicos Documentados (Modelo 600), siendo dicha gestión responsabilidad del Prestatario si así se acordase o fuese requerido.
+
+OCTAVA. PROTECCIÓN DE DATOS.
+Los datos personales del Prestatario se incorporan a un fichero responsabilidad del Prestamista con la única finalidad de gestionar la relación contractual y el cobro de la deuda. El Prestatario autoriza el tratamiento de sus datos y de la copia de su documento de identidad para estos fines.
+
+NOVENA. JURISDICCIÓN.
+Para la resolución de cualquier controversia, las partes, con renuncia a su propio fuero, se someten expresamente a los Juzgados y Tribunales de la ciudad de MADRID (o del domicilio del Prestamista).
+
+Y en prueba de conformidad, firman el presente por duplicado y a un solo efecto.
+
+EL PRESTAMISTA:                            EL PRESTATARIO:
+                                            
+Fdo: Bienvenido N. Feliz T.                Fdo: \${fullName}
 `;
 
 export const getContractText = (data: ContractData) => {
@@ -47,6 +79,7 @@ export const getContractText = (data: ContractData) => {
         .replace(/\${address}/g, data.address)
         .replace(/\${loanAmount}/g, data.loanAmount.toLocaleString('es-ES'))
         .replace(/\${today}/g, today)
+        // Usamos toFixed(2) para asegurar que se vea "8.00" (o lo que esté en config)
         .replace(/\${interestRate}/g, INTEREST_RATE_CONFIG.MONTHLY.toFixed(2));
 };
 
@@ -55,18 +88,63 @@ export const generateContractPDF = async (data: ContractData, signatureImage: st
     const doc = new jsPDF();
     const contractText = getContractText(data);
 
-    doc.setFontSize(16);
-    doc.text("Contrato de Préstamo", 105, 20, { align: 'center' });
+    // Título
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("CONTRATO DE PRÉSTAMO ENTRE PARTICULARES", 105, 20, { align: 'center' });
 
-    doc.setFontSize(11);
-    const splitText = doc.splitTextToSize(contractText, 180);
-    doc.text(splitText, 15, 35);
+    // Texto del contrato
+    doc.setFontSize(9); // Texto compacto para que quepa todo
+    doc.setFont("helvetica", "normal");
+    
+    // Ajuste de márgenes y ancho de texto
+    const splitText = doc.splitTextToSize(contractText, 170);
+    doc.text(splitText, 20, 35);
 
+    // Gestión de Firmas
     if (signatureImage) {
-        const lastTextY = 35 + (splitText.length * 5.5);
-        const signatureY = Math.max(lastTextY + 15, 220);
-        doc.text("Firma del Prestatario:", 15, signatureY);
-        doc.addImage(signatureImage, 'PNG', 15, signatureY + 5, 60, 30);
+        // Calcular posición Y basada en la longitud del texto
+        const lastTextY = 35 + (splitText.length * 3.5); // 3.5 es el interlineado aprox para font size 9
+        // Asegurar que las firmas no se solapen con el texto, mínimo en Y=220
+        const signatureY = Math.max(lastTextY + 15, 210);
+        
+        // Si el texto es muy largo y empuja las firmas fuera de la página, añadir página
+        if (signatureY > 260) {
+            doc.addPage();
+            const newSignatureY = 40;
+            
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            
+            doc.text("Firma del Prestatario (Cliente):", 20, newSignatureY);
+            doc.addImage(signatureImage, 'PNG', 20, newSignatureY + 5, 50, 25);
+            
+            doc.text("Firma del Prestamista:", 120, newSignatureY);
+            doc.setFont("helvetica", "italic");
+            doc.text("Bienvenido N. Feliz T.", 120, newSignatureY + 15);
+            doc.text("18476199T", 120, newSignatureY + 20);
+        } else {
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            
+            doc.text("Firma del Prestatario (Cliente):", 20, signatureY);
+            doc.addImage(signatureImage, 'PNG', 20, signatureY + 5, 50, 25);
+            
+            doc.text("Firma del Prestamista:", 120, signatureY);
+            doc.setFont("helvetica", "italic");
+            doc.text("Bienvenido N. Feliz T.", 120, signatureY + 15);
+            doc.text("18476199T", 120, signatureY + 20);
+        }
+    } else {
+        // Espacio para firma manual
+        const lastTextY = 35 + (splitText.length * 3.5);
+        const signatureY = Math.max(lastTextY + 20, 220);
+        
+        doc.line(20, signatureY + 20, 80, signatureY + 20);
+        doc.text("Firma del Prestatario", 20, signatureY + 25);
+        
+        doc.line(120, signatureY + 20, 180, signatureY + 20);
+        doc.text("Firma del Prestamista", 120, signatureY + 25);
     }
 
     return doc.output('blob');
@@ -275,23 +353,33 @@ export const generateRequestSummaryPDF = (request: LoanRequest) => {
     };
     const contractText = getContractText(contractData);
 
-    doc.setFontSize(16);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
     doc.text("Contrato de Préstamo Aceptado", 105, 20, { align: 'center' });
 
-    doc.setFontSize(10);
-    const splitText = doc.splitTextToSize(contractText, 180);
-    doc.text(splitText, 15, 35);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    const splitText = doc.splitTextToSize(contractText, 170);
+    doc.text(splitText, 20, 35);
 
     if (request.signature) {
-        const lastTextY = 35 + (splitText.length * 4.5); // Adjust line height factor for font size 10
-        const signatureY = Math.max(lastTextY + 10, 240); // Ensure signature is at the bottom
-        doc.setFontSize(12);
-        doc.text("Firma del Prestatario:", 15, signatureY);
+        const lastTextY = 35 + (splitText.length * 3.5);
+        let signatureY = Math.max(lastTextY + 10, 220); 
+
+        // Check for overflow
+        if (signatureY > 260) {
+            doc.addPage();
+            signatureY = 40;
+        }
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("Firma del Prestatario (Cliente):", 20, signatureY);
         try {
-            doc.addImage(request.signature, 'PNG', 15, signatureY + 5, 60, 30);
+            doc.addImage(request.signature, 'PNG', 20, signatureY + 5, 60, 30);
         } catch (e) {
             console.error("Could not add signature image to PDF:", e);
-            doc.text("[Error al cargar la firma]", 15, signatureY + 15);
+            doc.text("[Error al cargar la firma]", 20, signatureY + 15);
         }
     }
 
