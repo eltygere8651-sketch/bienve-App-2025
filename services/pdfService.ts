@@ -54,7 +54,7 @@ SEXTA. GASTOS Y COSTAS JUDICIALES.
 Serán de cuenta exclusiva del Prestatario todos los gastos derivados del presente contrato. En caso de incumplimiento, el Prestatario asume expresamente el pago de todos los gastos judiciales y extrajudiciales (incluyendo honorarios de Abogado y Procurador, burofaxes y gastos de gestión de cobro) que el Prestamista deba realizar para recuperar su dinero.
 
 SÉPTIMA. OBLIGACIONES FISCALES.
-Las partes declaran conocer la obligación de presentar este contrato ante la oficina liquidadora competente del Impuesto sobre Transmisiones Patrimoniales y Actos Jurídicos Documentados (Modelo 600), siendo dicha gestión responsabilidad del Prestatario si así se acordase o fuese requerido.
+Las partes declaran conocer la obligación de presentar este contrato ante la oficina liquidadora competente del Impuesto sobre Transmisiones Patrimuidas y Actos Jurídicos Documentados (Modelo 600), siendo dicha gestión responsabilidad del Prestatario si así se acordase o fuese requerido.
 
 OCTAVA. PROTECCIÓN DE DATOS.
 Los datos personales del Prestatario se incorporan a un fichero responsabilidad del Prestamista con la única finalidad de gestionar la relación contractual y el cobro de la deuda. El Prestatario autoriza el tratamiento de sus datos y de la copia de su documento de identidad para estos fines.
@@ -79,7 +79,6 @@ export const getContractText = (data: ContractData) => {
         .replace(/\${address}/g, data.address)
         .replace(/\${loanAmount}/g, data.loanAmount.toLocaleString('es-ES'))
         .replace(/\${today}/g, today)
-        // Usamos toFixed(2) para asegurar que se vea "8.00" (o lo que esté en config)
         .replace(/\${interestRate}/g, INTEREST_RATE_CONFIG.MONTHLY.toFixed(2));
 };
 
