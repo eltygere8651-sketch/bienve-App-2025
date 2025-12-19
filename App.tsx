@@ -7,11 +7,12 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Search } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Search, Share2 } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import RequestStatusChecker from './components/RequestStatusChecker';
 import LoanRequestForm from './components/LoanRequestForm';
+import ShareApp from './components/ShareApp';
 
 // Lazy load heavy components to optimize initial load time
 const ClientList = React.lazy(() => import('./components/ClientList'));
@@ -44,6 +45,7 @@ const App: React.FC = () => {
     
     const { requests, isLoading: dataIsLoading, error } = useDataContext();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
     
     useEffect(() => {
         setIsMobileMenuOpen(false);
@@ -116,17 +118,16 @@ const App: React.FC = () => {
                 <ul>
                    {isAuthenticated ? (
                         <>
-                            {/* Admin Order - Simplified */}
                             <NavItem icon={<LayoutDashboard />} label="Panel" view="dashboard" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                             <NavItem icon={<GitPullRequest />} label="Solicitudes" view="requests" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} badge={requests.length} />
                             <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         </>
                     ) : (
                         <>
-                            {/* Public Order */}
                             <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                            <NavItem icon={<FileText />} label="Iniciar una Solicitud" view="loanRequest" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                            <NavItem icon={<FileText />} label="Iniciar Solicitud" view="loanRequest" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                             <NavItem icon={<Search />} label="Consultar Solicitud" view="requestStatus" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                            <NavItem icon={<Share2 className="text-primary-400" />} label="Compartir App" onClick={() => setIsShareModalOpen(true)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         </>
                     )}
                 </ul>
@@ -159,7 +160,7 @@ const App: React.FC = () => {
                     <button
                         onClick={() => setCurrentView('auth')}
                         className="w-full flex items-center justify-center p-3 my-1 rounded-lg cursor-pointer text-slate-300 hover:bg-slate-700 hover:text-white"
-                        aria-label="Acceder o registrarse"
+                        aria-label="Acceder"
                     >
                         <LogIn />
                         <span className={`ml-4 transition-opacity duration-300 ${(isSidebarOpen || isMobileMenuOpen) ? 'opacity-100' : 'opacity-0 h-0 w-0'}`}>
@@ -185,6 +186,8 @@ const App: React.FC = () => {
                 onCancel={hideConfirmModal}
                 type={confirmState.type}
             />
+            <ShareApp isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
+            
             <div className="flex h-screen bg-slate-900 font-sans">
                  {/* Mobile Header */}
                 <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-800/80 backdrop-blur-sm text-slate-100 flex items-center justify-between px-4 z-30 border-b border-slate-700">
