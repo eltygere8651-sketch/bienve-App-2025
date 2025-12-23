@@ -1,23 +1,28 @@
 
-
 import React, { useMemo, useState } from 'react';
 import { Loan, LoanStatus, Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Users, Download, Search, PlusCircle } from 'lucide-react';
+import { Users, Download, Search, PlusCircle, Plus } from 'lucide-react';
 import { generateClientReport } from '../services/pdfService';
 import { formatCurrency } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
+import NewLoanModal from './NewLoanModal';
 
 interface ClientWithData extends Client {
     loans: Loan[];
 }
 
-const ClientCard: React.FC<{ client: ClientWithData & { loans: Loan[] } }> = ({ client }) => {
-    const totalLoaned = client.loans.reduce((acc, loan) => acc + loan.amount, 0);
+interface ClientCardProps {
+    client: ClientWithData;
+    onAddLoan: (client: Client) => void;
+}
+
+const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan }) => {
+    const totalLoaned = client.loans.reduce((acc, loan) => acc + (loan.initialCapital || loan.amount), 0);
     const outstandingBalance = client.loans
         .filter(loan => loan.status === LoanStatus.PENDING || loan.status === LoanStatus.OVERDUE)
-        .reduce((acc, loan) => acc + (loan.totalRepayment - (loan.monthlyPayment * loan.paymentsMade)), 0);
+        .reduce((acc, loan) => acc + loan.remainingCapital, 0);
 
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
 
@@ -60,7 +65,15 @@ const ClientCard: React.FC<{ client: ClientWithData & { loans: Loan[] } }> = ({ 
                     </div>
                 </div>
                 <div className="mt-6 flex-grow">
-                    <h4 className="text-sm font-semibold text-slate-300 mb-2">Historial de Préstamos ({client.loans.length})</h4>
+                    <div className="flex justify-between items-center mb-2">
+                        <h4 className="text-sm font-semibold text-slate-300">Historial de Préstamos ({client.loans.length})</h4>
+                        <button 
+                            onClick={() => onAddLoan(client)}
+                            className="text-xs flex items-center gap-1 bg-primary-600/20 text-primary-400 px-2 py-1 rounded hover:bg-primary-600/30 transition-colors"
+                        >
+                            <Plus size={12} /> Nuevo
+                        </button>
+                    </div>
                     {client.loans.length > 0 ? (
                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
                             {client.loans.map(loan => (
@@ -99,6 +112,7 @@ const ClientList: React.FC = () => {
     const { clientLoanData } = useDataContext();
     const { setCurrentView } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedClientForLoan, setSelectedClientForLoan] = useState<Client | null>(null);
 
     const filteredClients = useMemo(() => {
         if (!searchTerm) {
@@ -111,52 +125,64 @@ const ClientList: React.FC = () => {
     }, [clientLoanData, searchTerm]);
     
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Lista de Clientes</h1>
-                 <button
-                    onClick={() => setCurrentView('newClient')}
-                    className="inline-flex items-center justify-center px-4 py-2 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-transform hover:scale-105"
-                >
-                    <PlusCircle size={18} className="mr-2" />
-                    Registrar Cliente y Préstamo
-                </button>
-            </div>
-
-            {clientLoanData.length === 0 ? (
-                <div className="text-center py-12 bg-slate-800 rounded-lg shadow-lg border border-slate-700">
-                     <Users size={48} className="mx-auto text-slate-500" />
-                     <h2 className="mt-4 text-xl font-semibold text-slate-300">No hay clientes registrados</h2>
-                     <p className="mt-1 text-slate-400">Cuando apruebes una solicitud de préstamo o registres un nuevo cliente, aparecerá aquí.</p>
+        <>
+            <NewLoanModal 
+                isOpen={!!selectedClientForLoan} 
+                onClose={() => setSelectedClientForLoan(null)} 
+                client={selectedClientForLoan} 
+            />
+            
+            <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Lista de Clientes</h1>
+                     <button
+                        onClick={() => setCurrentView('newClient')}
+                        className="inline-flex items-center justify-center px-4 py-2 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-transform hover:scale-105"
+                    >
+                        <PlusCircle size={18} className="mr-2" />
+                        Registrar Cliente y Préstamo
+                    </button>
                 </div>
-            ) : (
-                <>
-                    <div className="relative">
-                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
-                         <input
-                            type="text"
-                            placeholder="Buscar cliente por nombre o DNI..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-slate-100 focus:ring-primary-500 focus:border-primary-500"
-                        />
+
+                {clientLoanData.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-800 rounded-lg shadow-lg border border-slate-700">
+                         <Users size={48} className="mx-auto text-slate-500" />
+                         <h2 className="mt-4 text-xl font-semibold text-slate-300">No hay clientes registrados</h2>
+                         <p className="mt-1 text-slate-400">Cuando apruebes una solicitud de préstamo o registres un nuevo cliente, aparecerá aquí.</p>
                     </div>
-                    {filteredClients.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {filteredClients.map(client => (
-                                <ClientCard key={client.id} client={client} />
-                            ))}
+                ) : (
+                    <>
+                        <div className="relative">
+                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
+                             <input
+                                type="text"
+                                placeholder="Buscar cliente por nombre o DNI..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 border border-slate-600 rounded-lg bg-slate-700 text-slate-100 focus:ring-primary-500 focus:border-primary-500"
+                            />
                         </div>
-                    ) : (
-                         <div className="text-center py-12 bg-slate-800 rounded-lg shadow-lg border border-slate-700">
-                             <Search size={48} className="mx-auto text-slate-500" />
-                             <h2 className="mt-4 text-xl font-semibold text-slate-300">No se encontraron clientes</h2>
-                             <p className="mt-1 text-slate-400">Prueba con otro término de búsqueda.</p>
-                        </div>
-                    )}
-                </>
-            )}
-        </div>
+                        {filteredClients.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {filteredClients.map(client => (
+                                    <ClientCard 
+                                        key={client.id} 
+                                        client={client as ClientWithData} 
+                                        onAddLoan={(c) => setSelectedClientForLoan(c)}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                             <div className="text-center py-12 bg-slate-800 rounded-lg shadow-lg border border-slate-700">
+                                 <Search size={48} className="mx-auto text-slate-500" />
+                                 <h2 className="mt-4 text-xl font-semibold text-slate-300">No se encontraron clientes</h2>
+                                 <p className="mt-1 text-slate-400">Prueba con otro término de búsqueda.</p>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        </>
     );
 };
 

@@ -1,83 +1,58 @@
-import React, { useMemo } from 'react';
-import { Loan } from '../types';
+
+import React from 'react';
+import { Loan, PaymentRecord } from '../types';
 import { formatCurrency } from '../services/utils';
-import { CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Calendar, Info } from 'lucide-react';
 
 interface PaymentHistoryProps {
     loan: Loan;
 }
 
 const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
-    // Optimization: Calculate payments only when loan data changes.
-    const payments = useMemo(() => {
-        const p = [];
-        const startDate = new Date(loan.startDate);
+    const history = loan.paymentHistory || [];
 
-        for (let i = 1; i <= loan.term; i++) {
-            const dueDate = new Date(startDate);
-            dueDate.setMonth(startDate.getMonth() + i);
+    // Sort by date descending
+    const sortedHistory = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-            let status: 'Pagado' | 'Pendiente' | 'Vencido' = 'Pendiente';
-            const isPaid = i <= loan.paymentsMade;
-            const isOverdue = !isPaid && new Date() > dueDate;
-
-            if (isPaid) {
-                status = 'Pagado';
-            } else if (isOverdue) {
-                status = 'Vencido';
-            }
-
-            p.push({
-                paymentNumber: i,
-                dueDate: dueDate.toLocaleDateString('es-ES'),
-                amount: loan.monthlyPayment,
-                status: status,
-            });
-        }
-        return p;
-    }, [loan.term, loan.startDate, loan.paymentsMade, loan.monthlyPayment]);
-
-
-    const StatusIcon = ({ status }: { status: string }) => {
-        switch (status) {
-            case 'Pagado':
-                return <CheckCircle className="text-green-500" size={16} />;
-            case 'Vencido':
-                return <AlertTriangle className="text-red-500" size={16} />;
-            default:
-                return <Clock className="text-slate-500" size={16} />;
-        }
-    };
+    if (sortedHistory.length === 0) {
+        return (
+            <div className="text-center py-8 text-slate-500 bg-slate-800/30 rounded-xl border border-slate-700/50">
+                <Info className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                <p>No hay pagos registrados aún.</p>
+            </div>
+        );
+    }
 
     return (
-        <div>
-            <h4 className="text-md font-semibold text-slate-200 mb-3">Historial de Pagos</h4>
-            <div className="max-h-60 overflow-y-auto pr-2 border-l-2 border-slate-700 pl-4 space-y-3">
-                {payments.map(payment => (
-                    <div key={payment.paymentNumber} className="flex justify-between items-center text-sm">
-                        <div className="flex items-center">
-                            <StatusIcon status={payment.status} />
-                            <div className="ml-3">
-                                <p className="font-medium text-slate-200">
-                                    Cuota #{payment.paymentNumber}
-                                </p>
-                                <p className="text-xs text-slate-400">
-                                    Vencimiento: {payment.dueDate}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="text-right">
-                             <p className="font-semibold text-slate-100">{formatCurrency(payment.amount)}</p>
-                             <p className={`text-xs font-bold ${
-                                 payment.status === 'Pagado' ? 'text-green-400' :
-                                 payment.status === 'Vencido' ? 'text-red-400' : 'text-slate-400'
-                             }`}>
-                                {payment.status}
-                             </p>
-                        </div>
-                    </div>
-                ))}
-            </div>
+        <div className="overflow-x-auto rounded-xl border border-slate-700 shadow-lg">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-slate-800 text-slate-400 uppercase font-medium text-xs">
+                    <tr>
+                        <th className="px-4 py-3">Fecha</th>
+                        <th className="px-4 py-3">Total Pagado</th>
+                        <th className="px-4 py-3 text-green-400">Interés</th>
+                        <th className="px-4 py-3 text-blue-400">Capital</th>
+                        <th className="px-4 py-3 text-amber-400">Saldo Restante</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700 bg-slate-900/40">
+                    {sortedHistory.map((record: PaymentRecord) => (
+                        <tr key={record.id} className="hover:bg-slate-800/50 transition-colors">
+                            <td className="px-4 py-3 text-slate-300 font-mono">
+                                <div className="flex items-center gap-2">
+                                    <Calendar size={14} className="text-slate-500" />
+                                    {new Date(record.date).toLocaleDateString('es-ES')}
+                                </div>
+                                {record.notes && <p className="text-[10px] text-slate-500 mt-1 truncate max-w-[120px]">{record.notes}</p>}
+                            </td>
+                            <td className="px-4 py-3 font-bold text-slate-100">{formatCurrency(record.amount)}</td>
+                            <td className="px-4 py-3 text-green-400">{formatCurrency(record.interestPaid)}</td>
+                            <td className="px-4 py-3 text-blue-400">{formatCurrency(record.capitalPaid)}</td>
+                            <td className="px-4 py-3 font-mono text-amber-400">{formatCurrency(record.remainingCapitalAfter)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 };

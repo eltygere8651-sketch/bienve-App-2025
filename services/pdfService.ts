@@ -196,6 +196,8 @@ interface ReceiptData {
     notes: string;
     previousBalance: number;
     newBalance: number;
+    interestPaid?: number; // Optional: Desglose explícito de interés
+    capitalPaid?: number;  // Optional: Desglose explícito de capital
 }
 
 export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: string) => {
@@ -246,9 +248,18 @@ export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: strin
         ['ID Préstamo / Referencia:', data.loanId],
         ['Fecha del Pago Aplicado:', new Date(data.paymentDate).toLocaleDateString('es-ES')],
         ['Saldo Anterior:', data.previousBalance.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })],
-        ['Monto del Pago:', amountString],
-        ['Nuevo Saldo Pendiente:', data.newBalance.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })],
     ];
+
+    // Añadir desglose si existe (para recibos "inteligentes")
+    if (data.interestPaid !== undefined && data.capitalPaid !== undefined) {
+        tableBody.push(['(+) Pago Total Recibido:', amountString]);
+        tableBody.push(['(-) Intereses Cubiertos:', data.interestPaid.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })]);
+        tableBody.push(['(-) Capital Amortizado:', data.capitalPaid.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })]);
+    } else {
+        tableBody.push(['Monto del Pago:', amountString]);
+    }
+
+    tableBody.push(['(=) Nuevo Saldo Pendiente:', data.newBalance.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })]);
     
     if (data.notes) {
         tableBody.push(['Notas Adicionales:', data.notes]);
@@ -259,13 +270,22 @@ export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: strin
         body: tableBody,
         theme: 'plain',
         styles: { fontSize: 11, cellPadding: 2 },
-        columnStyles: { 0: { fontStyle: 'bold' } },
-        didParseCell: function(data: any) {
-            if (data.row.index >= 2 && data.row.index <= 4) { // Balance rows
-                data.cell.styles.fontStyle = 'bold';
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 80 } }, // Ajustar ancho columna etiquetas
+        didParseCell: function(cellData: any) {
+            const rowIdx = cellData.row.index;
+            const label = cellData.row.cells[0].raw; // Obtener texto de la etiqueta
+            
+            // Negrita para saldos
+            if (label.includes('Saldo')) {
+                cellData.cell.styles.fontStyle = 'bold';
             }
-            if (data.row.index === 3) { // Payment Amount row
-                 data.cell.styles.textColor = [0, 150, 0]; // Green
+            // Colores para el desglose
+            if (label.includes('Pago Total') || label.includes('Monto del Pago')) {
+                 cellData.cell.styles.textColor = [0, 100, 0]; // Dark Green
+                 cellData.cell.styles.fontStyle = 'bold';
+            }
+            if (label.includes('Capital Amortizado')) {
+                 cellData.cell.styles.textColor = [0, 0, 200]; // Dark Blue
             }
         }
     });

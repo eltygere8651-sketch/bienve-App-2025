@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useMemo } from 'react';
 import { UserPlus, ArrowLeft, Loader2, BarChart, Banknote, Calendar, Percent } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
@@ -10,8 +8,11 @@ import { formatCurrency } from '../services/utils';
 
 const NewClientForm: React.FC = () => {
     const { handleAddClientAndLoan } = useDataContext();
-    const { setCurrentView, annualInterestRate } = useAppContext();
+    const { setCurrentView } = useAppContext();
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Default to 8% Monthly (96% Annual) as requested
+    const defaultAnnualRate = 96;
 
     const [clientData, setClientData] = useState({
         name: '',
@@ -33,16 +34,16 @@ const NewClientForm: React.FC = () => {
             return { monthlyPayment: 0, totalRepayment: 0 };
         }
 
-        const monthlyRate = (annualInterestRate / 12) / 100;
+        const monthlyRate = (defaultAnnualRate / 12) / 100;
         const monthlyPayment = (amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -term));
         const totalRepayment = monthlyPayment * term;
 
         return {
             monthlyPayment: isFinite(monthlyPayment) ? monthlyPayment : 0,
             totalRepayment: isFinite(totalRepayment) ? totalRepayment : 0,
-            monthlyInterestRate: annualInterestRate / 12,
+            monthlyInterestRate: defaultAnnualRate / 12,
         };
-    }, [loanData.amount, loanData.term, annualInterestRate]);
+    }, [loanData.amount, loanData.term]);
 
     const handleClientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -112,12 +113,12 @@ const NewClientForm: React.FC = () => {
                         <InputField label="Plazo (en meses)" name="term" type="number" value={loanData.term} onChange={handleLoanChange} required min="1" />
                     </div>
                     <div className="mt-6 bg-slate-700/50 p-4 rounded-lg">
-                        <h3 className="text-base font-semibold text-slate-200 mb-3">Resumen del Préstamo</h3>
+                        <h3 className="text-base font-semibold text-slate-200 mb-3">Resumen Contable (Est. 8% Mensual)</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="flex items-center space-x-3">
                                 <Banknote className="h-6 w-6 text-green-400"/>
                                 <div>
-                                    <p className="text-xs text-slate-400">Cuota Mensual</p>
+                                    <p className="text-xs text-slate-400">Cuota Sugerida</p>
                                     <p className="text-base font-bold text-slate-100">{formatCurrency(loanCalculations.monthlyPayment)}</p>
                                 </div>
                             </div>
@@ -132,7 +133,7 @@ const NewClientForm: React.FC = () => {
                                 <Percent className="h-6 w-6 text-purple-400"/>
                                 <div>
                                     <p className="text-xs text-slate-400">Interés Mensual</p>
-                                    <p className="text-base font-bold text-slate-100">{loanCalculations.monthlyInterestRate.toFixed(2)}%</p>
+                                    <p className="text-base font-bold text-slate-100">{loanCalculations.monthlyInterestRate.toFixed(0)}%</p>
                                 </div>
                             </div>
                         </div>

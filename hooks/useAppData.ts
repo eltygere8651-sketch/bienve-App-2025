@@ -1,16 +1,14 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Client, Loan, LoanRequest, LoanStatus, RequestStatus } from '../types';
+import { Client, Loan, LoanRequest, LoanStatus, RequestStatus, PaymentRecord } from '../types';
 import { User } from 'firebase/auth';
 import { 
     subscribeToCollection, 
     addDocument, 
     updateDocument, 
     deleteDocument,
-    getCollection // Importamos getCollection para la carga manual
+    getCollection 
 } from '../services/firebaseService';
-// Importamos orderBy y limit, pero los usaremos con precaución
-import { orderBy, limit } from 'firebase/firestore';
 import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER } from '../constants';
 
 export const useAppData = (
@@ -39,7 +37,6 @@ export const useAppData = (
             }
         };
 
-        // SAFETY TIMEOUT
         const safetyTimeout = setTimeout(() => {
             if (isLoading) {
                 console.warn("Firebase loading timed out - Forcing app render");
@@ -47,7 +44,6 @@ export const useAppData = (
             }
         }, 3000);
 
-        // Clientes
         const unsubClients = subscribeToCollection('clients', (data) => {
             setClients(data as Client[]);
             clientsLoaded = true;
@@ -58,9 +54,17 @@ export const useAppData = (
             checkAllLoaded();
         });
 
-        // Préstamos
         const unsubLoans = subscribeToCollection('loans', (data) => {
-            setLoans(data as Loan[]);
+            // Ensure compatibility with old data structure
+            const mappedLoans = (data as any[]).map(l => ({
+                ...l,
+                initialCapital: l.initialCapital ?? l.amount,
+                remainingCapital: l.remainingCapital ?? (l.status === 'Pagado' ? 0 : l.amount),
+                paymentHistory: l.paymentHistory ?? [],
+                totalInterestPaid: l.totalInterestPaid ?? 0,
+                totalCapitalPaid: l.totalCapitalPaid ?? 0
+            }));
+            setLoans(mappedLoans as Loan[]);
             loansLoaded = true;
             checkAllLoaded();
         }, [], (err) => {
@@ -69,23 +73,18 @@ export const useAppData = (
              checkAllLoaded();
         });
 
-        // SOLICITUDES - ESTRATEGIA "SIN FILTROS" (Maximum Compatibility)
-        // Eliminamos orderBy y limit de la suscripción automática para evitar 
-        // cualquier error de índice o permisos complejos.
         const unsubRequests = subscribeToCollection(
             'requests', 
             (data) => {
                 const reqs = (data || []) as LoanRequest[];
-                console.log("Solicitudes descargadas (Realtime):", reqs.length);
                 setRequests(reqs);
                 requestsLoaded = true;
                 checkAllLoaded();
                 setError(null);
             },
-            [], // Sin restricciones (Empty Array)
+            [], 
             (err) => {
                 console.error("Error loading requests:", err);
-                // No mostramos error bloqueante, permitimos reintentar manual
                 requestsLoaded = true;
                 checkAllLoaded();
             }
@@ -99,7 +98,6 @@ export const useAppData = (
         };
     }, []);
 
-    // Notificaciones de nuevas solicitudes
     useEffect(() => {
         if (isLoading) return;
 
@@ -118,13 +116,10 @@ export const useAppData = (
         prevRequestsCountRef.current = requests.length;
     }, [requests.length, isLoading, showToast]);
 
-    // Función para forzar la recarga manual (Bypassing listener)
     const reloadRequests = useCallback(async () => {
         setIsLoading(true);
         try {
-            console.log("Forzando recarga manual de solicitudes...");
             const data = await getCollection('requests');
-            console.log("Datos manuales recibidos:", data.length);
             setRequests(data as LoanRequest[]);
             showToast(`Sincronizado: ${data.length} solicitudes encontradas.`, 'success');
         } catch (err: any) {
@@ -157,7 +152,6 @@ export const useAppData = (
 
     const handleApproveRequest = useCallback(async (request: LoanRequest, loanAmount: number, loanTerm: number) => {
         try {
-            // 1. Crear Cliente
             const newClient = {
                 name: request.fullName,
                 idNumber: request.idNumber,
@@ -168,29 +162,34 @@ export const useAppData = (
             };
             const clientDoc = await addDocument('clients', newClient);
 
-            // 2. Calcular detalles del préstamo
-            const monthlyRate = 96 / 12 / 100; // 8% mensual
+            // Default 8% monthly = 96% Annual
+            const annualRate = 96; 
+            const monthlyRate = annualRate / 12 / 100;
             const monthlyPayment = (loanAmount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -loanTerm));
             const totalRepayment = monthlyPayment * loanTerm;
 
-            // 3. Crear Préstamo
-            const newLoan = {
+            const newLoan: Omit<Loan, 'id'> = {
                 clientId: clientDoc.id,
                 clientName: request.fullName,
                 amount: loanAmount,
-                interestRate: 96,
+                initialCapital: loanAmount,
+                remainingCapital: loanAmount,
+                interestRate: annualRate,
                 term: loanTerm,
                 startDate: new Date().toISOString(),
                 status: LoanStatus.PENDING,
                 monthlyPayment,
                 totalRepayment,
                 paymentsMade: 0,
+                totalInterestPaid: 0,
+                totalCapitalPaid: 0,
+                paymentHistory: [],
                 signature: request.signature,
-                contractPdfUrl: ''
+                contractPdfUrl: '',
+                notes: request.loanReason
             };
             await addDocument('loans', newLoan);
 
-            // 4. Eliminar Solicitud
             await deleteDocument('requests', request.id);
             
             showToast(`Préstamo Aprobado para ${request.fullName}`, 'success');
@@ -222,17 +221,56 @@ export const useAppData = (
         }
     }, [showToast]);
     
-    const handleRegisterPayment = useCallback(async (loanId: string) => {
+    const handleRegisterPayment = useCallback(async (loanId: string, amount: number, date: string, notes: string) => {
         const loan = loans.find(l => l.id === loanId);
         if (!loan || loan.status === LoanStatus.PAID) return;
         
-        const newPaymentsMade = loan.paymentsMade + 1;
-        const isPaidOff = newPaymentsMade >= loan.term;
-        const newStatus = isPaidOff ? LoanStatus.PAID : LoanStatus.PENDING;
+        // --- ACCOUNTING LOGIC ---
+        // 1. Calculate Monthly Interest based on Pending Capital
+        // Rate is Annual / 12. Example: 96% / 12 = 8%.
+        const monthlyRate = (loan.interestRate / 12) / 100;
+        const interestDue = loan.remainingCapital * monthlyRate;
+
+        // 2. Distribute Payment
+        // Priority: Interest -> Capital
+        let interestPaid = 0;
+        let capitalPaid = 0;
+
+        if (amount <= interestDue) {
+            // Payment only covers partial or full interest, no capital reduction
+            interestPaid = amount;
+            capitalPaid = 0;
+        } else {
+            // Payment covers full interest + capital reduction
+            interestPaid = interestDue;
+            capitalPaid = amount - interestDue;
+        }
+
+        const newRemainingCapital = Math.max(0, loan.remainingCapital - capitalPaid);
+        const isPaidOff = newRemainingCapital <= 0.1; // Tolerance for float errors
+
+        const newPaymentRecord: PaymentRecord = {
+            id: Date.now().toString(),
+            date: date,
+            amount: amount,
+            interestPaid: interestPaid,
+            capitalPaid: capitalPaid,
+            remainingCapitalAfter: newRemainingCapital,
+            notes: notes
+        };
+
+        const updatedHistory = [...(loan.paymentHistory || []), newPaymentRecord];
 
         try {
-            await updateDocument('loans', loanId, { paymentsMade: newPaymentsMade, status: newStatus });
-            showToast('Pago registrado correctamente.', 'success');
+            await updateDocument('loans', loanId, { 
+                paymentsMade: loan.paymentsMade + 1, 
+                status: isPaidOff ? LoanStatus.PAID : LoanStatus.PENDING,
+                remainingCapital: newRemainingCapital,
+                totalInterestPaid: (loan.totalInterestPaid || 0) + interestPaid,
+                totalCapitalPaid: (loan.totalCapitalPaid || 0) + capitalPaid,
+                paymentHistory: updatedHistory
+            });
+            showToast(`Pago registrado: €${interestPaid.toFixed(2)} interés, €${capitalPaid.toFixed(2)} capital.`, 'success');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
         }
@@ -245,7 +283,8 @@ export const useAppData = (
                 joinDate: new Date().toISOString()
             });
 
-             const monthlyRate = 96 / 12 / 100;
+             const annualRate = 96; // 8% monthly
+             const monthlyRate = annualRate / 12 / 100;
              const monthlyPayment = (loanData.amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -loanData.term));
              const totalRepayment = monthlyPayment * loanData.term;
  
@@ -253,16 +292,53 @@ export const useAppData = (
                  clientId: clientDoc.id,
                  clientName: clientData.name,
                  amount: loanData.amount,
-                 interestRate: 96,
+                 initialCapital: loanData.amount,
+                 remainingCapital: loanData.amount,
+                 interestRate: annualRate,
                  term: loanData.term,
                  startDate: new Date().toISOString(),
                  status: LoanStatus.PENDING,
                  monthlyPayment,
                  totalRepayment,
-                 paymentsMade: 0
+                 paymentsMade: 0,
+                 totalInterestPaid: 0,
+                 totalCapitalPaid: 0,
+                 paymentHistory: [],
+                 notes: 'Préstamo inicial'
              });
 
             showToast(`Cliente registrado.`, 'success');
+        } catch (err: any) {
+            showToast(`Error: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
+    const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => {
+        try {
+            const monthlyRate = (loanData.interestRate / 12) / 100;
+            const monthlyPayment = (loanData.amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -loanData.term));
+            const totalRepayment = monthlyPayment * loanData.term;
+
+            await addDocument('loans', {
+                clientId,
+                clientName,
+                amount: loanData.amount,
+                initialCapital: loanData.amount,
+                remainingCapital: loanData.amount,
+                interestRate: loanData.interestRate,
+                term: loanData.term,
+                startDate: loanData.startDate,
+                status: LoanStatus.PENDING,
+                monthlyPayment,
+                totalRepayment,
+                paymentsMade: 0,
+                totalInterestPaid: 0,
+                totalCapitalPaid: 0,
+                paymentHistory: [],
+                notes: loanData.notes
+            });
+            showToast('Préstamo añadido correctamente.', 'success');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;
@@ -309,7 +385,7 @@ export const useAppData = (
             };
             
             await addDocument('requests', testRequest);
-            showToast('Solicitud de prueba generada. Pulsa "Recargar" si no aparece.', 'success');
+            showToast('Solicitud de prueba generada.', 'success');
         } catch (err: any) {
             console.error("Error generating test request:", err);
             showToast(`Error al generar prueba: ${err.message}`, 'error');
@@ -363,10 +439,11 @@ export const useAppData = (
         handleUpdateRequestStatus,
         handleRegisterPayment,
         handleAddClientAndLoan,
+        handleAddLoan,
         handleGenerateTestRequest,
         handleDeleteTestRequests,
         handleUpdateLoan,
         handleDeleteLoan,
-        reloadRequests // Exponemos la función de recarga manual
+        reloadRequests
     };
 };

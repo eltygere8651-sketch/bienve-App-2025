@@ -1,5 +1,4 @@
 
-
 export enum LoanStatus {
     PENDING = 'Pendiente',
     PAID = 'Pagado',
@@ -13,20 +12,36 @@ export enum RequestStatus {
     APPROVED = 'Aprobado',
 }
 
+export interface PaymentRecord {
+    id: string;
+    date: string;
+    amount: number;
+    interestPaid: number;
+    capitalPaid: number;
+    remainingCapitalAfter: number;
+    notes?: string;
+}
+
 export interface Loan {
     id: string;
     clientId: string;
     clientName: string;
-    amount: number;
+    amount: number; // Capital Inicial
+    initialCapital: number; // Explicit Capital Inicial for clarity
+    remainingCapital: number; // Capital Pendiente
     interestRate: number; // Annual percentage rate
     term: number; // in months
     startDate: string;
     status: LoanStatus;
-    monthlyPayment: number;
-    totalRepayment: number;
-    paymentsMade: number;
+    monthlyPayment: number; // Cuota estimada (referencia)
+    totalRepayment: number; // Total estimado
+    paymentsMade: number; // Contador de pagos
+    totalInterestPaid: number;
+    totalCapitalPaid: number;
+    paymentHistory: PaymentRecord[];
     signature?: string;
     contractPdfUrl?: string;
+    notes?: string;
 }
 
 export interface Client {
