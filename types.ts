@@ -20,6 +20,7 @@ export interface PaymentRecord {
     capitalPaid: number;
     remainingCapitalAfter: number;
     notes?: string;
+    daysElapsed?: number; // Nuevo: Para registro histórico
 }
 
 export interface Loan {
@@ -32,6 +33,7 @@ export interface Loan {
     interestRate: number; // Annual percentage rate
     term: number; // in months
     startDate: string;
+    lastPaymentDate?: string; // Nuevo: Fecha del último pago o inicio para cálculo de intereses
     status: LoanStatus;
     monthlyPayment: number; // Cuota estimada (referencia)
     totalRepayment: number; // Total estimado

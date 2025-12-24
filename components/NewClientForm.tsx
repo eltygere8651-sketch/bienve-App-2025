@@ -1,18 +1,17 @@
 
 import React, { useState, useMemo } from 'react';
-import { UserPlus, ArrowLeft, Loader2, BarChart, Banknote, Calendar, Percent } from 'lucide-react';
+import { UserPlus, ArrowLeft, Loader2, BarChart, Banknote, Percent, AlertCircle } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField } from './FormFields';
-import { formatCurrency } from '../services/utils';
+import { formatCurrency, isValidDNI, isValidPhone } from '../services/utils';
+import { DEFAULT_ANNUAL_INTEREST_RATE, calculateLoanParameters } from '../config';
 
 const NewClientForm: React.FC = () => {
     const { handleAddClientAndLoan } = useDataContext();
     const { setCurrentView } = useAppContext();
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // Default to 8% Monthly (96% Annual) as requested
-    const defaultAnnualRate = 96;
+    const [formError, setFormError] = useState<string | null>(null);
 
     const [clientData, setClientData] = useState({
         name: '',
@@ -30,24 +29,14 @@ const NewClientForm: React.FC = () => {
     const loanCalculations = useMemo(() => {
         const amount = parseFloat(loanData.amount);
         const term = parseInt(loanData.term, 10);
-        if (isNaN(amount) || isNaN(term) || amount <= 0 || term <= 0) {
-            return { monthlyPayment: 0, totalRepayment: 0 };
-        }
-
-        const monthlyRate = (defaultAnnualRate / 12) / 100;
-        const monthlyPayment = (amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -term));
-        const totalRepayment = monthlyPayment * term;
-
-        return {
-            monthlyPayment: isFinite(monthlyPayment) ? monthlyPayment : 0,
-            totalRepayment: isFinite(totalRepayment) ? totalRepayment : 0,
-            monthlyInterestRate: defaultAnnualRate / 12,
-        };
+        
+        return calculateLoanParameters(amount, term, DEFAULT_ANNUAL_INTEREST_RATE);
     }, [loanData.amount, loanData.term]);
 
     const handleClientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setClientData(prev => ({ ...prev, [name]: value }));
+        setFormError(null); 
     };
     
     const handleLoanChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,14 +44,35 @@ const NewClientForm: React.FC = () => {
         setLoanData(prev => ({ ...prev, [name]: value }));
     };
 
+    const validateForm = () => {
+        if (!isValidDNI(clientData.idNumber)) {
+            setFormError("El formato del DNI/NIE no es válido.");
+            return false;
+        }
+        if (!isValidPhone(clientData.phone)) {
+            setFormError("El número de teléfono no parece válido.");
+            return false;
+        }
+        if (parseFloat(loanData.amount) <= 0 || parseInt(loanData.term) <= 0) {
+            setFormError("El monto y el plazo deben ser mayores a 0.");
+            return false;
+        }
+        return true;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setFormError(null);
+        
+        if (!validateForm()) return;
+
         setIsSubmitting(true);
+        
         try {
             await handleAddClientAndLoan(
                 {
                     name: clientData.name,
-                    idNumber: clientData.idNumber,
+                    idNumber: clientData.idNumber.toUpperCase().trim(),
                     phone: clientData.phone,
                     address: clientData.address,
                     email: clientData.email,
@@ -73,8 +83,9 @@ const NewClientForm: React.FC = () => {
                 }
             );
             setCurrentView('clients');
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error creating client and loan:", error);
+            setFormError(error.message || "Error desconocido al registrar.");
         } finally {
             setIsSubmitting(false);
         }
@@ -94,6 +105,13 @@ const NewClientForm: React.FC = () => {
             </div>
             
             <form onSubmit={handleSubmit} className="bg-slate-800 p-4 sm:p-8 rounded-xl shadow-lg space-y-8 border border-slate-700">
+                {formError && (
+                    <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 flex items-center text-red-200 animate-fade-in">
+                        <AlertCircle className="h-5 w-5 mr-3 flex-shrink-0" />
+                        <p>{formError}</p>
+                    </div>
+                )}
+
                 <div>
                     <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Información del Cliente</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -133,7 +151,7 @@ const NewClientForm: React.FC = () => {
                                 <Percent className="h-6 w-6 text-purple-400"/>
                                 <div>
                                     <p className="text-xs text-slate-400">Interés Mensual</p>
-                                    <p className="text-base font-bold text-slate-100">{loanCalculations.monthlyInterestRate.toFixed(0)}%</p>
+                                    <p className="text-base font-bold text-slate-100">{loanCalculations.monthlyRatePercentage.toFixed(0)}%</p>
                                 </div>
                             </div>
                         </div>

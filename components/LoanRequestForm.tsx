@@ -8,7 +8,7 @@ import { InputField, SelectField, FileUploadField } from './FormFields';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 import { getContractText } from '../services/pdfService';
 import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER } from '../constants';
-import { compressImage } from '../services/utils';
+import { compressImage, isValidDNI, isValidPhone } from '../services/utils';
 
 const initialFormData = {
     fullName: '', idNumber: '', address: '', phone: '', email: '',
@@ -78,6 +78,21 @@ const LoanRequestForm: React.FC = () => {
 
     const handleNextStep = (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // VALIDATION (Point 6)
+        if (!isValidDNI(formData.idNumber)) {
+            showToast('El DNI/NIE introducido no tiene un formato válido.', 'error');
+            return;
+        }
+        if (!isValidPhone(formData.phone)) {
+            showToast('El teléfono debe contener solo números y tener una longitud válida.', 'error');
+            return;
+        }
+        if (parseFloat(formData.loanAmount) <= 0) {
+            showToast('El monto del préstamo debe ser mayor a 0.', 'error');
+            return;
+        }
+
         if (!frontId || !backId) {
             showToast('Por favor, toma una captura o sube ambas imágenes del documento (DNI o NIE).', 'error');
             return;
@@ -106,6 +121,7 @@ const LoanRequestForm: React.FC = () => {
             const { contractType, ...restData } = formData;
             const submissionData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'> = {
                 ...restData,
+                idNumber: formData.idNumber.toUpperCase().trim(), // Normalizar DNI
                 loanAmount: parseFloat(formData.loanAmount) || 0,
                 signature: signatureImage,
             };

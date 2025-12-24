@@ -72,3 +72,19 @@ export const exportLoanToCSV = (loan: Loan) => {
     link.click();
     document.body.removeChild(link);
 };
+
+// --- NUEVAS VALIDACIONES ---
+
+export const isValidDNI = (dni: string): boolean => {
+    if (!dni) return false;
+    // Formato simple: empieza opcionalmente con X, Y, Z, siguen 7-8 dígitos, termina en letra
+    const dniRegex = /^[XYZ]?\d{5,8}[A-Z]$/i;
+    return dniRegex.test(dni.trim());
+};
+
+export const isValidPhone = (phone: string): boolean => {
+    if (!phone) return false;
+    // Permite espacios, guiones, pero debe tener al menos 9 dígitos
+    const cleanPhone = phone.replace(/[\s-]/g, '');
+    return /^\d{9,15}$/.test(cleanPhone);
+};

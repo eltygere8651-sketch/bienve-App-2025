@@ -1,9 +1,9 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Users, Download, Search, PlusCircle, Plus } from 'lucide-react';
+import { Users, Download, Search, PlusCircle, Plus, CalendarArrowDown, Sparkles, RefreshCw } from 'lucide-react';
 import { generateClientReport } from '../services/pdfService';
 import { formatCurrency } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
@@ -19,15 +19,19 @@ interface ClientCardProps {
 }
 
 const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan }) => {
-    const totalLoaned = client.loans.reduce((acc, loan) => acc + (loan.initialCapital || loan.amount), 0);
-    const outstandingBalance = client.loans
+    // Seguridad: Asegurar que loans sea un array y calcular valores con fallbacks a 0
+    const loans = client.loans || [];
+    
+    const totalLoaned = loans.reduce((acc, loan) => acc + (loan.initialCapital || loan.amount || 0), 0);
+    
+    const outstandingBalance = loans
         .filter(loan => loan.status === LoanStatus.PENDING || loan.status === LoanStatus.OVERDUE)
-        .reduce((acc, loan) => acc + loan.remainingCapital, 0);
+        .reduce((acc, loan) => acc + (loan.remainingCapital || 0), 0);
 
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
 
     const handleDownloadReport = () => {
-        generateClientReport(client, client.loans);
+        generateClientReport(client, loans);
     };
 
     const handleLoanClick = (loan: Loan) => {
@@ -38,6 +42,15 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan }) => {
         setSelectedLoan(null);
     };
 
+    // Determinar si es un cliente nuevo (registrado en las últimas 24h)
+    const isNewClient = useMemo(() => {
+        if (!client.joinDate) return false;
+        const joined = new Date(client.joinDate).getTime();
+        const now = Date.now();
+        // 24 horas en milisegundos = 86400000
+        return (now - joined) < 86400000;
+    }, [client.joinDate]);
+
     return (
         <>
             <LoanDetailsModal
@@ -46,11 +59,16 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan }) => {
                 loan={selectedLoan}
                 client={client}
             />
-            <div className="bg-slate-800 p-6 rounded-xl shadow-lg transition-all hover:shadow-2xl hover:scale-[1.02] flex flex-col animate-fade-in border border-slate-700">
+            <div className={`bg-slate-800 p-6 rounded-xl shadow-lg transition-all hover:shadow-2xl hover:scale-[1.02] flex flex-col animate-fade-in border ${isNewClient ? 'border-green-500/50 ring-1 ring-green-500/30' : 'border-slate-700'}`}>
                 <div className="flex justify-between items-start">
-                    <div>
-                        <h3 className="text-xl font-bold text-slate-100">{client.name}</h3>
-                        <p className="text-sm text-slate-400">Cliente desde: {new Date(client.joinDate).toLocaleDateString()}</p>
+                    <div className="relative">
+                        {isNewClient && (
+                            <span className="absolute -top-8 -left-2 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center shadow-lg animate-bounce">
+                                <Sparkles size={10} className="mr-1" /> NUEVO
+                            </span>
+                        )}
+                        <h3 className="text-xl font-bold text-slate-100">{client.name || 'Sin Nombre'}</h3>
+                        <p className="text-sm text-slate-400">Cliente desde: {client.joinDate ? new Date(client.joinDate).toLocaleDateString() : '-'}</p>
                         {client.idNumber && <p className="text-sm text-slate-400 font-mono">DNI/NIE: {client.idNumber}</p>}
                     </div>
                 </div>
@@ -66,7 +84,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan }) => {
                 </div>
                 <div className="mt-6 flex-grow">
                     <div className="flex justify-between items-center mb-2">
-                        <h4 className="text-sm font-semibold text-slate-300">Historial de Préstamos ({client.loans.length})</h4>
+                        <h4 className="text-sm font-semibold text-slate-300">Historial de Préstamos ({loans.length})</h4>
                         <button 
                             onClick={() => onAddLoan(client)}
                             className="text-xs flex items-center gap-1 bg-primary-600/20 text-primary-400 px-2 py-1 rounded hover:bg-primary-600/30 transition-colors"
@@ -74,15 +92,15 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan }) => {
                             <Plus size={12} /> Nuevo
                         </button>
                     </div>
-                    {client.loans.length > 0 ? (
+                    {loans.length > 0 ? (
                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                            {client.loans.map(loan => (
+                            {loans.map(loan => (
                                 <div 
                                     key={loan.id} 
                                     className="flex justify-between items-center bg-slate-700/50 p-2 rounded-md text-sm cursor-pointer hover:bg-slate-700"
                                     onClick={() => handleLoanClick(loan)}
                                 >
-                                    <span className="text-slate-300">{new Date(loan.startDate).toLocaleDateString()} - {formatCurrency(loan.amount)}</span>
+                                    <span className="text-slate-300">{loan.startDate ? new Date(loan.startDate).toLocaleDateString() : '-'} - {formatCurrency(loan.amount)}</span>
                                     <span className={`px-2 py-0.5 text-xs rounded-full ${
                                         loan.status === LoanStatus.PAID ? 'bg-green-500/10 text-green-400' : 
                                         loan.status === LoanStatus.PENDING ? 'bg-primary-500/10 text-primary-400' : 'bg-red-500/10 text-red-400'
@@ -112,18 +130,41 @@ const ClientList: React.FC = () => {
     const { clientLoanData } = useDataContext();
     const { setCurrentView } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [selectedClientForLoan, setSelectedClientForLoan] = useState<Client | null>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    // DEBOUNCE EFFECT: Wait 300ms after last keystroke to update filter
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearchTerm(searchTerm);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
     const filteredClients = useMemo(() => {
-        if (!searchTerm) {
-            return clientLoanData;
+        // Ordenar primero por fecha de creación (más reciente primero)
+        const sortedData = [...clientLoanData].sort((a, b) => {
+            const dateA = a.joinDate ? new Date(a.joinDate).getTime() : 0;
+            const dateB = b.joinDate ? new Date(b.joinDate).getTime() : 0;
+            return dateB - dateA;
+        });
+
+        if (!debouncedSearchTerm) {
+            return sortedData;
         }
-        return clientLoanData.filter(client =>
-            client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (client.idNumber && client.idNumber.toLowerCase().includes(searchTerm.toLowerCase()))
+        return sortedData.filter(client =>
+            (client.name && client.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())) ||
+            (client.idNumber && client.idNumber.toLowerCase().includes(debouncedSearchTerm.toLowerCase()))
         );
-    }, [clientLoanData, searchTerm]);
+    }, [clientLoanData, debouncedSearchTerm]);
     
+    const handleRefresh = () => {
+        setIsRefreshing(true);
+        // Simular refresco visual, ya que los datos son reactivos
+        setTimeout(() => setIsRefreshing(false), 800);
+    };
+
     return (
         <>
             <NewLoanModal 
@@ -134,7 +175,17 @@ const ClientList: React.FC = () => {
             
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Lista de Clientes</h1>
+                     <div>
+                         <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 flex items-center gap-2">
+                             Lista de Clientes
+                             <button onClick={handleRefresh} className={`p-1.5 rounded-full bg-slate-800 border border-slate-700 hover:text-white text-slate-400 ${isRefreshing ? 'animate-spin text-primary-400' : ''}`} title="Refrescar lista">
+                                 <RefreshCw size={14} />
+                             </button>
+                         </h1>
+                         <p className="text-xs text-slate-400 flex items-center mt-1">
+                            <CalendarArrowDown size={12} className="mr-1" /> Ordenados por: Más recientes primero
+                         </p>
+                     </div>
                      <button
                         onClick={() => setCurrentView('newClient')}
                         className="inline-flex items-center justify-center px-4 py-2 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-transform hover:scale-105"
@@ -176,7 +227,7 @@ const ClientList: React.FC = () => {
                              <div className="text-center py-12 bg-slate-800 rounded-lg shadow-lg border border-slate-700">
                                  <Search size={48} className="mx-auto text-slate-500" />
                                  <h2 className="mt-4 text-xl font-semibold text-slate-300">No se encontraron clientes</h2>
-                                 <p className="mt-1 text-slate-400">Prueba con otro término de búsqueda.</p>
+                                 <p className="mt-1 text-slate-400">Prueba con otro término de búsqueda o pulsa el botón de refrescar.</p>
                             </div>
                         )}
                     </>

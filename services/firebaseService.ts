@@ -203,6 +203,15 @@ export const findRequestsById = async (idNumber: string) => {
     return snapshot.docs.map(mapDoc);
 };
 
+// NUEVA FUNCIÓN: Verificar duplicados de clientes
+export const checkClientExists = async (idNumber: string) => {
+    if (!db) throw new Error("DB no inicializada");
+    // Buscamos clientes que coincidan exactamente con el DNI
+    const q = query(collection(db, 'clients'), where('idNumber', '==', idNumber), limit(1));
+    const snapshot = await getDocs(q);
+    return !snapshot.empty;
+};
+
 export const testConnection = async () => {
     if (!db) return false;
     try {

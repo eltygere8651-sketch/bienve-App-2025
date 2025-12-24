@@ -1,10 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { X, Banknote, Save, Loader2, Calendar, Percent } from 'lucide-react';
+import { X, Save, Loader2 } from 'lucide-react';
 import { Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { InputField } from './FormFields';
 import { formatCurrency } from '../services/utils';
+import { calculateLoanParameters } from '../config';
 
 interface NewLoanModalProps {
     isOpen: boolean;
@@ -30,19 +31,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
         const term = parseInt(loanData.term);
         const rate = parseFloat(loanData.interestRate);
 
-        if (isNaN(amount) || isNaN(term) || isNaN(rate) || amount <= 0 || term <= 0) {
-            return { monthlyPayment: 0, totalRepayment: 0, monthlyRate: 0 };
-        }
-
-        const monthlyRate = (rate / 12) / 100;
-        const monthlyPayment = (amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -term));
-        const totalRepayment = monthlyPayment * term;
-
-        return {
-            monthlyPayment: isFinite(monthlyPayment) ? monthlyPayment : 0,
-            totalRepayment: isFinite(totalRepayment) ? totalRepayment : 0,
-            monthlyRate: rate / 12
-        };
+        return calculateLoanParameters(amount, term, rate);
 
     }, [loanData.amount, loanData.term, loanData.interestRate]);
 
@@ -121,7 +110,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Resumen de Condiciones</h3>
                          <div className="flex justify-between text-sm">
                             <span className="text-slate-400">Interés Mensual:</span>
-                            <span className="text-slate-200 font-bold">{calculations.monthlyRate.toFixed(2)}%</span>
+                            <span className="text-slate-200 font-bold">{calculations.monthlyRatePercentage.toFixed(2)}%</span>
                          </div>
                          <div className="flex justify-between text-sm">
                             <span className="text-slate-400">Cuota Mensual:</span>

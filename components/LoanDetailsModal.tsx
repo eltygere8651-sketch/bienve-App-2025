@@ -7,6 +7,7 @@ import PaymentHistory from './PaymentHistory';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField, SelectField } from './FormFields';
+import { calculateAccruedInterest } from '../config';
 
 interface LoanDetailsModalProps {
     isOpen: boolean;
@@ -55,21 +56,27 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         }
     }, [loan, isOpen]);
 
-    // Payment Calculation Logic for Preview
+    // Payment Calculation Logic for Preview (Usando lógica avanzada por días)
     const paymentPreview = useMemo(() => {
         if (!loan || !paymentAmount) return null;
         const amount = parseFloat(paymentAmount);
         if (isNaN(amount) || amount <= 0) return null;
 
-        const monthlyRate = (loan.interestRate / 12) / 100;
-        const interestDue = loan.remainingCapital * monthlyRate;
+        const referenceDate = loan.lastPaymentDate || loan.startDate;
         
-        const interestPart = Math.min(amount, interestDue);
-        const capitalPart = Math.max(0, amount - interestDue);
+        const { interest, daysElapsed } = calculateAccruedInterest(
+            loan.remainingCapital,
+            referenceDate,
+            paymentDate,
+            loan.interestRate
+        );
+        
+        const interestPart = Math.min(amount, interest);
+        const capitalPart = Math.max(0, amount - interest);
         const newBalance = Math.max(0, loan.remainingCapital - capitalPart);
 
-        return { interestPart, capitalPart, newBalance };
-    }, [loan, paymentAmount]);
+        return { interestPart, capitalPart, newBalance, daysElapsed, interestDue: interest };
+    }, [loan, paymentAmount, paymentDate]);
 
     // Months without capital reduction
     const monthsOnlyInterest = useMemo(() => {
@@ -250,7 +257,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                         <div className="max-w-2xl mx-auto space-y-8">
                             <div className="text-center">
                                 <h3 className="text-xl font-bold text-slate-100">Registrar Entrada de Dinero</h3>
-                                <p className="text-slate-400 text-sm mt-1">El sistema calculará automáticamente el interés y el capital.</p>
+                                <p className="text-slate-400 text-sm mt-1">El sistema calcula el interés exacto según los días transcurridos desde el último pago.</p>
                             </div>
 
                             <form onSubmit={handlePaymentSubmit} className="space-y-6">
@@ -287,7 +294,14 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
 
                                 {paymentPreview && (
                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3 animate-fade-in">
-                                        <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Desglose Automático</h4>
+                                        <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+                                            <span>Desglose Automático</span>
+                                            <span className="text-slate-500 text-xs normal-case">Días transcurridos: {paymentPreview.daysElapsed}</span>
+                                        </h4>
+                                        <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                                            <span className="text-sm text-slate-300">Interés Generado ({paymentPreview.daysElapsed} días)</span>
+                                            <span className="font-bold text-green-400">{formatCurrency(paymentPreview.interestDue)}</span>
+                                        </div>
                                         <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
                                             <span className="text-sm text-slate-300">Interés Cubierto</span>
                                             <span className="font-bold text-green-400">{formatCurrency(paymentPreview.interestPart)}</span>

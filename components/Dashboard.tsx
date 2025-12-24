@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, FilterStatus, Client } from '../types';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, FileWarning, CloudCheck } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, FileWarning, CloudCheck, CloudOff } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCurrency } from '../services/utils';
@@ -29,7 +29,7 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
 
 const Dashboard: React.FC = () => {
     const { loans, clients } = useDataContext();
-    const { showToast } = useAppContext();
+    const { showToast, isOnline } = useAppContext();
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('Todos');
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
     const [showPermissionBanner, setShowPermissionBanner] = useState(false);
@@ -151,10 +151,17 @@ const Dashboard: React.FC = () => {
                 )}
                 <div className="flex justify-between items-center">
                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Panel Contable</h1>
-                    <div className="flex items-center text-emerald-400 bg-emerald-900/20 px-3 py-1 rounded-full text-xs font-medium border border-emerald-500/20">
-                        <CloudCheck size={16} className="mr-2" />
-                        Conectado a la Nube
-                    </div>
+                    {isOnline ? (
+                        <div className="flex items-center text-emerald-400 bg-emerald-900/20 px-3 py-1 rounded-full text-xs font-medium border border-emerald-500/20 animate-fade-in">
+                            <CloudCheck size={16} className="mr-2" />
+                            Conectado a la Nube
+                        </div>
+                    ) : (
+                        <div className="flex items-center text-amber-400 bg-amber-900/20 px-3 py-1 rounded-full text-xs font-medium border border-amber-500/20 animate-pulse">
+                            <CloudOff size={16} className="mr-2" />
+                            Modo Offline
+                        </div>
+                    )}
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

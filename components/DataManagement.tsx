@@ -1,25 +1,29 @@
 
 import React, { useState } from 'react';
-import { DatabaseBackup, ShieldCheck, FlaskConical, Trash2, Download, Loader2, Activity, CheckCircle, XCircle, Copy, Lock } from 'lucide-react';
+import { DatabaseBackup, ShieldCheck, FlaskConical, Trash2, Download, Loader2, Activity, Copy, Lock } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
-import { exportDatabase } from '../services/dbService';
 import { testConnection } from '../services/firebaseService';
 
 const DataManagement: React.FC = () => {
     const { showConfirmModal, showToast } = useAppContext();
-    const { handleGenerateTestRequest, handleDeleteTestRequests } = useDataContext();
+    const { clients, loans, requests, handleGenerateTestRequest, handleDeleteTestRequests } = useDataContext();
     const [isExporting, setIsExporting] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
 
     const handleExportBackup = async () => {
         setIsExporting(true);
         try {
-            const data = await exportDatabase();
+            // FIX: Usar los datos del Context (que vienen de Firebase) en lugar de dbService (Dexie)
+            const data = {
+                clients,
+                loans,
+                requests
+            };
 
             const backupData = {
                 timestamp: new Date().toISOString(),
-                version: '3.0 (IndexedDB)',
+                version: '3.1 (Cloud Data)',
                 app: 'B.M Contigo',
                 data: data
             };
@@ -28,13 +32,13 @@ const DataManagement: React.FC = () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `bm_contigo_local_backup_${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `bm_contigo_backup_${new Date().toISOString().split('T')[0]}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            showToast('Copia de seguridad descargada correctamente.', 'success');
+            showToast(`Copia de seguridad descargada. (${clients.length} Clientes, ${loans.length} Préstamos)`, 'success');
 
         } catch (error: any) {
             console.error("Backup error:", error);

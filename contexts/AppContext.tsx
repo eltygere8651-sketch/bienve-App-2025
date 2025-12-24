@@ -40,6 +40,7 @@ interface AppContextType {
     isConfigReady: boolean;
     initializationStatus: InitializationStatus;
     annualInterestRate: number;
+    isOnline: boolean; // Nuevo estado para Point 8
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -51,6 +52,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [currentView, setCurrentView] = useState<AppView>('welcome');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [hasAdminAccount, setHasAdminAccount] = useState(true); 
+    const [isOnline, setIsOnline] = useState(navigator.onLine); // Estado inicial de conexión
     
     const [confirmState, setConfirmState] = useState<ConfirmState>({
         isOpen: false,
@@ -66,6 +68,26 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setToast({ message, type });
     }, []);
+
+    // Listeners de Conectividad (Point 8)
+    useEffect(() => {
+        const handleOnline = () => {
+            setIsOnline(true);
+            showToast('Conexión restablecida. Sincronizando...', 'success');
+        };
+        const handleOffline = () => {
+            setIsOnline(false);
+            showToast('Sin conexión a internet. Trabajando en modo offline.', 'info');
+        };
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, [showToast]);
 
     // Inicialización de Firebase
     useEffect(() => {
@@ -191,10 +213,11 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isConfigReady: initializationStatus !== 'not_configured',
         initializationStatus,
         annualInterestRate,
+        isOnline
     }), [
         toast, showToast, currentView, user, isAuthenticated, login, registerAdmin, logout, hasAdminAccount,
         isSidebarOpen, confirmState, showConfirmModal, hideConfirmModal,
-        initializationStatus, annualInterestRate
+        initializationStatus, annualInterestRate, isOnline
     ]);
 
     if (initializationStatus === 'not_configured') {

@@ -1,22 +1,24 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { ReceiptText, Download, Calculator, AlertCircle, Info } from 'lucide-react';
+import { ReceiptText, Download, Calculator, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { generatePaymentReceipt } from '../services/pdfService';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
 import { Loan, LoanStatus } from '../types';
 import { formatCurrency } from '../services/utils';
+import { calculateAccruedInterest } from '../config';
 
 const ReceiptGenerator: React.FC = () => {
     const { showToast } = useAppContext();
-    const { loans } = useDataContext();
+    const { loans, handleRegisterPayment } = useDataContext();
     
     // Form State
     const [selectedLoanId, setSelectedLoanId] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
     const [notes, setNotes] = useState('');
+    const [isProcessing, setIsProcessing] = useState(false);
     
     // Manual overrides (solo si no se selecciona un préstamo)
     const [manualClientName, setManualClientName] = useState('');
@@ -33,20 +35,32 @@ const ReceiptGenerator: React.FC = () => {
         return activeLoans.find(l => l.id === selectedLoanId) || null;
     }, [selectedLoanId, activeLoans]);
 
-    // Cálculos "Inteligentes" basados en la regla de negocio
+    // Cálculos "Inteligentes" basados en tiempo transcurrido (Puntos 4 y 5)
     const calculations = useMemo(() => {
         const amount = parseFloat(paymentAmount);
         let currentBalance = 0;
-        let monthlyRate = 0.08; // Default 8% for manual mode
+        let interestDue = 0;
+        let daysElapsed = 0;
 
         if (selectedLoan) {
             currentBalance = selectedLoan.remainingCapital;
-            monthlyRate = (selectedLoan.interestRate / 12) / 100;
+            const referenceDate = selectedLoan.lastPaymentDate || selectedLoan.startDate;
+            
+            const accrued = calculateAccruedInterest(
+                currentBalance, 
+                referenceDate, 
+                paymentDate, 
+                selectedLoan.interestRate
+            );
+            interestDue = accrued.interest;
+            daysElapsed = accrued.daysElapsed;
+
         } else if (selectedLoanId === 'manual') {
             currentBalance = parseFloat(manualPreviousBalance) || 0;
+            // En manual asumimos 30 días estándar y 8% mensual
+            interestDue = currentBalance * 0.08;
+            daysElapsed = 30;
         }
-
-        const interestDue = currentBalance * monthlyRate;
 
         if (isNaN(amount) || amount <= 0) {
             return { 
@@ -54,16 +68,12 @@ const ReceiptGenerator: React.FC = () => {
                 interestPart: 0, 
                 capitalPart: 0, 
                 newBalance: currentBalance,
-                interestDue 
+                interestDue,
+                daysElapsed
             };
         }
 
-        // Lógica: Primero se cobran intereses, el resto reduce capital
-        // Regla: 8% mensual fijo sobre deuda pendiente.
         const interestPart = Math.min(amount, interestDue); 
-        
-        // Si paga de más (ej: deuda 100, paga 200), asumimos que reduce capital.
-        // Si paga menos del interés, el capital no baja.
         const capitalPart = Math.max(0, amount - interestDue); 
         const newBalance = Math.max(0, currentBalance - capitalPart);
 
@@ -72,9 +82,10 @@ const ReceiptGenerator: React.FC = () => {
             interestPart,
             capitalPart,
             newBalance,
-            interestDue
+            interestDue,
+            daysElapsed
         };
-    }, [selectedLoan, selectedLoanId, paymentAmount, manualPreviousBalance]);
+    }, [selectedLoan, selectedLoanId, paymentAmount, manualPreviousBalance, paymentDate]);
 
     const isFormValid = (selectedLoanId && selectedLoanId !== 'manual' ? true : (manualClientName && manualPreviousBalance)) && parseFloat(paymentAmount) > 0;
 
@@ -88,40 +99,57 @@ const ReceiptGenerator: React.FC = () => {
         signaturePadRef.current?.clear();
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!isFormValid) return;
+        setIsProcessing(true);
 
-        const signatureImage = signaturePadRef.current?.toDataURL();
-        const clientName = selectedLoan ? selectedLoan.clientName : manualClientName;
-        const loanIdRef = selectedLoan ? selectedLoan.id : 'MANUAL';
+        try {
+            const signatureImage = signaturePadRef.current?.toDataURL();
+            const clientName = selectedLoan ? selectedLoan.clientName : manualClientName;
+            const loanIdRef = selectedLoan ? selectedLoan.id : 'MANUAL';
 
-        // Determinar tipo de pago basado en el cálculo
-        let paymentDescription = 'Abono General';
-        if (calculations.capitalPart > 0 && calculations.interestPart > 0) paymentDescription = 'Interés + Abono a Capital';
-        else if (calculations.capitalPart > 0 && calculations.interestPart === 0) paymentDescription = 'Abono Directo a Capital'; // Raro, pero posible si no hay deuda
-        else paymentDescription = 'Pago de Intereses';
+            // Determinar tipo de pago basado en el cálculo
+            let paymentDescription = 'Abono General';
+            if (calculations.capitalPart > 0 && calculations.interestPart > 0) paymentDescription = 'Interés + Abono a Capital';
+            else if (calculations.capitalPart > 0 && calculations.interestPart === 0) paymentDescription = 'Abono Directo a Capital';
+            else paymentDescription = 'Pago de Intereses';
 
-        // En modo manual, añadimos una nota automática sobre el cálculo
-        const finalNotes = selectedLoanId === 'manual' 
-            ? `${notes ? notes + '. ' : ''}Cálculo manual (8%): Interés ${formatCurrency(calculations.interestPart)}, Capital ${formatCurrency(calculations.capitalPart)}.`
-            : notes;
+            // En modo manual, añadimos una nota automática
+            const finalNotes = selectedLoanId === 'manual' 
+                ? `${notes ? notes + '. ' : ''}Cálculo manual (8%): Interés ${formatCurrency(calculations.interestPart)}, Capital ${formatCurrency(calculations.capitalPart)}.`
+                : notes;
 
-        generatePaymentReceipt({
-            clientName: clientName,
-            loanId: loanIdRef,
-            paymentAmount: parseFloat(paymentAmount),
-            paymentType: paymentDescription,
-            paymentDate: paymentDate,
-            notes: finalNotes,
-            previousBalance: calculations.previousBalance,
-            newBalance: calculations.newBalance,
-            interestPaid: calculations.interestPart,
-            capitalPaid: calculations.capitalPart
-        }, signatureImage);
+            if (selectedLoan) {
+                await handleRegisterPayment(
+                    selectedLoan.id, 
+                    parseFloat(paymentAmount), 
+                    paymentDate, 
+                    notes || "Pago generado desde Recibos"
+                );
+            }
 
-        showToast('Recibo inteligente generado correctamente.', 'success');
-        resetForm();
+            generatePaymentReceipt({
+                clientName: clientName,
+                loanId: loanIdRef,
+                paymentAmount: parseFloat(paymentAmount),
+                paymentType: paymentDescription,
+                paymentDate: paymentDate,
+                notes: finalNotes,
+                previousBalance: calculations.previousBalance,
+                newBalance: calculations.newBalance,
+                interestPaid: calculations.interestPart,
+                capitalPaid: calculations.capitalPart
+            }, signatureImage);
+
+            showToast('Recibo generado y pago registrado correctamente.', 'success');
+            resetForm();
+        } catch (error) {
+            console.error(error);
+            showToast('Hubo un error al procesar el recibo.', 'error');
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     return (
@@ -130,7 +158,7 @@ const ReceiptGenerator: React.FC = () => {
                 <ReceiptText className="h-8 w-8 mr-3 text-primary-400" />
                 <div>
                     <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Generador de Recibos</h1>
-                    <p className="text-slate-400 text-sm">Calcula automáticamente intereses (8%) y capital, incluso en manual.</p>
+                    <p className="text-slate-400 text-sm">Calcula intereses por días transcurridos y registra el pago automáticamente.</p>
                 </div>
             </div>
             
@@ -150,7 +178,7 @@ const ReceiptGenerator: React.FC = () => {
                                 {loan.clientName} - Deuda: {formatCurrency(loan.remainingCapital)}
                             </option>
                         ))}
-                        <option value="manual">-- INGRESO MANUAL (Calculadora 8%) --</option>
+                        <option value="manual">-- INGRESO MANUAL (Calculadora Estándar) --</option>
                     </select>
                  </div>
 
@@ -159,7 +187,7 @@ const ReceiptGenerator: React.FC = () => {
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in bg-slate-700/30 p-4 rounded-xl border border-slate-600">
                         <div className="md:col-span-2 flex items-center gap-2 text-yellow-400 text-xs mb-2">
                             <Info size={14} />
-                            <span>Modo Manual: Se aplicará la regla del 8% mensual automáticamente.</span>
+                            <span>Modo Manual: Solo genera el PDF, NO actualiza la base de datos. Asume 30 días de interés al 8%.</span>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-300 mb-1">Nombre del Cliente</label>
@@ -186,9 +214,10 @@ const ReceiptGenerator: React.FC = () => {
                             className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-white font-bold text-lg"
                         />
                         {(selectedLoan || (selectedLoanId === 'manual' && manualPreviousBalance)) && (
-                            <p className="text-xs text-slate-400 mt-1">
-                                Interés mensual esperado (8%): <span className="text-amber-400 font-bold">{formatCurrency(calculations.interestDue)}</span>
-                            </p>
+                            <div className="text-xs text-slate-400 mt-2 p-2 bg-slate-700 rounded border border-slate-600">
+                                <p>Interés calculado por <span className="text-white font-bold">{calculations.daysElapsed} días</span>.</p>
+                                <p>Monto a cubrir de interés: <span className="text-amber-400 font-bold">{formatCurrency(calculations.interestDue)}</span></p>
+                            </div>
                         )}
                     </div>
                      <div>
@@ -213,7 +242,7 @@ const ReceiptGenerator: React.FC = () => {
                         
                         <div className="grid grid-cols-3 gap-2 text-center text-sm">
                             <div className="bg-slate-800 p-2 rounded border border-slate-600">
-                                <p className="text-slate-400 text-xs uppercase">Interés (8%)</p>
+                                <p className="text-slate-400 text-xs uppercase">Interés</p>
                                 <p className="text-green-400 font-bold text-lg">{formatCurrency(calculations.interestPart)}</p>
                             </div>
                             <div className="bg-slate-800 p-2 rounded border border-slate-600">
@@ -256,11 +285,11 @@ const ReceiptGenerator: React.FC = () => {
                 <div className="text-right">
                     <button 
                         type="submit"
-                        disabled={!isFormValid}
+                        disabled={!isFormValid || isProcessing}
                         className="inline-flex items-center justify-center px-6 py-4 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform hover:scale-105 disabled:bg-slate-600 disabled:cursor-not-allowed w-full sm:w-auto"
                     >
-                        <Download className="mr-2 h-5 w-5" />
-                        Generar Recibo PDF
+                        {isProcessing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Download className="mr-2 h-5 w-5" />}
+                        {isProcessing ? 'Procesando...' : 'Registrar Pago y Generar PDF'}
                     </button>
                 </div>
             </form>

@@ -7,9 +7,11 @@ import {
     addDocument, 
     updateDocument, 
     deleteDocument,
-    getCollection 
+    getCollection,
+    checkClientExists
 } from '../services/firebaseService';
 import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER } from '../constants';
+import { DEFAULT_ANNUAL_INTEREST_RATE, calculateLoanParameters, calculateAccruedInterest } from '../config';
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -55,11 +57,13 @@ export const useAppData = (
         });
 
         const unsubLoans = subscribeToCollection('loans', (data) => {
-            // Ensure compatibility with old data structure
+            // Ensure compatibility with old data structure and new logic
             const mappedLoans = (data as any[]).map(l => ({
                 ...l,
                 initialCapital: l.initialCapital ?? l.amount,
                 remainingCapital: l.remainingCapital ?? (l.status === 'Pagado' ? 0 : l.amount),
+                // Fallback for existing loans without lastPaymentDate
+                lastPaymentDate: l.lastPaymentDate ?? l.startDate, 
                 paymentHistory: l.paymentHistory ?? [],
                 totalInterestPaid: l.totalInterestPaid ?? 0,
                 totalCapitalPaid: l.totalCapitalPaid ?? 0
@@ -152,6 +156,12 @@ export const useAppData = (
 
     const handleApproveRequest = useCallback(async (request: LoanRequest, loanAmount: number, loanTerm: number) => {
         try {
+            // Verificar duplicados antes de aprobar
+            const exists = await checkClientExists(request.idNumber);
+            if (exists) {
+                throw new Error(`Ya existe un cliente registrado con el DNI/NIE ${request.idNumber}`);
+            }
+
             const newClient = {
                 name: request.fullName,
                 idNumber: request.idNumber,
@@ -162,11 +172,9 @@ export const useAppData = (
             };
             const clientDoc = await addDocument('clients', newClient);
 
-            // Default 8% monthly = 96% Annual
-            const annualRate = 96; 
-            const monthlyRate = annualRate / 12 / 100;
-            const monthlyPayment = (loanAmount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -loanTerm));
-            const totalRepayment = monthlyPayment * loanTerm;
+            // Calcular usando la utilidad centralizada
+            const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanAmount, loanTerm);
+            const startDate = new Date().toISOString();
 
             const newLoan: Omit<Loan, 'id'> = {
                 clientId: clientDoc.id,
@@ -174,9 +182,10 @@ export const useAppData = (
                 amount: loanAmount,
                 initialCapital: loanAmount,
                 remainingCapital: loanAmount,
-                interestRate: annualRate,
+                interestRate: DEFAULT_ANNUAL_INTEREST_RATE,
                 term: loanTerm,
-                startDate: new Date().toISOString(),
+                startDate: startDate,
+                lastPaymentDate: startDate, // Inicializar fecha de último pago
                 status: LoanStatus.PENDING,
                 monthlyPayment,
                 totalRepayment,
@@ -221,33 +230,36 @@ export const useAppData = (
         }
     }, [showToast]);
     
+    // --- LÓGICA DE PAGOS ACTUALIZADA (PUNTO 5) ---
     const handleRegisterPayment = useCallback(async (loanId: string, amount: number, date: string, notes: string) => {
         const loan = loans.find(l => l.id === loanId);
         if (!loan || loan.status === LoanStatus.PAID) return;
         
-        // --- ACCOUNTING LOGIC ---
-        // 1. Calculate Monthly Interest based on Pending Capital
-        // Rate is Annual / 12. Example: 96% / 12 = 8%.
-        const monthlyRate = (loan.interestRate / 12) / 100;
-        const interestDue = loan.remainingCapital * monthlyRate;
+        // Calcular intereses basados en días transcurridos desde el último pago
+        const referenceDate = loan.lastPaymentDate || loan.startDate;
+        const { interest, daysElapsed } = calculateAccruedInterest(
+            loan.remainingCapital,
+            referenceDate,
+            date,
+            loan.interestRate
+        );
 
-        // 2. Distribute Payment
-        // Priority: Interest -> Capital
         let interestPaid = 0;
         let capitalPaid = 0;
 
-        if (amount <= interestDue) {
-            // Payment only covers partial or full interest, no capital reduction
+        // Lógica de imputación de pagos: Primero intereses acumulados, luego capital
+        if (amount <= interest) {
             interestPaid = amount;
             capitalPaid = 0;
+            // Nota: Si el pago no cubre el interés, se genera deuda de interés implícita
+            // En este modelo simple, asumimos que el interés se paga o se pierde/acumula visualmente
         } else {
-            // Payment covers full interest + capital reduction
-            interestPaid = interestDue;
-            capitalPaid = amount - interestDue;
+            interestPaid = interest;
+            capitalPaid = amount - interest;
         }
 
         const newRemainingCapital = Math.max(0, loan.remainingCapital - capitalPaid);
-        const isPaidOff = newRemainingCapital <= 0.1; // Tolerance for float errors
+        const isPaidOff = newRemainingCapital <= 0.1; // Margen de error para decimales
 
         const newPaymentRecord: PaymentRecord = {
             id: Date.now().toString(),
@@ -256,7 +268,8 @@ export const useAppData = (
             interestPaid: interestPaid,
             capitalPaid: capitalPaid,
             remainingCapitalAfter: newRemainingCapital,
-            notes: notes
+            notes: notes,
+            daysElapsed: daysElapsed // Guardar días que cubrió este pago
         };
 
         const updatedHistory = [...(loan.paymentHistory || []), newPaymentRecord];
@@ -268,25 +281,40 @@ export const useAppData = (
                 remainingCapital: newRemainingCapital,
                 totalInterestPaid: (loan.totalInterestPaid || 0) + interestPaid,
                 totalCapitalPaid: (loan.totalCapitalPaid || 0) + capitalPaid,
-                paymentHistory: updatedHistory
+                paymentHistory: updatedHistory,
+                lastPaymentDate: date // Actualizar la fecha para el próximo cálculo
             });
-            showToast(`Pago registrado: €${interestPaid.toFixed(2)} interés, €${capitalPaid.toFixed(2)} capital.`, 'success');
+            showToast(`Pago registrado. Interés de ${daysElapsed} días cobrado.`, 'success');
         } catch (err: any) {
+            console.error("Error updating loan payment:", err);
             showToast(`Error: ${err.message}`, 'error');
+            throw err; 
         }
     }, [loans, showToast]);
 
     const handleAddClientAndLoan = useCallback(async (clientData: any, loanData: { amount: number; term: number }) => {
         try {
+            // Validaciones básicas
+            if (isNaN(loanData.amount) || loanData.amount <= 0) throw new Error("El monto del préstamo debe ser válido.");
+            if (isNaN(loanData.term) || loanData.term <= 0) throw new Error("El plazo del préstamo debe ser válido.");
+            if (!clientData.name || clientData.name.trim() === '') throw new Error("El nombre del cliente es obligatorio.");
+            if (!clientData.idNumber || clientData.idNumber.trim() === '') throw new Error("El DNI es obligatorio.");
+
+            // 1. Verificación Crítica: Duplicados
+            const exists = await checkClientExists(clientData.idNumber);
+            if (exists) {
+                throw new Error(`El cliente con DNI ${clientData.idNumber} ya está registrado.`);
+            }
+
+            // 2. Crear Cliente
             const clientDoc = await addDocument('clients', {
                 ...clientData,
                 joinDate: new Date().toISOString()
             });
 
-             const annualRate = 96; // 8% monthly
-             const monthlyRate = annualRate / 12 / 100;
-             const monthlyPayment = (loanData.amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -loanData.term));
-             const totalRepayment = monthlyPayment * loanData.term;
+            // 3. Crear Préstamo (Usando utilidad centralizada)
+             const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanData.amount, loanData.term);
+             const startDate = new Date().toISOString();
  
              await addDocument('loans', {
                  clientId: clientDoc.id,
@@ -294,9 +322,10 @@ export const useAppData = (
                  amount: loanData.amount,
                  initialCapital: loanData.amount,
                  remainingCapital: loanData.amount,
-                 interestRate: annualRate,
+                 interestRate: DEFAULT_ANNUAL_INTEREST_RATE,
                  term: loanData.term,
-                 startDate: new Date().toISOString(),
+                 startDate: startDate,
+                 lastPaymentDate: startDate, // Inicialización
                  status: LoanStatus.PENDING,
                  monthlyPayment,
                  totalRepayment,
@@ -307,18 +336,18 @@ export const useAppData = (
                  notes: 'Préstamo inicial'
              });
 
-            showToast(`Cliente registrado.`, 'success');
+            showToast(`Cliente registrado correctamente.`, 'success');
         } catch (err: any) {
-            showToast(`Error: ${err.message}`, 'error');
-            throw err;
+            console.error(err);
+            showToast(err.message, 'error');
+            throw err; 
         }
     }, [showToast]);
 
     const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => {
         try {
-            const monthlyRate = (loanData.interestRate / 12) / 100;
-            const monthlyPayment = (loanData.amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -loanData.term));
-            const totalRepayment = monthlyPayment * loanData.term;
+            // Calcular usando utilidad centralizada, pero permitiendo tasa custom
+            const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanData.amount, loanData.term, loanData.interestRate);
 
             await addDocument('loans', {
                 clientId,
@@ -329,6 +358,7 @@ export const useAppData = (
                 interestRate: loanData.interestRate,
                 term: loanData.term,
                 startDate: loanData.startDate,
+                lastPaymentDate: loanData.startDate, // Inicialización
                 status: LoanStatus.PENDING,
                 monthlyPayment,
                 totalRepayment,
