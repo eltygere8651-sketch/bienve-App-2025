@@ -7,7 +7,7 @@ import PaymentHistory from './PaymentHistory';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField, SelectField } from './FormFields';
-import { calculateAccruedInterest } from '../config';
+import { calculateMonthlyInterest } from '../config';
 
 interface LoanDetailsModalProps {
     isOpen: boolean;
@@ -56,27 +56,20 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         }
     }, [loan, isOpen]);
 
-    // Payment Calculation Logic for Preview (Usando lógica avanzada por días)
+    // MODIFICADO: Uso de calculateMonthlyInterest (8% fijo)
     const paymentPreview = useMemo(() => {
         if (!loan || !paymentAmount) return null;
         const amount = parseFloat(paymentAmount);
         if (isNaN(amount) || amount <= 0) return null;
-
-        const referenceDate = loan.lastPaymentDate || loan.startDate;
         
-        const { interest, daysElapsed } = calculateAccruedInterest(
-            loan.remainingCapital,
-            referenceDate,
-            paymentDate,
-            loan.interestRate
-        );
+        const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
         
         const interestPart = Math.min(amount, interest);
         const capitalPart = Math.max(0, amount - interest);
         const newBalance = Math.max(0, loan.remainingCapital - capitalPart);
 
-        return { interestPart, capitalPart, newBalance, daysElapsed, interestDue: interest };
-    }, [loan, paymentAmount, paymentDate]);
+        return { interestPart, capitalPart, newBalance, interestDue: interest };
+    }, [loan, paymentAmount]);
 
     // Months without capital reduction
     const monthsOnlyInterest = useMemo(() => {
@@ -257,7 +250,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                         <div className="max-w-2xl mx-auto space-y-8">
                             <div className="text-center">
                                 <h3 className="text-xl font-bold text-slate-100">Registrar Entrada de Dinero</h3>
-                                <p className="text-slate-400 text-sm mt-1">El sistema calcula el interés exacto según los días transcurridos desde el último pago.</p>
+                                <p className="text-slate-400 text-sm mt-1">El sistema aplica un interés fijo del 8% sobre el capital pendiente.</p>
                             </div>
 
                             <form onSubmit={handlePaymentSubmit} className="space-y-6">
@@ -270,6 +263,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                         onChange={(e) => setPaymentAmount(e.target.value)} 
                                         required 
                                         min="0.01" 
+                                        step="0.01"
                                     />
                                     <InputField 
                                         label="Fecha del Pago" 
@@ -296,10 +290,10 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                     <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-3 animate-fade-in">
                                         <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex justify-between">
                                             <span>Desglose Automático</span>
-                                            <span className="text-slate-500 text-xs normal-case">Días transcurridos: {paymentPreview.daysElapsed}</span>
+                                            <span className="text-slate-500 text-xs normal-case">Tasa: 8% Mensual Fijo</span>
                                         </h4>
                                         <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
-                                            <span className="text-sm text-slate-300">Interés Generado ({paymentPreview.daysElapsed} días)</span>
+                                            <span className="text-sm text-slate-300">Interés Mensual</span>
                                             <span className="font-bold text-green-400">{formatCurrency(paymentPreview.interestDue)}</span>
                                         </div>
                                         <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
@@ -351,9 +345,9 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
                                 <h3 className="text-lg font-bold text-slate-100 border-b border-slate-700 pb-2">Editar Datos Maestros</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <InputField label="Capital Inicial (€)" name="initialCapital" type="number" value={String(formData.initialCapital)} onChange={(e) => setFormData({...formData, initialCapital: Number(e.target.value)})} />
-                                    <InputField label="Capital Pendiente (€)" name="remainingCapital" type="number" value={String(formData.remainingCapital)} onChange={(e) => setFormData({...formData, remainingCapital: Number(e.target.value)})} />
-                                    <InputField label="Tasa Anual (%)" name="interestRate" type="number" value={String(formData.interestRate)} onChange={(e) => setFormData({...formData, interestRate: Number(e.target.value)})} />
+                                    <InputField label="Capital Inicial (€)" name="initialCapital" type="number" value={String(formData.initialCapital)} onChange={(e) => setFormData({...formData, initialCapital: Number(e.target.value)})} step="0.01" />
+                                    <InputField label="Capital Pendiente (€)" name="remainingCapital" type="number" value={String(formData.remainingCapital)} onChange={(e) => setFormData({...formData, remainingCapital: Number(e.target.value)})} step="0.01" />
+                                    <InputField label="Tasa Anual (%)" name="interestRate" type="number" value={String(formData.interestRate)} onChange={(e) => setFormData({...formData, interestRate: Number(e.target.value)})} step="0.01" />
                                     <InputField label="Fecha Inicio" name="startDate" type="date" value={String(formData.startDate)} onChange={(e) => setFormData({...formData, startDate: e.target.value})} />
                                 </div>
                                 <div>

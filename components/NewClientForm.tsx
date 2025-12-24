@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { UserPlus, ArrowLeft, Loader2, BarChart, Banknote, Percent, AlertCircle } from 'lucide-react';
+import { UserPlus, ArrowLeft, Loader2, BarChart, Banknote, Percent, AlertCircle, Lock } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField } from './FormFields';
@@ -82,12 +82,16 @@ const NewClientForm: React.FC = () => {
                     term: parseInt(loanData.term, 10),
                 }
             );
-            setCurrentView('clients');
+            
+            // PEQUEÑO RETARDO TÉCNICO
+            setTimeout(() => {
+                setCurrentView('clients');
+            }, 500);
+
         } catch (error: any) {
             console.error("Error creating client and loan:", error);
             setFormError(error.message || "Error desconocido al registrar.");
-        } finally {
-            setIsSubmitting(false);
+            setIsSubmitting(false); // Solo paramos loading si hubo error
         }
     };
     
@@ -126,12 +130,24 @@ const NewClientForm: React.FC = () => {
                 </div>
                 <div>
                     <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Detalles del Préstamo Inicial</h2>
+                    
+                    {/* Regla Inquebrantable Banner */}
+                    <div className="mb-6 bg-blue-900/30 border border-blue-500/30 p-3 rounded-lg flex items-start gap-3">
+                         <Lock className="text-blue-400 h-5 w-5 mt-0.5 flex-shrink-0" />
+                         <div>
+                             <p className="text-sm text-blue-200 font-bold">Regla de Oro: Interés Fijo 8% Mensual</p>
+                             <p className="text-xs text-blue-300">
+                                 La tasa está fijada al 96% anual (8% mensual). El capital adeudado solo disminuirá si el pago del cliente supera el interés acumulado.
+                             </p>
+                         </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <InputField label="Monto a Prestar (€)" name="amount" type="number" value={loanData.amount} onChange={handleLoanChange} required min="1" />
+                        <InputField label="Monto a Prestar (€)" name="amount" type="number" value={loanData.amount} onChange={handleLoanChange} required min="1" step="0.01" />
                         <InputField label="Plazo (en meses)" name="term" type="number" value={loanData.term} onChange={handleLoanChange} required min="1" />
                     </div>
                     <div className="mt-6 bg-slate-700/50 p-4 rounded-lg">
-                        <h3 className="text-base font-semibold text-slate-200 mb-3">Resumen Contable (Est. 8% Mensual)</h3>
+                        <h3 className="text-base font-semibold text-slate-200 mb-3">Resumen Contable (8% Mensual)</h3>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="flex items-center space-x-3">
                                 <Banknote className="h-6 w-6 text-green-400"/>
@@ -150,8 +166,10 @@ const NewClientForm: React.FC = () => {
                             <div className="flex items-center space-x-3">
                                 <Percent className="h-6 w-6 text-purple-400"/>
                                 <div>
-                                    <p className="text-xs text-slate-400">Interés Mensual</p>
-                                    <p className="text-base font-bold text-slate-100">{loanCalculations.monthlyRatePercentage.toFixed(0)}%</p>
+                                    <p className="text-xs text-slate-400">Tasa Mensual</p>
+                                    <p className="text-base font-bold text-slate-100 flex items-center">
+                                        8% <Lock size={12} className="ml-1 opacity-50"/>
+                                    </p>
                                 </div>
                             </div>
                         </div>

@@ -11,14 +11,15 @@ export const InputField: React.FC<{
     required?: boolean;
     isOptional?: boolean;
     min?: string | number;
-}> = ({ label, name, type, value, onChange, required, isOptional, min }) => (
+    step?: string | number;
+}> = ({ label, name, type, value, onChange, required, isOptional, min, step }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">
             {label} {isOptional && <span className="text-xs text-slate-400">(Opcional)</span>}
         </label>
         <input 
             id={name} name={name} type={type} value={value} onChange={onChange} 
-            required={required} min={min} 
+            required={required} min={min} step={step}
             className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100" 
         />
     </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { X, Save, Loader2 } from 'lucide-react';
+import { X, Save, Loader2, Lock } from 'lucide-react';
 import { Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { InputField } from './FormFields';
@@ -17,11 +17,11 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
     const { handleAddLoan } = useDataContext();
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Default values
+    // Default values - Interest locked to 96 (8% monthly)
     const [loanData, setLoanData] = useState({
         amount: '500',
         term: '12',
-        interestRate: '96', // 8% monthly
+        interestRate: '96', 
         startDate: new Date().toISOString().split('T')[0],
         notes: ''
     });
@@ -85,16 +85,22 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
                     <div className="grid grid-cols-2 gap-4">
-                        <InputField label="Monto (€)" name="amount" type="number" value={loanData.amount} onChange={handleInputChange as any} required min="1" />
+                        <InputField label="Monto (€)" name="amount" type="number" value={loanData.amount} onChange={handleInputChange as any} required min="1" step="0.01" />
                         <InputField label="Plazo (meses)" name="term" type="number" value={loanData.term} onChange={handleInputChange as any} required min="1" />
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
-                        <InputField label="Interés Anual (%)" name="interestRate" type="number" value={loanData.interestRate} onChange={handleInputChange as any} required min="0" />
+                        <div className="relative opacity-75">
+                            <InputField label="Interés Anual (%)" name="interestRate" type="number" value={loanData.interestRate} onChange={() => {}} required min="0" step="0.01" />
+                            <div className="absolute inset-0 bg-slate-900/10 cursor-not-allowed flex items-center justify-end pr-8 pb-3 pointer-events-none">
+                                <Lock size={16} className="text-slate-400" />
+                            </div>
+                            <p className="text-[10px] text-primary-400 mt-1 absolute bottom-[-18px]">Fijo: 8% Mensual</p>
+                        </div>
                         <InputField label="Fecha Inicio" name="startDate" type="date" value={loanData.startDate} onChange={handleInputChange as any} required />
                     </div>
 
-                    <div>
+                    <div className="mt-4">
                         <label className="block text-sm font-medium text-slate-300 mb-1">Notas (Opcional)</label>
                         <textarea 
                             name="notes"

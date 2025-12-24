@@ -30,6 +30,7 @@ interface DataContextType {
     handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
     handleDeleteLoan: (loanId: string, clientName: string) => Promise<void>;
     reloadRequests: () => Promise<void>;
+    refreshAllData: () => Promise<void>; // Nueva función añadida al tipo
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);

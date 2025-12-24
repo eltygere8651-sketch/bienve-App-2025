@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 
@@ -51,7 +52,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
     return (
         <div 
-            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4 animate-modal-backdrop" 
+            className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-[60] p-4 animate-modal-backdrop" 
             onClick={!isProcessing ? onCancel : undefined}
             role="dialog"
             aria-modal="true"

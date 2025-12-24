@@ -68,7 +68,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan }) => {
                             </span>
                         )}
                         <h3 className="text-xl font-bold text-slate-100">{client.name || 'Sin Nombre'}</h3>
-                        <p className="text-sm text-slate-400">Cliente desde: {client.joinDate ? new Date(client.joinDate).toLocaleDateString() : '-'}</p>
+                        <p className="text-sm text-slate-400">Cliente desde: {client.joinDate ? new Date(client.joinDate).toLocaleDateString() : 'Reciente'}</p>
                         {client.idNumber && <p className="text-sm text-slate-400 font-mono">DNI/NIE: {client.idNumber}</p>}
                     </div>
                 </div>
@@ -127,7 +127,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan }) => {
 };
 
 const ClientList: React.FC = () => {
-    const { clientLoanData } = useDataContext();
+    const { clientLoanData, refreshAllData } = useDataContext(); // Usar refreshAllData del contexto
     const { setCurrentView } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -143,11 +143,12 @@ const ClientList: React.FC = () => {
     }, [searchTerm]);
 
     const filteredClients = useMemo(() => {
-        // Ordenar primero por fecha de creación (más reciente primero)
         const sortedData = [...clientLoanData].sort((a, b) => {
             const dateA = a.joinDate ? new Date(a.joinDate).getTime() : 0;
             const dateB = b.joinDate ? new Date(b.joinDate).getTime() : 0;
-            return dateB - dateA;
+            const safeA = isNaN(dateA) ? 0 : dateA;
+            const safeB = isNaN(dateB) ? 0 : dateB;
+            return safeB - safeA;
         });
 
         if (!debouncedSearchTerm) {
@@ -159,10 +160,11 @@ const ClientList: React.FC = () => {
         );
     }, [clientLoanData, debouncedSearchTerm]);
     
-    const handleRefresh = () => {
+    // Función de refresco real
+    const handleRefresh = async () => {
         setIsRefreshing(true);
-        // Simular refresco visual, ya que los datos son reactivos
-        setTimeout(() => setIsRefreshing(false), 800);
+        await refreshAllData(); // Llamada real a la BD
+        setIsRefreshing(false);
     };
 
     return (
@@ -178,7 +180,7 @@ const ClientList: React.FC = () => {
                      <div>
                          <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 flex items-center gap-2">
                              Lista de Clientes
-                             <button onClick={handleRefresh} className={`p-1.5 rounded-full bg-slate-800 border border-slate-700 hover:text-white text-slate-400 ${isRefreshing ? 'animate-spin text-primary-400' : ''}`} title="Refrescar lista">
+                             <button onClick={handleRefresh} className={`p-1.5 rounded-full bg-slate-800 border border-slate-700 hover:text-white text-slate-400 ${isRefreshing ? 'animate-spin text-primary-400' : ''}`} title="Sincronizar ahora">
                                  <RefreshCw size={14} />
                              </button>
                          </h1>
@@ -198,8 +200,16 @@ const ClientList: React.FC = () => {
                 {clientLoanData.length === 0 ? (
                     <div className="text-center py-12 bg-slate-800 rounded-lg shadow-lg border border-slate-700">
                          <Users size={48} className="mx-auto text-slate-500" />
-                         <h2 className="mt-4 text-xl font-semibold text-slate-300">No hay clientes registrados</h2>
-                         <p className="mt-1 text-slate-400">Cuando apruebes una solicitud de préstamo o registres un nuevo cliente, aparecerá aquí.</p>
+                         <h2 className="mt-4 text-xl font-semibold text-slate-300">No hay clientes visibles</h2>
+                         <p className="mt-1 text-slate-400">Si acabas de registrar uno, pulsa el botón de abajo.</p>
+                         <button 
+                            onClick={handleRefresh} 
+                            disabled={isRefreshing}
+                            className="mt-4 px-4 py-2 bg-slate-700 text-primary-400 rounded-lg text-sm font-bold flex items-center mx-auto gap-2 hover:bg-slate-600"
+                        >
+                            <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
+                            Sincronizar Datos
+                        </button>
                     </div>
                 ) : (
                     <>
