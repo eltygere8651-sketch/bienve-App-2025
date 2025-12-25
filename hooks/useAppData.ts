@@ -308,7 +308,10 @@ export const useAppData = (
     const handleAddClientAndLoan = useCallback(async (clientData: any, loanData: { amount: number; term: number }) => {
         try {
             if (isNaN(loanData.amount) || loanData.amount <= 0) throw new Error("El monto del préstamo debe ser válido.");
-            if (isNaN(loanData.term) || loanData.term <= 0) throw new Error("El plazo del préstamo debe ser válido.");
+            
+            // CORRECCIÓN: Permitir term = 0 (Indefinido), pero rechazar negativos
+            if (isNaN(loanData.term) || loanData.term < 0) throw new Error("El plazo del préstamo debe ser válido.");
+            
             if (!clientData.name || clientData.name.trim() === '') throw new Error("El nombre del cliente es obligatorio.");
             if (!clientData.idNumber || clientData.idNumber.trim() === '') throw new Error("El DNI es obligatorio.");
 
