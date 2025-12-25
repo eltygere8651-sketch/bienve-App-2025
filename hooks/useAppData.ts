@@ -403,13 +403,19 @@ export const useAppData = (
 
     const handleDeleteLoan = useCallback(async (loanId: string, clientName: string) => {
         try {
-            await deleteDocument('loans', loanId);
-            showToast(`Préstamo eliminado.`, 'success');
+            // CAMBIO: Soft Delete (Archivar y Cancelar) en lugar de borrar
+            await updateDocument('loans', loanId, { 
+                archived: true, 
+                status: LoanStatus.CANCELLED,
+                notes: `Cancelado el ${new Date().toLocaleDateString()}` 
+            });
+            showToast(`Préstamo movido al historial (Cancelado).`, 'success');
+            refreshAllData(); // Actualizar UI
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast]);
+    }, [showToast, refreshAllData]);
 
     const handleArchivePaidLoans = useCallback(async () => {
         try {

@@ -1,6 +1,6 @@
 
 import React, { useRef } from 'react';
-import { UploadCloud, Camera, Image as ImageIcon } from 'lucide-react';
+import { UploadCloud, Camera, Image as ImageIcon, Euro } from 'lucide-react';
 
 export const InputField: React.FC<{
     label: string;
@@ -12,16 +12,54 @@ export const InputField: React.FC<{
     isOptional?: boolean;
     min?: string | number;
     step?: string | number;
-}> = ({ label, name, type, value, onChange, required, isOptional, min, step }) => (
+    placeholder?: string;
+}> = ({ label, name, type, value, onChange, required, isOptional, min, step, placeholder }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">
             {label} {isOptional && <span className="text-xs text-slate-400">(Opcional)</span>}
         </label>
         <input 
-            id={name} name={name} type={type} value={value} onChange={onChange} 
-            required={required} min={min} step={step}
-            className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100" 
+            id={name} 
+            name={name} 
+            type={type} 
+            value={value} 
+            onChange={onChange} 
+            required={required} 
+            min={min} 
+            step={step}
+            placeholder={placeholder}
+            onFocus={(e) => e.target.select()} // UX: Auto-seleccionar para no borrar 1 a 1
+            className="w-full px-3 py-2 border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100 placeholder-slate-500 transition-all" 
         />
+    </div>
+);
+
+export const MoneyInput: React.FC<{
+    label: string;
+    value: string;
+    onChange: (val: string) => void;
+    required?: boolean;
+    autoFocus?: boolean;
+}> = ({ label, value, onChange, required, autoFocus }) => (
+    <div>
+        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{label}</label>
+        <div className="relative group">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Euro size={18} className="text-slate-500 group-focus-within:text-primary-400 transition-colors" />
+            </div>
+            <input
+                type="number"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                required={required}
+                min="0.01"
+                step="0.01"
+                placeholder="0.00"
+                autoFocus={autoFocus}
+                onFocus={(e) => e.target.select()} // UX CRITICA: Auto-seleccionar texto
+                className="block w-full pl-10 pr-3 py-3 bg-slate-800 border border-slate-600 rounded-xl leading-5 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 sm:text-lg font-bold transition-all shadow-inner"
+            />
+        </div>
     </div>
 );
 
@@ -37,7 +75,7 @@ export const SelectField: React.FC<{
         <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
         <select 
             id={name} name={name} value={value} onChange={onChange} required={required} 
-            className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100"
+            className="w-full px-3 py-2 border border-slate-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100 transition-all appearance-none"
         >
             {children}
         </select>

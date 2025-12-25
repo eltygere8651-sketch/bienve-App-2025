@@ -12,9 +12,16 @@ const HistoryPanel: React.FC = () => {
     const [isCleaning, setIsCleaning] = useState(false);
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
 
-    // Calcular estadísticas generales
-    const totalRecovered = useMemo(() => archivedLoans.reduce((acc, l) => acc + (l.initialCapital || l.amount), 0), [archivedLoans]);
-    const totalInterest = useMemo(() => archivedLoans.reduce((acc, l) => acc + l.totalInterestPaid, 0), [archivedLoans]);
+    // Calcular estadísticas generales (Excluyendo Cancelados)
+    const totalRecovered = useMemo(() => archivedLoans
+        .filter(l => l.status !== LoanStatus.CANCELLED)
+        .reduce((acc, l) => acc + (l.initialCapital || l.amount), 0), [archivedLoans]);
+        
+    const totalInterest = useMemo(() => archivedLoans
+        .filter(l => l.status !== LoanStatus.CANCELLED)
+        .reduce((acc, l) => acc + l.totalInterestPaid, 0), [archivedLoans]);
+
+    const closedLoansCount = useMemo(() => archivedLoans.filter(l => l.status !== LoanStatus.CANCELLED).length, [archivedLoans]);
 
     // Filtrar lista
     const filteredLoans = useMemo(() => {
@@ -24,14 +31,13 @@ const HistoryPanel: React.FC = () => {
         );
     }, [archivedLoans, searchTerm]);
 
-    // Generar informe de reputación (Heurística simple: Pagado sin historial de overdue en logs vs Pagado con overdue)
-    // Nota: Como no guardamos un historial de estados, usaremos el estado actual (que debe ser PAID) y notas o fechas.
-    // Para este MVP, "Historial Impecable" son todos los archivados (ya que pagaron).
-    // Podríamos marcar como "Con Incidencias" si tienen notas de "retraso" o similar, pero por ahora lo dejamos simple.
+    // Generar informe de reputación (Excluyendo cancelados para reputación positiva)
     const clientReputation = useMemo(() => {
         const rep = new Map<string, { name: string, paidLoans: number, totalAmount: number }>();
         
         archivedLoans.forEach(loan => {
+            if (loan.status === LoanStatus.CANCELLED) return; // Ignore cancelled loans for reputation
+
             if (!rep.has(loan.clientId)) {
                 rep.set(loan.clientId, { name: loan.clientName, paidLoans: 0, totalAmount: 0 });
             }
@@ -89,7 +95,7 @@ const HistoryPanel: React.FC = () => {
                         <div className="p-3 bg-green-500/20 text-green-400 rounded-xl"><CheckCircle size={24} /></div>
                         <div>
                             <p className="text-sm text-slate-400 font-bold uppercase">Préstamos Cerrados</p>
-                            <p className="text-2xl font-bold text-white">{archivedLoans.length}</p>
+                            <p className="text-2xl font-bold text-white">{closedLoansCount}</p>
                         </div>
                     </div>
                     <div className="glass-card p-6 rounded-2xl bg-slate-800/60 border border-slate-700 flex items-center gap-4">
@@ -134,7 +140,7 @@ const HistoryPanel: React.FC = () => {
                                         <tr>
                                             <th className="px-6 py-3">Cliente</th>
                                             <th className="px-6 py-3">Monto Original</th>
-                                            <th className="px-6 py-3">Finalizado</th>
+                                            <th className="px-6 py-3">Fecha Fin / Estado</th>
                                             <th className="px-6 py-3 text-right">Acción</th>
                                         </tr>
                                     </thead>
@@ -144,9 +150,14 @@ const HistoryPanel: React.FC = () => {
                                                 <td className="px-6 py-4 font-medium text-white">{loan.clientName}</td>
                                                 <td className="px-6 py-4 text-slate-300 font-mono">{formatCurrency(loan.initialCapital || loan.amount)}</td>
                                                 <td className="px-6 py-4 text-slate-400">
-                                                    <div className="flex items-center gap-1.5">
+                                                    <div className="flex items-center gap-2">
                                                         <Calendar size={14} />
                                                         {new Date(loan.lastPaymentDate || loan.startDate).toLocaleDateString()}
+                                                        {loan.status === LoanStatus.CANCELLED && (
+                                                            <span className="text-[10px] font-bold text-red-400 bg-red-900/30 px-1.5 py-0.5 rounded border border-red-500/20">
+                                                                Cancelado
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
