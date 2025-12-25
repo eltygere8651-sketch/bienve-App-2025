@@ -93,26 +93,24 @@ const App: React.FC = () => {
         setCurrentView(isAuthenticated ? 'dashboard' : 'welcome');
     };
 
-    // Componente interno para los botones de acción en cabecera
-    const HeaderActions = () => (
-        <div className="flex items-center gap-1 sm:gap-2">
+    // Componente interno para los botones de acción (Solo usado en Mobile Header ahora)
+    const HeaderActionsMobile = () => (
+        <div className="flex items-center gap-1">
             {!isInStandaloneMode && (
                 <button 
                     onClick={handleInstallApp}
-                    className="p-2 text-slate-300 hover:text-white hover:bg-white/5 rounded-full transition-colors flex items-center gap-2"
+                    className="p-2 text-slate-300 hover:text-white hover:bg-white/5 rounded-full transition-colors"
                     title="Instalar App"
                 >
-                    <Download size={18} />
-                    <span className="hidden lg:inline text-sm font-medium">Instalar</span>
+                    <Download size={20} />
                 </button>
             )}
             <button 
                 onClick={() => setIsShareModalOpen(true)}
-                className="p-2 text-primary-300 hover:text-white hover:bg-primary-500/20 rounded-full transition-colors flex items-center gap-2"
+                className="p-2 text-primary-300 hover:text-white hover:bg-primary-500/20 rounded-full transition-colors"
                 title="Compartir"
             >
-                <Share2 size={18} />
-                <span className="hidden lg:inline text-sm font-medium">Compartir</span>
+                <Share2 size={20} />
             </button>
         </div>
     );
@@ -213,6 +211,28 @@ const App: React.FC = () => {
             </nav>
 
              <div className="p-4 border-t border-white/5 bg-black/10">
+                {/* BOTONES DE UTILIDAD (PC) - Movidos aquí para no obstruir el contenido principal */}
+                <div className={`grid ${isSidebarOpen || isMobileMenuOpen ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mb-4`}>
+                     {!isInStandaloneMode && (
+                        <button 
+                            onClick={handleInstallApp}
+                            className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-white/5 group"
+                            title="Instalar App"
+                        >
+                            <Download size={20} className="group-hover:text-emerald-400 transition-colors" />
+                            {(isSidebarOpen || isMobileMenuOpen) && <span className="text-[10px] mt-1 font-bold uppercase tracking-wide">Instalar</span>}
+                        </button>
+                    )}
+                    <button 
+                        onClick={() => setIsShareModalOpen(true)}
+                        className={`flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-white/5 group ${isInStandaloneMode ? 'col-span-2' : ''}`}
+                        title="Compartir App"
+                    >
+                        <Share2 size={20} className="group-hover:text-primary-400 transition-colors" />
+                        {(isSidebarOpen || isMobileMenuOpen) && <span className="text-[10px] mt-1 font-bold uppercase tracking-wide">Compartir</span>}
+                    </button>
+                </div>
+
                 {isAuthenticated ? (
                      <button
                         onClick={logout}
@@ -266,7 +286,7 @@ const App: React.FC = () => {
                          <h1 className="text-lg font-heading font-bold text-white">B.M Contigo</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <HeaderActions />
+                        <HeaderActionsMobile />
                         <div className="w-px h-6 bg-white/10 mx-1"></div>
                         <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-300 hover:text-white">
                             <Menu size={24} />
@@ -288,15 +308,10 @@ const App: React.FC = () => {
                 </aside>
                 
                 <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-                    {/* Background Ambient Glow - Sutil para opción corporativa */}
+                    {/* Background Ambient Glow */}
                     <div className="absolute top-0 left-0 w-full h-96 bg-primary-900/10 rounded-full blur-[120px] -translate-y-1/2 pointer-events-none"></div>
 
-                    {/* Desktop Header Bar (Top Right) */}
-                    <div className="hidden md:flex absolute top-0 right-0 p-6 z-20 pointer-events-none">
-                        <div className="pointer-events-auto bg-slate-900/50 backdrop-blur-md border border-white/10 rounded-full px-4 py-1.5 shadow-xl flex items-center gap-2">
-                            <HeaderActions />
-                        </div>
-                    </div>
+                    {/* Desktop Header eliminado para no obstruir botones de acción */}
 
                     <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 pt-20 md:pt-8 scroll-smooth">
                         <div className="max-w-7xl mx-auto w-full">
