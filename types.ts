@@ -3,7 +3,6 @@ export enum LoanStatus {
     PENDING = 'Pendiente',
     PAID = 'Pagado',
     OVERDUE = 'Vencido',
-    CANCELLED = 'Cancelado',
 }
 
 export enum RequestStatus {
@@ -56,6 +55,7 @@ export interface Client {
     phone?: string;
     address?: string;
     email?: string;
+    archived?: boolean; // Added for soft delete/archiving
 }
 
 export interface LoanRequest {

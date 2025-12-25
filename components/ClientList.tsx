@@ -3,21 +3,34 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Users, Search, PlusCircle, Plus, CalendarArrowDown, Sparkles, RefreshCw, Banknote, TrendingUp, AlertCircle, Phone, ArrowRight, Eye } from 'lucide-react';
+import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
 import NewLoanModal from './NewLoanModal';
+import { generateClientReport, generateFullClientListPDF } from '../services/pdfService';
 
 interface ClientWithData extends Client {
     loans: Loan[];
 }
 
 const ProgressBar: React.FC<{ percent: number }> = ({ percent }) => (
-    <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden mt-2 border border-slate-700/50">
+    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden mt-3 border border-slate-700/50 shadow-inner">
         <div 
-            className={`h-full rounded-full transition-all duration-500 ${percent >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-primary-600 to-primary-400'}`} 
+            className={`h-full rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(0,0,0,0.3)] ${percent >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-primary-600 to-indigo-500'}`} 
             style={{ width: `${percent}%` }}
         />
+    </div>
+);
+
+const StatBadge: React.FC<{ label: string, value: string | number, icon: any, color: string }> = ({ label, value, icon: Icon, color }) => (
+    <div className="flex items-center gap-4 bg-slate-800/60 backdrop-blur-md px-5 py-4 rounded-2xl border border-white/5 shadow-lg flex-1 min-w-[200px] hover:bg-slate-800/80 transition-colors">
+        <div className={`p-3 rounded-xl bg-${color}-500/10 text-${color}-400 ring-1 ring-${color}-500/20 shadow-lg shadow-${color}-900/20`}>
+            <Icon size={24} />
+        </div>
+        <div>
+            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-0.5">{label}</p>
+            <p className="text-2xl font-heading font-bold text-white leading-none tracking-tight">{value}</p>
+        </div>
     </div>
 );
 
@@ -26,12 +39,11 @@ interface ClientCardProps {
     onAddLoan: (client: Client) => void;
     onViewDetails: (loan: Loan) => void;
     onQuickPay: (loan: Loan) => void;
+    onArchive: (client: Client) => void;
 }
 
-const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetails, onQuickPay }) => {
+const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetails, onQuickPay, onArchive }) => {
     const loans = client.loans || [];
-    
-    // Calcular deuda activa (Solo préstamos pendientes)
     const activeLoan = loans.find(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
     const hasActiveLoan = !!activeLoan;
     
@@ -40,95 +52,127 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
         return (Date.now() - new Date(client.joinDate).getTime()) < 86400000;
     }, [client.joinDate]);
 
-    return (
-        <div className="bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 shadow-lg hover:shadow-xl hover:border-slate-600 transition-all duration-300 group flex flex-col h-full relative">
-             {/* Decorative gradient top */}
-             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary-500 to-indigo-600"></div>
+    const handleDownloadReport = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        generateClientReport(client, loans);
+    };
 
-            {/* Header */}
-            <div className="p-5 pb-2 flex justify-between items-start">
-                <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-bold text-slate-100 truncate pr-2 group-hover:text-primary-300 transition-colors" title={client.name}>
-                        {client.name}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-900/50 px-1.5 py-0.5 rounded border border-slate-700">
-                            {client.idNumber}
-                        </span>
-                        {isNewClient && (
-                            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                <Sparkles size={8} /> NUEVO
-                            </span>
-                        )}
+    const handleCardClick = () => {
+        if (activeLoan) {
+            onViewDetails(activeLoan);
+        } else if (loans.length > 0) {
+            // If only paid loans, open details for the most recent one to see history
+            const lastLoan = loans[loans.length - 1];
+            onViewDetails(lastLoan);
+        } else {
+            // New client with no loans -> Prompt to create one
+            onAddLoan(client);
+        }
+    };
+
+    const handleActionClick = (e: React.MouseEvent, action: () => void) => {
+        e.stopPropagation();
+        action();
+    }
+
+    return (
+        <div 
+            onClick={handleCardClick}
+            className="relative flex flex-col bg-slate-800 rounded-2xl border border-slate-700/60 shadow-xl overflow-hidden group transition-all duration-300 hover:border-primary-500/30 hover:shadow-2xl hover:shadow-primary-900/10 hover:-translate-y-1 cursor-pointer"
+        >
+             {/* Header */}
+            <div className="p-5 flex justify-between items-start relative z-10">
+                <div className="flex-1 min-w-0 pr-2">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center text-white font-heading font-bold text-lg border border-slate-600 shadow-inner">
+                            {client.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="text-lg font-heading font-bold text-white truncate leading-none mb-1" title={client.name}>
+                                {client.name}
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                {isNewClient && (
+                                    <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                        <Sparkles size={8} /> NUEVO
+                                    </span>
+                                )}
+                                <span className="text-xs font-mono text-slate-500">{client.idNumber}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div className="h-8 w-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs border border-slate-600">
-                    {client.name.charAt(0)}
-                </div>
+                
+                {/* PDF Button */}
+                <button 
+                    onClick={handleDownloadReport}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-slate-700 hover:border-slate-600 shadow-sm z-20 active:scale-90"
+                    title="Descargar Ficha PDF"
+                >
+                    <FileDown size={18} />
+                </button>
             </div>
 
             {/* Content Body */}
-            <div className="p-5 pt-2 flex-1 flex flex-col">
-                {client.phone && (
-                     <p className="text-xs text-slate-500 flex items-center gap-1.5 mb-4">
-                        <Phone size={12} /> {formatPhone(client.phone)}
-                    </p>
-                )}
-
+            <div className="px-5 pb-5 flex-1 flex flex-col">
                 {hasActiveLoan ? (
                     <div className="flex-1 flex flex-col">
-                        <div className="bg-slate-900/30 rounded-xl p-4 border border-slate-700/50 mb-4 flex-1">
-                             <div className="flex justify-between items-end mb-1">
+                        <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/50 mb-4 relative overflow-hidden group-hover:border-slate-600 transition-colors">
+                             <div className="flex justify-between items-end mb-1 relative z-10">
                                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Pendiente</span>
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${activeLoan.status === LoanStatus.OVERDUE ? 'bg-red-500/10 text-red-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${activeLoan.status === LoanStatus.OVERDUE ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'}`}>
                                     {activeLoan.status}
                                 </span>
                              </div>
-                             <div className="text-2xl font-bold text-white mb-3">
+                             <div className="text-2xl font-bold text-white tracking-tight relative z-10 font-mono">
                                  {formatCurrency(activeLoan.remainingCapital)}
                              </div>
                              
-                             <div className="flex justify-between items-center text-[10px] text-slate-500 mb-1">
-                                 <span>Progreso</span>
-                                 <span>{calculateLoanProgress(activeLoan).toFixed(0)}%</span>
-                             </div>
                              <ProgressBar percent={calculateLoanProgress(activeLoan)} />
+                             
+                             <div className="flex justify-between mt-2 text-[10px] font-medium">
+                                 <span className="text-slate-500">Progreso</span>
+                                 <span className="text-slate-300">{calculateLoanProgress(activeLoan).toFixed(0)}%</span>
+                             </div>
                         </div>
                         
-                        <div className="grid grid-cols-2 gap-3 mt-auto">
-                             <button 
-                                onClick={() => onViewDetails(activeLoan)}
-                                className="px-3 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold transition-colors border border-slate-600 flex items-center justify-center gap-2"
-                            >
-                                <Eye size={14} /> Ficha
-                            </button>
+                        <div className="mt-auto pt-2">
                             <button 
-                                onClick={() => onQuickPay(activeLoan)}
-                                className="px-3 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2"
+                                onClick={(e) => handleActionClick(e, () => onQuickPay(activeLoan))}
+                                className="w-full group/btn relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-900/20 border-t border-white/10 active:scale-95"
                             >
-                                <Banknote size={14} /> Cobrar
+                                <Wallet size={16} /> Registrar Pago
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center py-8 bg-slate-900/20 rounded-xl border border-dashed border-slate-700">
-                        <p className="text-sm text-slate-500 font-medium mb-1">Sin deuda activa</p>
-                        <p className="text-xs text-slate-600 mb-3">El cliente está al día.</p>
-                        <button 
-                            onClick={() => onAddLoan(client)}
-                            className="text-xs flex items-center gap-1.5 bg-primary-500/10 text-primary-400 px-4 py-2 rounded-lg hover:bg-primary-500/20 transition-all font-bold border border-primary-500/20"
-                        >
-                            <Plus size={14} /> Nuevo Préstamo
-                        </button>
+                    <div className="flex-1 flex flex-col items-center justify-center text-center py-4 bg-slate-900/20 rounded-xl border border-dashed border-slate-700/50">
+                        <div className="p-2 rounded-full bg-slate-800/50 mb-2"><Banknote size={20} className="text-slate-600" /></div>
+                        <p className="text-xs text-slate-500 mb-3 font-medium">Sin deuda activa</p>
+                        
+                        <div className="flex gap-2 w-full">
+                            <button 
+                                onClick={(e) => handleActionClick(e, () => onArchive(client))}
+                                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-xs border border-slate-700 hover:border-slate-600 transition-all"
+                                title="Archivar Cliente (Ocultar)"
+                            >
+                                <Archive size={14} /> Archivar
+                            </button>
+                            <button 
+                                onClick={(e) => handleActionClick(e, () => onAddLoan(client))}
+                                className="flex-[2] flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white font-bold text-xs border border-indigo-500/20 hover:border-indigo-500 transition-all"
+                            >
+                                <PlusCircle size={14} /> Prestar
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
             
-            {/* Footer Summary */}
-            {loans.length > 1 && (
-                <div className="bg-slate-900/50 px-5 py-2 border-t border-slate-800 flex justify-between items-center text-[10px]">
-                    <span className="text-slate-500 uppercase font-bold tracking-wider">Historial Total</span>
-                    <span className="text-slate-400 font-mono bg-slate-800 px-1.5 rounded">{loans.length} Préstamos</span>
+            {client.phone && (
+                <div className="px-5 py-3 border-t border-slate-700/50 flex items-center text-xs text-slate-400 bg-slate-800/30">
+                    <Phone size={12} className="mr-2" />
+                    {formatPhone(client.phone)}
                 </div>
             )}
         </div>
@@ -136,8 +180,8 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
 };
 
 const ClientList: React.FC = () => {
-    const { clientLoanData, refreshAllData } = useDataContext(); 
-    const { setCurrentView } = useAppContext();
+    const { clientLoanData, refreshAllData, handleArchiveClient } = useDataContext(); 
+    const { setCurrentView, showToast, showConfirmModal } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     
@@ -169,6 +213,14 @@ const ClientList: React.FC = () => {
             (c.idNumber && c.idNumber.toLowerCase().includes(term))
         );
     }, [clientLoanData, debouncedSearchTerm]);
+
+    // Stats for Dashboard
+    const stats = useMemo(() => {
+        const totalClients = clientLoanData.length;
+        const clientsWithDebt = clientLoanData.filter(c => c.loans.some(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE)).length;
+        const totalDebt = clientLoanData.reduce((acc, c) => acc + c.loans.reduce((lAcc, l) => lAcc + l.remainingCapital, 0), 0);
+        return { totalClients, clientsWithDebt, totalDebt };
+    }, [clientLoanData]);
     
     const handleRefresh = async () => {
         setIsRefreshing(true);
@@ -186,10 +238,25 @@ const ClientList: React.FC = () => {
         setDetailsModalTab('details');
     };
 
+    const confirmArchive = (client: Client) => {
+        showConfirmModal({
+            title: 'Archivar Cliente',
+            message: `¿Estás seguro de que quieres archivar a ${client.name}? Se moverá al historial y no aparecerá en esta lista. Podrás restaurarlo más tarde.`,
+            onConfirm: async () => {
+                await handleArchiveClient(client.id);
+            },
+            type: 'info'
+        });
+    };
+
     const activeClient = useMemo(() => {
         if (!selectedLoanForDetails) return null;
         return clientLoanData.find(c => c.id === selectedLoanForDetails.clientId) || null;
     }, [selectedLoanForDetails, clientLoanData]);
+
+    const handleGlobalPDF = () => {
+        generateFullClientListPDF(clientLoanData);
+    };
 
     return (
         <>
@@ -207,8 +274,10 @@ const ClientList: React.FC = () => {
                 initialTab={detailsModalTab} 
             />
             
-            <div className="space-y-6 animate-fade-in max-w-[1600px] mx-auto">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+            <div className="space-y-8 animate-fade-in max-w-[1600px] mx-auto pb-10">
+                
+                {/* 1. Top Header & Actions */}
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
                      <div>
                          <h1 className="text-3xl font-heading font-bold text-white flex items-center gap-3">
                              Cartera de Clientes
@@ -217,44 +286,65 @@ const ClientList: React.FC = () => {
                                 className={`p-2 rounded-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-400 transition-all ${isRefreshing ? 'animate-spin text-primary-500' : ''}`} 
                                 title="Sincronizar"
                              >
-                                 <RefreshCw size={16} />
+                                 <RefreshCw size={18} />
                              </button>
                          </h1>
-                         <p className="text-sm text-slate-400 flex items-center mt-2">
-                            <TrendingUp size={14} className="mr-1.5 text-emerald-400" /> 
-                            {filteredClients.filter(c => c.loans.some(l => l.status === LoanStatus.PENDING)).length} clientes con deuda activa
-                         </p>
+                         <p className="text-sm text-slate-400 mt-1">Gestiona préstamos y visualiza el estado financiero de tus contactos.</p>
                      </div>
-                     <button
-                        onClick={() => setCurrentView('newClient')}
-                        className="inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg shadow-primary-900/30 hover:bg-primary-500 transition-all hover:-translate-y-0.5 group"
-                    >
-                        <PlusCircle size={20} className="mr-2 group-hover:rotate-90 transition-transform" />
-                        Registrar Cliente
-                    </button>
+                     
+                     <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+                        <button
+                            onClick={handleGlobalPDF}
+                            className="flex-1 lg:flex-none flex items-center justify-center px-5 py-3 bg-slate-800 text-slate-200 font-bold rounded-xl border border-slate-700 hover:bg-slate-700 hover:border-slate-600 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-sm active:scale-95"
+                        >
+                            <FileDown size={18} className="mr-2 text-blue-400" />
+                            Reporte Global
+                        </button>
+                        <button
+                            onClick={() => setCurrentView('newClient')}
+                            className="flex-1 lg:flex-none flex items-center justify-center px-6 py-3 bg-gradient-to-r from-primary-600 to-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-primary-900/30 hover:shadow-primary-500/40 hover:from-primary-500 hover:to-indigo-500 transition-all transform hover:-translate-y-0.5 border-t border-white/20 text-sm group active:scale-95"
+                        >
+                            <PlusCircle size={20} className="mr-2 group-hover:rotate-90 transition-transform" />
+                            Nuevo Cliente
+                        </button>
+                     </div>
                 </div>
 
+                {/* 2. Mini Dashboard */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <StatBadge label="Total Clientes" value={stats.totalClients} icon={Users} color="blue" />
+                    <StatBadge label="Con Deuda Activa" value={stats.clientsWithDebt} icon={TrendingUp} color="amber" />
+                    <StatBadge label="Cartera Pendiente" value={formatCurrency(stats.totalDebt)} icon={Wallet} color="emerald" />
+                </div>
+
+                {/* 3. Search & Filters */}
+                <div className="relative max-w-xl">
+                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Search className="h-5 w-5 text-slate-400" />
+                     </div>
+                     <input
+                        type="text"
+                        placeholder="Buscar cliente por nombre, DNI o teléfono..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-12 pr-4 py-4 bg-slate-800/80 border border-slate-700 rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-lg backdrop-blur-sm outline-none"
+                    />
+                </div>
+
+                {/* 4. Grid of Cards */}
                 {clientLoanData.length === 0 ? (
-                    <div className="text-center py-20 bg-slate-800/20 rounded-3xl border border-dashed border-slate-700/50">
-                         <div className="bg-slate-800 p-6 rounded-full inline-block mb-4 shadow-xl">
+                    <div className="text-center py-24 bg-slate-800/20 rounded-3xl border border-dashed border-slate-700/50 flex flex-col items-center">
+                         <div className="bg-slate-800 p-6 rounded-full mb-4 shadow-xl ring-1 ring-slate-700">
                             <Users size={48} className="text-slate-600" />
                          </div>
                          <h2 className="text-2xl font-heading font-bold text-slate-200">Base de datos vacía</h2>
-                         <p className="mt-2 text-slate-400">Comienza registrando tu primer cliente para ver actividad.</p>
+                         <p className="mt-2 text-slate-400 max-w-md">No tienes clientes registrados. Comienza añadiendo uno nuevo para gestionar sus préstamos.</p>
+                         <button onClick={() => setCurrentView('newClient')} className="mt-6 text-primary-400 font-bold hover:text-primary-300 flex items-center gap-2">
+                             Registrar Primer Cliente <ArrowRight size={16} />
+                         </button>
                     </div>
                 ) : (
                     <>
-                        <div className="relative max-w-lg mb-8">
-                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 pointer-events-none" />
-                             <input
-                                type="text"
-                                placeholder="Buscar por nombre, DNI o teléfono..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3.5 border border-slate-700 rounded-xl bg-slate-800 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-lg"
-                            />
-                        </div>
-                        
                         {filteredClients.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                 {filteredClients.map(client => (
@@ -264,11 +354,12 @@ const ClientList: React.FC = () => {
                                         onAddLoan={(c) => setSelectedClientForNewLoan(c)}
                                         onViewDetails={handleViewDetails}
                                         onQuickPay={handleQuickPay}
+                                        onArchive={confirmArchive}
                                     />
                                 ))}
                             </div>
                         ) : (
-                             <div className="text-center py-16">
+                             <div className="text-center py-20 bg-slate-800/30 rounded-2xl border border-dashed border-slate-700">
                                  <p className="text-lg text-slate-400 font-medium">No se encontraron resultados para "{searchTerm}"</p>
                             </div>
                         )}

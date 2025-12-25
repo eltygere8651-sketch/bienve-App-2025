@@ -87,27 +87,20 @@ export const generateContractPDF = async (data: ContractData, signatureImage: st
     const doc = new jsPDF();
     const contractText = getContractText(data);
 
-    // Título
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text("CONTRATO DE PRÉSTAMO ENTRE PARTICULARES", 105, 20, { align: 'center' });
 
-    // Texto del contrato
-    doc.setFontSize(9); // Texto compacto para que quepa todo
+    doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     
-    // Ajuste de márgenes y ancho de texto
     const splitText = doc.splitTextToSize(contractText, 170);
     doc.text(splitText, 20, 35);
 
-    // Gestión de Firmas
     if (signatureImage) {
-        // Calcular posición Y basada en la longitud del texto
-        const lastTextY = 35 + (splitText.length * 3.5); // 3.5 es el interlineado aprox para font size 9
-        // Asegurar que las firmas no se solapen con el texto, mínimo en Y=220
+        const lastTextY = 35 + (splitText.length * 3.5); 
         const signatureY = Math.max(lastTextY + 15, 210);
         
-        // Si el texto es muy largo y empuja las firmas fuera de la página, añadir página
         if (signatureY > 260) {
             doc.addPage();
             const newSignatureY = 40;
@@ -135,7 +128,6 @@ export const generateContractPDF = async (data: ContractData, signatureImage: st
             doc.text("18476199T", 120, signatureY + 20);
         }
     } else {
-        // Espacio para firma manual
         const lastTextY = 35 + (splitText.length * 3.5);
         const signatureY = Math.max(lastTextY + 20, 220);
         
@@ -160,31 +152,181 @@ export const downloadPdf = (pdfBlob: Blob, filename: string) => {
     URL.revokeObjectURL(url);
 };
 
+// --- CLIENT REPORTS ---
+
 export const generateClientReport = (client: Client, loans: Loan[]) => {
     const doc = new jsPDF();
 
-    doc.setFontSize(18);
-    doc.text(`Informe de Cliente: ${client.name}`, 105, 20, { align: 'center' });
+    // Brand Header
+    doc.setFillColor(15, 23, 42); // Slate 900
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text("B.M CONTIGO", 15, 25);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("Ficha Financiera de Cliente", 150, 25);
+
+    // Client Info Box
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(250, 250, 250);
+    doc.roundedRect(15, 50, 180, 35, 3, 3, 'FD');
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(client.name, 20, 60);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`DNI/NIE: ${client.idNumber || 'N/A'}`, 20, 68);
+    doc.text(`Teléfono: ${client.phone || 'N/A'}`, 20, 74);
+    doc.text(`Dirección: ${client.address || 'N/A'}`, 20, 80);
+    doc.text(`Miembro desde: ${new Date(client.joinDate).toLocaleDateString()}`, 130, 68);
+
+    // Calculate Totals
+    const activeLoans = loans.filter(l => l.status !== 'Pagado');
+    const totalActiveDebt = activeLoans.reduce((acc, l) => acc + l.remainingCapital, 0);
+    const totalPaidInterest = loans.reduce((acc, l) => acc + l.totalInterestPaid, 0);
+
+    // Summary Cards representation in PDF
+    doc.setFillColor(240, 240, 240);
+    doc.rect(15, 95, 85, 20, 'F'); // Debt Box
+    doc.rect(110, 95, 85, 20, 'F'); // Interest Box
+
+    doc.setFontSize(9);
+    doc.text("DEUDA ACTIVA TOTAL", 20, 102);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(220, 38, 38); // Red
+    doc.text(totalActiveDebt.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }), 20, 110);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("TOTAL INTERESES PAGADOS", 115, 102);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(22, 163, 74); // Green
+    doc.text(totalPaidInterest.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }), 115, 110);
+
+    // Loans Table
+    doc.setTextColor(0,0,0);
     doc.setFontSize(11);
-    doc.text(`ID Cliente: ${client.id}`, 15, 30);
-    doc.text(`Fecha de Alta: ${new Date(client.joinDate).toLocaleDateString()}`, 15, 36);
+    doc.text("Detalle de Préstamos", 15, 130);
 
     (doc as any).autoTable({
-        startY: 50,
-        head: [['ID Préstamo', 'Fecha Inicio', 'Monto (€)', 'Plazo', 'Estado', 'Pagos']],
+        startY: 135,
+        head: [['Fecha Inicio', 'Capital Inicial', 'Capital Pendiente', 'Estado', 'Interés Generado']],
         body: loans.map(l => [
-            l.id.substring(l.id.length - 6),
             new Date(l.startDate).toLocaleDateString(),
-            l.amount.toLocaleString('es-ES'),
-            l.term === 0 ? 'Indefinido' : `${l.term} meses`,
+            formatCurrency(l.initialCapital || l.amount),
+            formatCurrency(l.remainingCapital),
             l.status,
-            l.term === 0 ? l.paymentsMade : `${l.paymentsMade}/${l.term}`
+            formatCurrency(l.totalInterestPaid)
         ]),
         theme: 'striped',
-        headStyles: { fillColor: [37, 99, 235] },
+        headStyles: { fillColor: [15, 23, 42], textColor: 255 }, // Dark header
+        styles: { fontSize: 9, cellPadding: 3 },
+        columnStyles: {
+            2: { fontStyle: 'bold', textColor: [100, 0, 0] } // Highlight remaining capital
+        }
     });
     
-    doc.save(`Informe_${client.name.replace(/\s/g, '_')}.pdf`);
+    const pageCount = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Página ${i} de ${pageCount} - Generado el ${new Date().toLocaleDateString()}`, 105, 290, { align: 'center' });
+    }
+
+    doc.save(`Ficha_${client.name.replace(/\s/g, '_')}.pdf`);
+};
+
+export const generateFullClientListPDF = (clientsWithLoans: { name: string; idNumber?: string; phone?: string; loans: Loan[] }[]) => {
+    const doc = new jsPDF();
+
+    // Brand Header
+    doc.setFillColor(30, 41, 59); // Slate 800
+    doc.rect(0, 0, 210, 35, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("B.M CONTIGO", 14, 18);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("Informe Global de Cartera", 14, 25);
+    doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 195, 18, { align: 'right' });
+
+    // Prepare data
+    const rows = clientsWithLoans.map(c => {
+        const activeDebt = c.loans.reduce((acc, l) => acc + l.remainingCapital, 0);
+        const activeLoansCount = c.loans.filter(l => l.status !== 'Pagado').length;
+        
+        return {
+            name: c.name,
+            id: c.idNumber || '-',
+            phone: c.phone || '-',
+            loans: activeLoansCount,
+            debt: activeDebt
+        };
+    });
+
+    // Sort by debt descending (Most important first)
+    rows.sort((a, b) => b.debt - a.debt);
+
+    // Table
+    (doc as any).autoTable({
+        startY: 45,
+        head: [['Cliente', 'DNI/NIE', 'Teléfono', 'Prést. Activos', 'Deuda Total']],
+        body: rows.map(r => [
+            r.name,
+            r.id,
+            r.phone,
+            r.loans,
+            r.debt.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229], textColor: 255 }, // Indigo Header
+        styles: { fontSize: 10, cellPadding: 3 },
+        columnStyles: {
+            0: { fontStyle: 'bold' },
+            4: { fontStyle: 'bold', halign: 'right', textColor: [50, 50, 50] }
+        },
+        didParseCell: function(data: any) {
+            // Highlight high debt rows
+            if (data.section === 'body' && data.column.index === 4) {
+                const val = parseFloat(data.cell.raw.replace(/[^0-9,-]+/g,"").replace(",","."));
+                if (val > 0) {
+                    data.cell.styles.textColor = [220, 38, 38]; // Red
+                }
+            }
+        }
+    });
+
+    // Summary Box at bottom
+    const totalPortfolioDebt = rows.reduce((acc, r) => acc + r.debt, 0);
+
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    
+    doc.setFillColor(245, 245, 245);
+    doc.roundedRect(120, finalY, 75, 25, 2, 2, 'F');
+    doc.setDrawColor(200, 200, 200);
+    doc.roundedRect(120, finalY, 75, 25, 2, 2, 'D');
+
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text("TOTAL CARTERA PENDIENTE", 125, finalY + 8);
+    
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text(totalPortfolioDebt.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }), 125, finalY + 18);
+
+    doc.save(`Cartera_Global_${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
 interface ReceiptData {
@@ -292,11 +434,9 @@ export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: strin
 
     const finalY = (doc as any).lastAutoTable.finalY;
 
-    // Signature Logic
     if (signatureImage) {
         doc.addImage(signatureImage, 'PNG', 75, finalY + 15, 60, 30);
     } else {
-        // SUSTITUCIÓN: Sello digital en lugar de línea vacía
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(14);
         doc.setTextColor(200, 200, 200); // Marca de agua gris claro
@@ -447,7 +587,6 @@ export const generateIdDocumentsPDF = async (request: LoanRequest) => {
     };
 
     try {
-        // Fetch images in parallel for efficiency
         const [frontResponse, backResponse] = await Promise.all([
             fetch(request.frontIdUrl),
             fetch(request.backIdUrl)

@@ -13,6 +13,7 @@ export type NewLoanData = { amount: number, term: number };
 
 interface DataContextType {
     clients: Client[];
+    archivedClients: Client[]; // Expose archived clients
     loans: Loan[]; // Active loans
     archivedLoans: Loan[]; // Historical loans
     requests: LoanRequest[];
@@ -31,6 +32,9 @@ interface DataContextType {
     handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
     handleDeleteLoan: (loanId: string, clientName: string) => Promise<void>;
     handleArchivePaidLoans: () => Promise<number>;
+    handleArchiveClient: (clientId: string) => Promise<void>; // New
+    handleRestoreClient: (clientId: string) => Promise<void>; // New
+    handleBatchDeleteClients: (clientIds: string[]) => Promise<void>; // New Batch Delete
     reloadRequests: () => Promise<void>;
     refreshAllData: () => Promise<void>; 
 }
@@ -38,8 +42,9 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { showToast, user } = useAppContext();
-    const appData = useAppData(showToast, user);
+    const { showToast, user, isConfigReady } = useAppContext();
+    // CRITICAL FIX: Pass isConfigReady so subscriptions wait for Firebase initialization
+    const appData = useAppData(showToast, user, isConfigReady);
 
     const value = useMemo(() => appData, [appData]);
 

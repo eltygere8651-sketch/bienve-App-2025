@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { PenSquare, Handshake, FileText, PenTool, Banknote, IdCard } from 'lucide-react';
+import { PenSquare, Handshake, FileText, PenTool, Banknote, ShieldCheck } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 
 const LargeLogo = () => (
@@ -44,8 +44,8 @@ const Welcome: React.FC = () => {
                 </p>
 
                 <div className="inline-flex items-center gap-2 bg-slate-900/50 border border-primary-500/20 px-5 py-2 rounded-full text-primary-200 text-sm font-medium backdrop-blur-sm mb-10">
-                    <IdCard size={18} className="text-primary-400"/>
-                    <span>Requisito único: DNI o NIE en vigor</span>
+                    <ShieldCheck size={18} className="text-primary-400"/>
+                    <span>Aprobación basada en confianza y análisis personalizado</span>
                 </div>
 
                 <div className="flex justify-center items-center">

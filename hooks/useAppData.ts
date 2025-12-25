@@ -15,7 +15,8 @@ import { DEFAULT_ANNUAL_INTEREST_RATE, calculateLoanParameters, calculateMonthly
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
-    user: User | null
+    user: User | null,
+    isConfigReady: boolean // New dependency to ensure DB is ready
 ) => {
     const [clients, setClients] = useState<Client[]>([]);
     const [loans, setLoans] = useState<Loan[]>([]);
@@ -28,6 +29,11 @@ export const useAppData = (
 
     // Cargar datos en tiempo real con Firebase
     useEffect(() => {
+        // CRITICAL FIX: Ensure both Config AND User are ready before subscribing.
+        // Firebase rules usually require an authenticated user (even anonymous).
+        // If we subscribe before 'user' is populated, we get "Missing Permissions" and the listener dies.
+        if (!isConfigReady || !user) return;
+
         setIsLoading(true);
         let clientsLoaded = false;
         let loansLoaded = false;
@@ -44,18 +50,25 @@ export const useAppData = (
                 console.warn("Firebase loading timed out - Forcing app render");
                 setIsLoading(false);
             }
-        }, 3000);
+        }, 5000); 
 
+        // 1. Clients Subscription
         const unsubClients = subscribeToCollection('clients', (data) => {
-            setClients(data as Client[]);
+            const mappedClients = (data as any[]).map(c => ({
+                ...c,
+                archived: c.archived ?? false // Default to false
+            }));
+            setClients(mappedClients as Client[]);
             clientsLoaded = true;
             checkAllLoaded();
         }, [], (err) => {
             console.error("Error loading clients", err);
-            clientsLoaded = true;
+            // Do not block UI on error, but log it
+            clientsLoaded = true; 
             checkAllLoaded();
         });
 
+        // 2. Loans Subscription
         const unsubLoans = subscribeToCollection('loans', (data) => {
             const mappedLoans = (data as any[]).map(l => ({
                 ...l,
@@ -65,7 +78,7 @@ export const useAppData = (
                 paymentHistory: l.paymentHistory ?? [],
                 totalInterestPaid: l.totalInterestPaid ?? 0,
                 totalCapitalPaid: l.totalCapitalPaid ?? 0,
-                archived: l.archived ?? false // Default to false if not present
+                archived: l.archived ?? false
             }));
             setLoans(mappedLoans as Loan[]);
             loansLoaded = true;
@@ -76,6 +89,7 @@ export const useAppData = (
              checkAllLoaded();
         });
 
+        // 3. Requests Subscription
         const unsubRequests = subscribeToCollection(
             'requests', 
             (data) => {
@@ -99,11 +113,14 @@ export const useAppData = (
             unsubLoans();
             unsubRequests();
         };
-    }, []);
+    }, [isConfigReady, user]); // Added 'user' to dependency array to trigger re-sync on auth change
 
-    // Derived State for Active vs Archived
+    // Derived State
     const activeLoans = useMemo(() => loans.filter(l => !l.archived), [loans]);
     const archivedLoans = useMemo(() => loans.filter(l => l.archived), [loans]);
+    
+    const activeClients = useMemo(() => clients.filter(c => !c.archived), [clients]);
+    const archivedClients = useMemo(() => clients.filter(c => c.archived), [clients]);
 
     useEffect(() => {
         if (isLoading) return;
@@ -132,7 +149,11 @@ export const useAppData = (
                 getCollection('requests')
             ]);
 
-            setClients(clientsData as Client[]);
+            const mappedClients = (clientsData as any[]).map(c => ({
+                ...c,
+                archived: c.archived ?? false
+            }));
+            setClients(mappedClients as Client[]);
             
             const mappedLoans = (loansData as any[]).map(l => ({
                 ...l,
@@ -192,7 +213,8 @@ export const useAppData = (
                 phone: request.phone,
                 address: request.address,
                 email: request.email,
-                joinDate: new Date().toISOString()
+                joinDate: new Date().toISOString(),
+                archived: false
             };
             const clientDoc = await addDocument('clients', newClient);
 
@@ -226,14 +248,13 @@ export const useAppData = (
             await deleteDocument('requests', request.id);
             
             showToast(`Préstamo Aprobado para ${request.fullName}`, 'success');
-            refreshAllData();
-
+            
         } catch (err: any) {
             console.error("Failed to approve request:", err);
             showToast(`Error al aprobar: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast, refreshAllData]);
+    }, [showToast]);
     
     const handleRejectRequest = useCallback(async (request: LoanRequest) => {
         try {
@@ -308,8 +329,6 @@ export const useAppData = (
     const handleAddClientAndLoan = useCallback(async (clientData: any, loanData: { amount: number; term: number }) => {
         try {
             if (isNaN(loanData.amount) || loanData.amount <= 0) throw new Error("El monto del préstamo debe ser válido.");
-            
-            // CORRECCIÓN: Permitir term = 0 (Indefinido), pero rechazar negativos
             if (isNaN(loanData.term) || loanData.term < 0) throw new Error("El plazo del préstamo debe ser válido.");
             
             if (!clientData.name || clientData.name.trim() === '') throw new Error("El nombre del cliente es obligatorio.");
@@ -322,7 +341,8 @@ export const useAppData = (
 
             const clientDoc = await addDocument('clients', {
                 ...clientData,
-                joinDate: new Date().toISOString()
+                joinDate: new Date().toISOString(),
+                archived: false
             });
 
              const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanData.amount, loanData.term);
@@ -350,14 +370,13 @@ export const useAppData = (
              });
 
             showToast(`Cliente registrado correctamente.`, 'success');
-            await refreshAllData();
 
         } catch (err: any) {
             console.error(err);
             showToast(err.message, 'error');
             throw err; 
         }
-    }, [showToast, refreshAllData]);
+    }, [showToast]);
 
     const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => {
         try {
@@ -384,12 +403,11 @@ export const useAppData = (
                 archived: false
             });
             showToast('Préstamo añadido correctamente.', 'success');
-            refreshAllData();
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast, refreshAllData]);
+    }, [showToast]);
 
     const handleUpdateLoan = useCallback(async (loanId: string, updatedData: Partial<Loan>) => {
         try {
@@ -403,19 +421,13 @@ export const useAppData = (
 
     const handleDeleteLoan = useCallback(async (loanId: string, clientName: string) => {
         try {
-            // CAMBIO: Soft Delete (Archivar y Cancelar) en lugar de borrar
-            await updateDocument('loans', loanId, { 
-                archived: true, 
-                status: LoanStatus.CANCELLED,
-                notes: `Cancelado el ${new Date().toLocaleDateString()}` 
-            });
-            showToast(`Préstamo movido al historial (Cancelado).`, 'success');
-            refreshAllData(); // Actualizar UI
+            await deleteDocument('loans', loanId);
+            showToast(`Préstamo eliminado.`, 'success');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;
         }
-    }, [showToast, refreshAllData]);
+    }, [showToast]);
 
     const handleArchivePaidLoans = useCallback(async () => {
         try {
@@ -431,11 +443,6 @@ export const useAppData = (
             );
 
             await Promise.all(updatePromises);
-            
-            // Refresh local state effectively implies re-fetch in this architecture or optimistic update
-            // For simplicity, we trigger a refresh but return count immediately
-            refreshAllData(); 
-            
             showToast(`${loansToArchive.length} préstamos archivados correctamente.`, 'success');
             return loansToArchive.length;
         } catch (err: any) {
@@ -443,7 +450,37 @@ export const useAppData = (
             showToast(`Error al archivar: ${err.message}`, 'error');
             return 0;
         }
-    }, [loans, showToast, refreshAllData]);
+    }, [loans, showToast]);
+
+    const handleArchiveClient = useCallback(async (clientId: string) => {
+        try {
+            await updateDocument('clients', clientId, { archived: true });
+            showToast('Cliente movido al historial.', 'success');
+        } catch (err: any) {
+            showToast(`Error al archivar cliente: ${err.message}`, 'error');
+        }
+    }, [showToast]);
+
+    const handleRestoreClient = useCallback(async (clientId: string) => {
+        try {
+            await updateDocument('clients', clientId, { archived: false });
+            showToast('Cliente restaurado a la lista principal.', 'success');
+        } catch (err: any) {
+            showToast(`Error al restaurar cliente: ${err.message}`, 'error');
+        }
+    }, [showToast]);
+
+    const handleBatchDeleteClients = useCallback(async (clientIds: string[]) => {
+        try {
+            if (clientIds.length === 0) return;
+            const deletePromises = clientIds.map(id => deleteDocument('clients', id));
+            await Promise.all(deletePromises);
+            showToast(`${clientIds.length} clientes eliminados permanentemente.`, 'success');
+        } catch (err: any) {
+            console.error("Error batch deleting clients:", err);
+            showToast(`Error al eliminar clientes: ${err.message}`, 'error');
+        }
+    }, [showToast]);
 
     const handleGenerateTestRequest = useCallback(async () => {
         try {
@@ -491,8 +528,6 @@ export const useAppData = (
          }
     }, [requests, showToast]);
 
-    // This computes data specifically for the client list view, grouping loans
-    // Note: We only attach ACTIVE loans to clients for the main view to keep it clean.
     const clientLoanData = useMemo(() => {
         const loansByClientId = new Map<string, Loan[]>();
         for (const loan of activeLoans) {
@@ -502,17 +537,18 @@ export const useAppData = (
             loansByClientId.get(loan.clientId)!.push(loan);
         }
 
-        return clients.map(client => ({
+        return activeClients.map(client => ({
             ...client,
             loans: loansByClientId.get(client.id) || [],
         }));
-    }, [clients, activeLoans]);
+    }, [activeClients, activeLoans]);
 
     return {
-        clients,
-        loans: activeLoans, // Return active by default for most components
-        archivedLoans,     // Expose archived separately
-        allLoans: loans,   // Expose all if needed
+        clients: activeClients, 
+        archivedClients,        
+        loans: activeLoans,
+        archivedLoans,
+        allLoans: loans,
         requests,
         isLoading,
         error,
@@ -529,6 +565,9 @@ export const useAppData = (
         handleUpdateLoan,
         handleDeleteLoan,
         handleArchivePaidLoans,
+        handleArchiveClient,
+        handleRestoreClient,
+        handleBatchDeleteClients,
         reloadRequests,
         refreshAllData 
     };

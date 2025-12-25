@@ -44,7 +44,10 @@ export const compressImage = (file: File, maxWidth: number = 800, quality: numbe
 export const exportLoanToCSV = (loan: Loan) => {
     const headers = ['Fecha', 'Monto Total', 'Interés Pagado', 'Capital Amortizado', 'Capital Pendiente', 'Notas'];
     
-    const rows = loan.paymentHistory.map((p: PaymentRecord) => [
+    // Sort history chronologically before exporting
+    const sortedHistory = [...(loan.paymentHistory || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const rows = sortedHistory.map((p: PaymentRecord) => [
         new Date(p.date).toLocaleDateString('es-ES'),
         p.amount.toFixed(2),
         p.interestPaid.toFixed(2),

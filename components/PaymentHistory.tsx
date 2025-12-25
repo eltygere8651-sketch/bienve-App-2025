@@ -2,7 +2,7 @@
 import React from 'react';
 import { Loan, PaymentRecord } from '../types';
 import { formatCurrency } from '../services/utils';
-import { Calendar, Info } from 'lucide-react';
+import { Calendar, Info, ArrowUp } from 'lucide-react';
 
 interface PaymentHistoryProps {
     loan: Loan;
@@ -11,8 +11,9 @@ interface PaymentHistoryProps {
 const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
     const history = loan.paymentHistory || [];
 
-    // Sort by date descending
-    const sortedHistory = [...history].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Sort by date ASCENDING (Chronological: Month 9 -> Month 10 -> Month 11)
+    // This ensures order regardless of entry time
+    const sortedHistory = [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     if (sortedHistory.length === 0) {
         return (
@@ -28,6 +29,7 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
             <table className="w-full text-left text-sm">
                 <thead className="bg-slate-800 text-slate-400 uppercase font-medium text-xs">
                     <tr>
+                        <th className="px-4 py-3">#</th>
                         <th className="px-4 py-3">Fecha</th>
                         <th className="px-4 py-3">Total Pagado</th>
                         <th className="px-4 py-3 text-green-400">Interés</th>
@@ -36,8 +38,11 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700 bg-slate-900/40">
-                    {sortedHistory.map((record: PaymentRecord) => (
+                    {sortedHistory.map((record: PaymentRecord, index) => (
                         <tr key={record.id} className="hover:bg-slate-800/50 transition-colors">
+                            <td className="px-4 py-3 text-slate-500 font-mono text-xs w-10">
+                                {index + 1}
+                            </td>
                             <td className="px-4 py-3 text-slate-300 font-mono">
                                 <div className="flex items-center gap-2">
                                     <Calendar size={14} className="text-slate-500" />
