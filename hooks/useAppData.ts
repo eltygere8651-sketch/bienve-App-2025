@@ -64,7 +64,8 @@ export const useAppData = (
                 lastPaymentDate: l.lastPaymentDate ?? l.startDate, 
                 paymentHistory: l.paymentHistory ?? [],
                 totalInterestPaid: l.totalInterestPaid ?? 0,
-                totalCapitalPaid: l.totalCapitalPaid ?? 0
+                totalCapitalPaid: l.totalCapitalPaid ?? 0,
+                archived: l.archived ?? false // Default to false if not present
             }));
             setLoans(mappedLoans as Loan[]);
             loansLoaded = true;
@@ -99,6 +100,10 @@ export const useAppData = (
             unsubRequests();
         };
     }, []);
+
+    // Derived State for Active vs Archived
+    const activeLoans = useMemo(() => loans.filter(l => !l.archived), [loans]);
+    const archivedLoans = useMemo(() => loans.filter(l => l.archived), [loans]);
 
     useEffect(() => {
         if (isLoading) return;
@@ -136,7 +141,8 @@ export const useAppData = (
                 lastPaymentDate: l.lastPaymentDate ?? l.startDate, 
                 paymentHistory: l.paymentHistory ?? [],
                 totalInterestPaid: l.totalInterestPaid ?? 0,
-                totalCapitalPaid: l.totalCapitalPaid ?? 0
+                totalCapitalPaid: l.totalCapitalPaid ?? 0,
+                archived: l.archived ?? false
             }));
             setLoans(mappedLoans as Loan[]);
             setRequests(requestsData as LoanRequest[]);
@@ -212,7 +218,8 @@ export const useAppData = (
                 paymentHistory: [],
                 signature: request.signature,
                 contractPdfUrl: '',
-                notes: request.loanReason
+                notes: request.loanReason,
+                archived: false
             };
             await addDocument('loans', newLoan);
 
@@ -248,23 +255,19 @@ export const useAppData = (
         }
     }, [showToast]);
     
-    // MODIFICADO: Lógica de cobro mensual fija (8%)
     const handleRegisterPayment = useCallback(async (loanId: string, amount: number, date: string, notes: string) => {
         const loan = loans.find(l => l.id === loanId);
         if (!loan || loan.status === LoanStatus.PAID) return;
         
-        // REGLA: Interés Mensual Fijo (8% del capital pendiente)
         const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
 
         let interestPaid = 0;
         let capitalPaid = 0;
 
-        // Si el pago es menor o igual al interés mensual, todo va a interés
         if (amount <= interest) {
             interestPaid = amount;
             capitalPaid = 0;
         } else {
-            // Si paga más del interés, el excedente baja capital
             interestPaid = interest;
             capitalPaid = amount - interest;
         }
@@ -280,7 +283,6 @@ export const useAppData = (
             capitalPaid: capitalPaid,
             remainingCapitalAfter: newRemainingCapital,
             notes: notes
-            // Eliminado daysElapsed ya que no se usa en este modelo
         };
 
         const updatedHistory = [...(loan.paymentHistory || []), newPaymentRecord];
@@ -340,7 +342,8 @@ export const useAppData = (
                  totalInterestPaid: 0,
                  totalCapitalPaid: 0,
                  paymentHistory: [],
-                 notes: 'Préstamo inicial'
+                 notes: 'Préstamo inicial',
+                 archived: false
              });
 
             showToast(`Cliente registrado correctamente.`, 'success');
@@ -374,7 +377,8 @@ export const useAppData = (
                 totalInterestPaid: 0,
                 totalCapitalPaid: 0,
                 paymentHistory: [],
-                notes: loanData.notes
+                notes: loanData.notes,
+                archived: false
             });
             showToast('Préstamo añadido correctamente.', 'success');
             refreshAllData();
@@ -403,6 +407,34 @@ export const useAppData = (
             throw err;
         }
     }, [showToast]);
+
+    const handleArchivePaidLoans = useCallback(async () => {
+        try {
+            const loansToArchive = loans.filter(l => l.status === LoanStatus.PAID && !l.archived);
+            
+            if (loansToArchive.length === 0) {
+                showToast('No hay préstamos pagados para archivar.', 'info');
+                return 0;
+            }
+
+            const updatePromises = loansToArchive.map(loan => 
+                updateDocument('loans', loan.id, { archived: true })
+            );
+
+            await Promise.all(updatePromises);
+            
+            // Refresh local state effectively implies re-fetch in this architecture or optimistic update
+            // For simplicity, we trigger a refresh but return count immediately
+            refreshAllData(); 
+            
+            showToast(`${loansToArchive.length} préstamos archivados correctamente.`, 'success');
+            return loansToArchive.length;
+        } catch (err: any) {
+            console.error("Error archiving loans:", err);
+            showToast(`Error al archivar: ${err.message}`, 'error');
+            return 0;
+        }
+    }, [loans, showToast, refreshAllData]);
 
     const handleGenerateTestRequest = useCallback(async () => {
         try {
@@ -450,9 +482,11 @@ export const useAppData = (
          }
     }, [requests, showToast]);
 
+    // This computes data specifically for the client list view, grouping loans
+    // Note: We only attach ACTIVE loans to clients for the main view to keep it clean.
     const clientLoanData = useMemo(() => {
         const loansByClientId = new Map<string, Loan[]>();
-        for (const loan of loans) {
+        for (const loan of activeLoans) {
             if (!loansByClientId.has(loan.clientId)) {
                 loansByClientId.set(loan.clientId, []);
             }
@@ -463,11 +497,13 @@ export const useAppData = (
             ...client,
             loans: loansByClientId.get(client.id) || [],
         }));
-    }, [clients, loans]);
+    }, [clients, activeLoans]);
 
     return {
         clients,
-        loans,
+        loans: activeLoans, // Return active by default for most components
+        archivedLoans,     // Expose archived separately
+        allLoans: loans,   // Expose all if needed
         requests,
         isLoading,
         error,
@@ -483,6 +519,7 @@ export const useAppData = (
         handleDeleteTestRequests,
         handleUpdateLoan,
         handleDeleteLoan,
+        handleArchivePaidLoans,
         reloadRequests,
         refreshAllData 
     };

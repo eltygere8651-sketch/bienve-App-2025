@@ -44,6 +44,7 @@ export interface Loan {
     signature?: string;
     contractPdfUrl?: string;
     notes?: string;
+    archived?: boolean; // Nuevo: Flag para historial
 }
 
 export interface Client {
@@ -74,6 +75,6 @@ export interface LoanRequest {
     signature?: string;
 }
 
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient' | 'history';
 
 export type FilterStatus = LoanStatus | 'Todos';

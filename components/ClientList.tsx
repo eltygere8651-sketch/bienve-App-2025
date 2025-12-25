@@ -122,7 +122,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
             {/* Footer Summary (if multiple loans exist) */}
             {loans.length > 1 && (
                 <div className="bg-slate-900/50 px-5 py-2 border-t border-slate-800 flex justify-between items-center">
-                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Historial Total</span>
+                    <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Historial Activo</span>
                     <span className="text-xs text-slate-400 font-mono">{loans.length} Préstamos</span>
                 </div>
             )}
@@ -131,7 +131,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
 };
 
 const ClientList: React.FC = () => {
-    const { clientLoanData, refreshAllData } = useDataContext();
+    const { clientLoanData, refreshAllData } = useDataContext(); // Note: clientLoanData now uses activeLoans internally in hook
     const { setCurrentView } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -173,9 +173,8 @@ const ClientList: React.FC = () => {
     };
 
     const handleQuickPay = (loan: Loan) => {
-        // En esta nueva implementación, pasamos la intención de ir directo al tab de pago (aunque el modal nuevo es híbrido)
         setSelectedLoanForDetails(loan);
-        setDetailsModalTab('payment'); // Este estado se puede pasar al modal si se desea forzar el focus
+        setDetailsModalTab('payment');
     };
 
     const handleViewDetails = (loan: Loan) => {
@@ -183,7 +182,6 @@ const ClientList: React.FC = () => {
         setDetailsModalTab('details');
     };
 
-    // Helper para encontrar cliente del préstamo seleccionado
     const activeClient = useMemo(() => {
         if (!selectedLoanForDetails) return null;
         return clientLoanData.find(c => c.id === selectedLoanForDetails.clientId) || null;
@@ -191,14 +189,12 @@ const ClientList: React.FC = () => {
 
     return (
         <>
-            {/* Modals */}
             <NewLoanModal 
                 isOpen={!!selectedClientForNewLoan} 
                 onClose={() => setSelectedClientForNewLoan(null)} 
                 client={selectedClientForNewLoan} 
             />
             
-            {/* Pasamos el activeTab inicial al modal */}
             <LoanDetailsModal
                 isOpen={!!selectedLoanForDetails}
                 onClose={() => setSelectedLoanForDetails(null)}

@@ -13,7 +13,8 @@ export type NewLoanData = { amount: number, term: number };
 
 interface DataContextType {
     clients: Client[];
-    loans: Loan[];
+    loans: Loan[]; // Active loans
+    archivedLoans: Loan[]; // Historical loans
     requests: LoanRequest[];
     isLoading: boolean;
     error: string | null;
@@ -29,8 +30,9 @@ interface DataContextType {
     handleDeleteTestRequests: () => Promise<void>;
     handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
     handleDeleteLoan: (loanId: string, clientName: string) => Promise<void>;
+    handleArchivePaidLoans: () => Promise<number>;
     reloadRequests: () => Promise<void>;
-    refreshAllData: () => Promise<void>; // Nueva función añadida al tipo
+    refreshAllData: () => Promise<void>; 
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
