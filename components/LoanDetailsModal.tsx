@@ -47,10 +47,13 @@ const InfoRow = ({ icon: Icon, label, value, onCopy }: { icon: any, label: strin
 };
 
 const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, loan, client, initialTab = 'details' }) => {
-    const { handleUpdateLoan, handleDeleteLoan, handleRegisterPayment } = useDataContext();
+    const { handleUpdateLoan, handleUpdateClient, handleDeleteLoan, handleRegisterPayment } = useDataContext();
     const { showConfirmModal, showToast } = useAppContext();
     const [activeTab, setActiveTab] = useState(initialTab);
-    const [formData, setFormData] = useState<Partial<Loan>>({});
+    
+    // States for Edit Forms
+    const [loanFormData, setLoanFormData] = useState<Partial<Loan>>({});
+    const [clientFormData, setClientFormData] = useState<Partial<Client>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Payment Form State
@@ -59,9 +62,10 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     const [paymentNotes, setPaymentNotes] = useState('');
 
     useEffect(() => {
-        if (loan) {
-            setFormData({
+        if (loan && client) {
+            setLoanFormData({
                 initialCapital: loan.initialCapital || loan.amount,
+                amount: loan.amount, // Also sync amount property
                 remainingCapital: loan.remainingCapital,
                 term: loan.term,
                 interestRate: loan.interestRate,
@@ -69,11 +73,19 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                 status: loan.status,
                 notes: loan.notes || ''
             });
+            setClientFormData({
+                name: client.name,
+                idNumber: client.idNumber,
+                phone: client.phone,
+                address: client.address,
+                email: client.email
+            });
+            
             setActiveTab(initialTab);
             setPaymentAmount('');
             setPaymentNotes('');
         }
-    }, [loan, isOpen, initialTab]);
+    }, [loan, client, isOpen, initialTab]);
 
     const paymentPreview = useMemo(() => {
         if (!loan || !paymentAmount) return null;
@@ -101,10 +113,27 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         e.preventDefault();
         setIsSubmitting(true);
         try {
-            await handleUpdateLoan(loan.id, formData);
+            // Update Loan
+            const updatedLoan = { ...loanFormData };
+            // Ensure consistency: if amount changed, sync initialCapital
+            if (updatedLoan.amount) {
+                updatedLoan.initialCapital = updatedLoan.amount;
+            } else if (updatedLoan.initialCapital) {
+                updatedLoan.amount = updatedLoan.initialCapital;
+            }
+            
+            await Promise.all([
+                handleUpdateLoan(loan.id, updatedLoan),
+                handleUpdateClient(client.id, clientFormData)
+            ]);
+
             setActiveTab('details');
-            showToast('Préstamo actualizado correctamente', 'success');
-        } catch (error) { } finally { setIsSubmitting(false); }
+            showToast('Datos actualizados correctamente', 'success');
+        } catch (error) { 
+            console.error(error);
+        } finally { 
+            setIsSubmitting(false); 
+        }
     };
 
     const handlePaymentSubmit = async (e: React.FormEvent) => {
@@ -128,7 +157,6 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         });
     };
 
-    // Botones de Relleno Rápido (UX Fix)
     const setQuickAmount = (type: 'interest' | 'full') => {
         if (type === 'interest') setPaymentAmount(interestDueDisplay.toFixed(2));
         if (type === 'full') setPaymentAmount((loan.remainingCapital + interestDueDisplay).toFixed(2));
@@ -251,7 +279,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                 </div>
                             )}
 
-                            {/* TAB: PAGOS (Nuevo Diseño) */}
+                            {/* TAB: PAGOS */}
                             {activeTab === 'payment' && (
                                 <div className="max-w-xl mx-auto space-y-6 animate-fade-in">
                                     <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
@@ -333,23 +361,130 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                             )}
 
                             {activeTab === 'edit' && (
-                                <form onSubmit={handleUpdateSubmit} className="max-w-xl mx-auto space-y-5 animate-fade-in">
+                                <form onSubmit={handleUpdateSubmit} className="max-w-3xl mx-auto space-y-6 animate-fade-in">
                                     <div className="bg-red-900/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
-                                        <AlertTriangle className="text-red-400 shrink-0" />
-                                        <p className="text-xs text-red-200">
-                                            <strong>Zona de Peligro:</strong> Modificar estos valores manualmente afecta los cálculos históricos. Úsalo solo para correcciones.
-                                        </p>
+                                        <AlertTriangle className="text-red-400 shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-sm text-red-200 font-bold mb-1">Modo Edición Avanzada</p>
+                                            <p className="text-xs text-red-300/80">
+                                                Modificar estos valores manualmente (especialmente Capital o Deuda) afectará al historial y los cálculos futuros. Úsalo solo para corregir errores de registro.
+                                            </p>
+                                        </div>
                                     </div>
+
+                                    {/* SECCIÓN 1: DATOS DEL PRÉSTAMO */}
                                     <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <InputField label="Capital Pendiente (€)" name="remainingCapital" type="number" value={String(formData.remainingCapital)} onChange={(e) => setFormData({...formData, remainingCapital: Number(e.target.value)})} step="0.01" />
-                                            <InputField label="Tasa (%)" name="interestRate" type="number" value={String(formData.interestRate)} onChange={(e) => setFormData({...formData, interestRate: Number(e.target.value)})} step="0.01" />
+                                        <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-2">
+                                            <Banknote size={20} className="text-green-400" />
+                                            Datos del Préstamo
+                                        </h3>
+                                        
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                            <InputField 
+                                                label="Capital Inicial (€)" 
+                                                name="amount" 
+                                                type="number" 
+                                                value={String(loanFormData.amount || '')} 
+                                                onChange={(e) => {
+                                                    const newAmount = Number(e.target.value);
+                                                    // Auto-update remaining capital preserving the amount already paid
+                                                    const capitalPaid = (loan.initialCapital || loan.amount) - loan.remainingCapital;
+                                                    const newRemaining = Math.max(0, newAmount - capitalPaid);
+                                                    
+                                                    setLoanFormData({
+                                                        ...loanFormData, 
+                                                        amount: newAmount,
+                                                        remainingCapital: newRemaining
+                                                    });
+                                                }}
+                                                step="0.01" 
+                                            />
+                                            <InputField 
+                                                label="Deuda Actual / Capital Pendiente (€)" 
+                                                name="remainingCapital" 
+                                                type="number" 
+                                                value={String(loanFormData.remainingCapital || '')} 
+                                                onChange={(e) => setLoanFormData({...loanFormData, remainingCapital: Number(e.target.value)})} 
+                                                step="0.01" 
+                                            />
+                                            <InputField 
+                                                label="Tasa Interés Anual (%)" 
+                                                name="interestRate" 
+                                                type="number" 
+                                                value={String(loanFormData.interestRate || '')} 
+                                                onChange={(e) => setLoanFormData({...loanFormData, interestRate: Number(e.target.value)})} 
+                                                step="0.01" 
+                                            />
+                                            <InputField 
+                                                label="Plazo (Meses)" 
+                                                name="term" 
+                                                type="number" 
+                                                value={String(loanFormData.term || '')} 
+                                                onChange={(e) => setLoanFormData({...loanFormData, term: Number(e.target.value)})} 
+                                            />
+                                            <InputField 
+                                                label="Fecha Inicio" 
+                                                name="startDate" 
+                                                type="date" 
+                                                value={String(loanFormData.startDate || '')} 
+                                                onChange={(e) => setLoanFormData({...loanFormData, startDate: e.target.value})} 
+                                            />
                                         </div>
-                                        <InputField label="Fecha Inicio" name="startDate" type="date" value={String(formData.startDate)} onChange={(e) => setFormData({...formData, startDate: e.target.value})} />
-                                        <div className="pt-6 flex justify-between items-center border-t border-slate-700 mt-4">
-                                            <button type="button" onClick={onDelete} className="text-red-400 text-sm flex items-center gap-2 hover:bg-red-500/10 px-3 py-2 rounded transition-colors"><Trash2 size={16} /> Eliminar Préstamo</button>
-                                            <button type="submit" className="px-6 py-2 bg-primary-600 text-white font-bold rounded-lg hover:bg-primary-500 shadow-lg">Guardar Cambios</button>
+                                    </div>
+
+                                    {/* SECCIÓN 2: DATOS DEL CLIENTE */}
+                                    <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
+                                        <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-2">
+                                            <User size={20} className="text-blue-400" />
+                                            Datos del Cliente
+                                        </h3>
+                                        
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                            <div className="sm:col-span-2">
+                                                <InputField 
+                                                    label="Nombre Completo" 
+                                                    name="name" 
+                                                    type="text" 
+                                                    value={clientFormData.name || ''} 
+                                                    onChange={(e) => setClientFormData({...clientFormData, name: e.target.value})} 
+                                                />
+                                            </div>
+                                            <InputField 
+                                                label="DNI / NIE" 
+                                                name="idNumber" 
+                                                type="text" 
+                                                value={clientFormData.idNumber || ''} 
+                                                onChange={(e) => setClientFormData({...clientFormData, idNumber: e.target.value})} 
+                                            />
+                                            <InputField 
+                                                label="Teléfono" 
+                                                name="phone" 
+                                                type="text" 
+                                                value={clientFormData.phone || ''} 
+                                                onChange={(e) => setClientFormData({...clientFormData, phone: e.target.value})} 
+                                            />
+                                            <div className="sm:col-span-2">
+                                                <InputField 
+                                                    label="Dirección" 
+                                                    name="address" 
+                                                    type="text" 
+                                                    value={clientFormData.address || ''} 
+                                                    onChange={(e) => setClientFormData({...clientFormData, address: e.target.value})} 
+                                                />
+                                            </div>
                                         </div>
+                                    </div>
+
+                                    <div className="pt-4 flex flex-col sm:flex-row justify-between items-center border-t border-slate-700 mt-4 gap-4">
+                                        <button type="button" onClick={onDelete} className="text-red-400 text-sm flex items-center gap-2 hover:bg-red-500/10 px-3 py-2 rounded transition-colors w-full sm:w-auto justify-center"><Trash2 size={16} /> Cerrar/Eliminar Préstamo</button>
+                                        <button 
+                                            type="submit" 
+                                            disabled={isSubmitting}
+                                            className="px-8 py-3 bg-primary-600 text-white font-bold rounded-lg hover:bg-primary-500 shadow-lg w-full sm:w-auto flex items-center justify-center gap-2"
+                                        >
+                                            {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
+                                            Guardar Todos los Cambios
+                                        </button>
                                     </div>
                                 </form>
                             )}

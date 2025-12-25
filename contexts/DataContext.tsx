@@ -25,12 +25,13 @@ interface DataContextType {
     handleRejectRequest: (request: LoanRequest) => Promise<void>;
     handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
     handleRegisterPayment: (loanId: string, amount: number, date: string, notes: string) => Promise<void>;
-    handleUpdatePayment: (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => Promise<void>; // New
+    handleUpdatePayment: (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => Promise<void>; 
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
     handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => Promise<void>;
     handleGenerateTestRequest: () => Promise<void>;
     handleDeleteTestRequests: () => Promise<void>;
     handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
+    handleUpdateClient: (clientId: string, updatedData: Partial<Client>) => Promise<void>; // New
     handleDeleteLoan: (loanId: string, clientName: string) => Promise<void>;
     handleArchivePaidLoans: () => Promise<number>;
     handleArchiveClient: (clientId: string) => Promise<void>; 

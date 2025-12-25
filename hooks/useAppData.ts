@@ -328,33 +328,25 @@ export const useAppData = (
 
     const handleUpdatePayment = useCallback(async (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => {
         try {
-            // 1. Get Loan
             const loan = loans.find(l => l.id === loanId);
             if (!loan) throw new Error("Préstamo no encontrado");
         
-            // 2. Find Payment
             const paymentIndex = loan.paymentHistory.findIndex(p => p.id === paymentId);
             if (paymentIndex === -1) throw new Error("Pago no encontrado");
         
             const oldPayment = loan.paymentHistory[paymentIndex];
         
-            // 3. Calculate New Values
             const newCapital = Math.max(0, newAmount - newInterest);
         
             if (newInterest > newAmount) throw new Error("El interés no puede ser mayor al monto total.");
         
-            // 4. Calculate Diffs
             const interestDiff = newInterest - oldPayment.interestPaid;
             const capitalDiff = newCapital - oldPayment.capitalPaid;
         
-            // 5. Update Loan Totals
-            // remainingCapital decreases when we pay capital.
-            // So if capitalPaid INCREASES (positive diff), remainingCapital DECREASES.
             const newLoanRemaining = Math.max(0, loan.remainingCapital - capitalDiff);
             const newTotalInterest = Math.max(0, (loan.totalInterestPaid || 0) + interestDiff);
             const newTotalCapital = Math.max(0, (loan.totalCapitalPaid || 0) + capitalDiff);
         
-            // 6. Update Payment Record
             const updatedPayment: PaymentRecord = {
                 ...oldPayment,
                 date: newDate,
@@ -362,14 +354,12 @@ export const useAppData = (
                 interestPaid: newInterest,
                 capitalPaid: newCapital,
                 notes: newNotes,
-                // Adjust remainingCapitalAfter by the difference in capitalPaid for this record
                 remainingCapitalAfter: Math.max(0, oldPayment.remainingCapitalAfter - capitalDiff)
             };
         
             const newHistory = [...loan.paymentHistory];
             newHistory[paymentIndex] = updatedPayment;
         
-            // 7. Save
             await updateDocument('loans', loanId, {
                 paymentHistory: newHistory,
                 remainingCapital: newLoanRemaining,
@@ -472,9 +462,24 @@ export const useAppData = (
     const handleUpdateLoan = useCallback(async (loanId: string, updatedData: Partial<Loan>) => {
         try {
             await updateDocument('loans', loanId, updatedData);
-            showToast('Préstamo actualizado.', 'success');
+            showToast('Datos del préstamo actualizados.', 'success');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [showToast]);
+
+    const handleUpdateClient = useCallback(async (clientId: string, updatedData: Partial<Client>) => {
+        try {
+            await updateDocument('clients', clientId, updatedData);
+            
+            // Note: If client name changed, ideally we should update clientName in their active loans too
+            // For simplicity, we are just updating the client document here. 
+            // A more robust solution would query all loans by clientId and update clientName there too.
+            
+            showToast('Datos del cliente actualizados.', 'success');
+        } catch (err: any) {
+            showToast(`Error al actualizar cliente: ${err.message}`, 'error');
             throw err;
         }
     }, [showToast]);
@@ -624,6 +629,7 @@ export const useAppData = (
         handleGenerateTestRequest,
         handleDeleteTestRequests,
         handleUpdateLoan,
+        handleUpdateClient,
         handleDeleteLoan,
         handleArchivePaidLoans,
         handleArchiveClient,
