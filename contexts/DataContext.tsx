@@ -25,6 +25,7 @@ interface DataContextType {
     handleRejectRequest: (request: LoanRequest) => Promise<void>;
     handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
     handleRegisterPayment: (loanId: string, amount: number, date: string, notes: string) => Promise<void>;
+    handleUpdatePayment: (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => Promise<void>; // New
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
     handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => Promise<void>;
     handleGenerateTestRequest: () => Promise<void>;
@@ -32,9 +33,9 @@ interface DataContextType {
     handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
     handleDeleteLoan: (loanId: string, clientName: string) => Promise<void>;
     handleArchivePaidLoans: () => Promise<number>;
-    handleArchiveClient: (clientId: string) => Promise<void>; // New
-    handleRestoreClient: (clientId: string) => Promise<void>; // New
-    handleBatchDeleteClients: (clientIds: string[]) => Promise<void>; // New Batch Delete
+    handleArchiveClient: (clientId: string) => Promise<void>; 
+    handleRestoreClient: (clientId: string) => Promise<void>; 
+    handleBatchDeleteClients: (clientIds: string[]) => Promise<void>; 
     reloadRequests: () => Promise<void>;
     refreshAllData: () => Promise<void>; 
 }

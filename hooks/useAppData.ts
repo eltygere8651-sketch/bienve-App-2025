@@ -326,6 +326,66 @@ export const useAppData = (
         }
     }, [loans, showToast]);
 
+    const handleUpdatePayment = useCallback(async (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => {
+        try {
+            // 1. Get Loan
+            const loan = loans.find(l => l.id === loanId);
+            if (!loan) throw new Error("Préstamo no encontrado");
+        
+            // 2. Find Payment
+            const paymentIndex = loan.paymentHistory.findIndex(p => p.id === paymentId);
+            if (paymentIndex === -1) throw new Error("Pago no encontrado");
+        
+            const oldPayment = loan.paymentHistory[paymentIndex];
+        
+            // 3. Calculate New Values
+            const newCapital = Math.max(0, newAmount - newInterest);
+        
+            if (newInterest > newAmount) throw new Error("El interés no puede ser mayor al monto total.");
+        
+            // 4. Calculate Diffs
+            const interestDiff = newInterest - oldPayment.interestPaid;
+            const capitalDiff = newCapital - oldPayment.capitalPaid;
+        
+            // 5. Update Loan Totals
+            // remainingCapital decreases when we pay capital.
+            // So if capitalPaid INCREASES (positive diff), remainingCapital DECREASES.
+            const newLoanRemaining = Math.max(0, loan.remainingCapital - capitalDiff);
+            const newTotalInterest = Math.max(0, (loan.totalInterestPaid || 0) + interestDiff);
+            const newTotalCapital = Math.max(0, (loan.totalCapitalPaid || 0) + capitalDiff);
+        
+            // 6. Update Payment Record
+            const updatedPayment: PaymentRecord = {
+                ...oldPayment,
+                date: newDate,
+                amount: newAmount,
+                interestPaid: newInterest,
+                capitalPaid: newCapital,
+                notes: newNotes,
+                // Adjust remainingCapitalAfter by the difference in capitalPaid for this record
+                remainingCapitalAfter: Math.max(0, oldPayment.remainingCapitalAfter - capitalDiff)
+            };
+        
+            const newHistory = [...loan.paymentHistory];
+            newHistory[paymentIndex] = updatedPayment;
+        
+            // 7. Save
+            await updateDocument('loans', loanId, {
+                paymentHistory: newHistory,
+                remainingCapital: newLoanRemaining,
+                totalInterestPaid: newTotalInterest,
+                totalCapitalPaid: newTotalCapital,
+                status: newLoanRemaining < 0.1 ? LoanStatus.PAID : LoanStatus.PENDING
+            });
+        
+            showToast("Pago corregido exitosamente.", "success");
+        } catch (err: any) {
+            console.error("Error updating payment:", err);
+            showToast(`Error al corregir pago: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [loans, showToast]);
+
     const handleAddClientAndLoan = useCallback(async (clientData: any, loanData: { amount: number; term: number }) => {
         try {
             if (isNaN(loanData.amount) || loanData.amount <= 0) throw new Error("El monto del préstamo debe ser válido.");
@@ -558,6 +618,7 @@ export const useAppData = (
         handleRejectRequest,
         handleUpdateRequestStatus,
         handleRegisterPayment,
+        handleUpdatePayment,
         handleAddClientAndLoan,
         handleAddLoan,
         handleGenerateTestRequest,
