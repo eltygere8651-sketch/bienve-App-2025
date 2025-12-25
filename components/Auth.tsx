@@ -48,37 +48,37 @@ const Auth: React.FC = () => {
     };
 
     return (
-        <div className="flex items-center justify-center p-4 min-h-[80vh]">
+        <div className="flex items-center justify-center p-4 min-h-[85vh]">
             <div className="w-full max-w-md animate-fade-in-down">
-                <div className="text-center mb-8">
-                    <Handshake className="text-primary-500 h-16 w-16 mx-auto" />
-                    <h1 className="text-3xl font-bold text-slate-100 mt-4">B.M Contigo</h1>
-                    <p className="text-slate-400 mt-2">
-                        Gestión de Préstamos y Clientes
+                
+                <div className="text-center mb-10">
+                    <div className="inline-flex items-center justify-center w-20 h-20 bg-slate-800/50 rounded-full mb-6 ring-8 ring-slate-800/30 backdrop-blur-sm">
+                        <Handshake className="text-primary-500 h-10 w-10" />
+                    </div>
+                    <h1 className="text-4xl font-heading font-bold text-white tracking-tight">B.M Contigo</h1>
+                    <p className="text-slate-400 mt-3 text-lg">
+                        Portal de Administración
                     </p>
                 </div>
                 
-                <div className="bg-slate-800 p-8 rounded-xl shadow-lg border border-slate-700 relative overflow-hidden">
+                <div className="glass-panel p-8 rounded-2xl shadow-2xl relative overflow-hidden">
                     {/* Elemento decorativo */}
-                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-primary-500/10 rounded-full blur-xl"></div>
+                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-primary-500/20 rounded-full blur-2xl"></div>
 
-                    <div className="mb-6 text-center relative z-10">
-                        <div className="bg-slate-900/50 w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4 border border-slate-600">
-                             <ShieldCheck className="text-green-400 h-8 w-8" />
-                        </div>
-                        <h2 className="text-xl font-bold text-slate-100">
-                            Acceso Administrativo
+                    <div className="mb-8 text-center relative z-10">
+                        <h2 className="text-xl font-bold text-white mb-2">
+                            Iniciar Sesión
                         </h2>
-                        <p className="text-sm text-slate-400 mt-2">
-                            Introduce tus credenciales para acceder al panel.
+                        <p className="text-sm text-slate-400">
+                            Acceso seguro al sistema de gestión.
                         </p>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
+                    <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
                          <div>
-                            <label htmlFor="auth-email" className="block text-sm font-medium text-slate-300">Correo Electrónico</label>
-                            <div className="relative mt-1">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                            <label htmlFor="auth-email" className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5 ml-1">Correo Electrónico</label>
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                                 <input 
                                     id="auth-email" 
                                     name="email"
@@ -87,16 +87,16 @@ const Auth: React.FC = () => {
                                     value={email} 
                                     onChange={(e) => setEmail(e.target.value)} 
                                     required 
-                                    placeholder="admin@ejemplo.com"
-                                    className="pl-10 w-full px-4 py-3 border border-slate-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-900/50 text-slate-100 placeholder-slate-500 transition-all focus:bg-slate-900" 
+                                    placeholder="nombre@ejemplo.com"
+                                    className="pl-10 w-full px-4 py-3 border border-white/10 rounded-xl shadow-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-black/20 text-white placeholder-slate-600 transition-all focus:bg-black/40 outline-none" 
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label htmlFor="auth-password"className="block text-sm font-medium text-slate-300">Contraseña</label>
-                            <div className="relative mt-1">
-                                <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                             <label htmlFor="auth-password"className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5 ml-1">Contraseña</label>
+                            <div className="relative">
+                                <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                                 <input 
                                     id="auth-password" 
                                     name="password"
@@ -106,7 +106,7 @@ const Auth: React.FC = () => {
                                     onChange={(e) => setPassword(e.target.value)} 
                                     required 
                                     placeholder="••••••••"
-                                    className="pl-10 w-full px-4 py-3 border border-slate-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-900/50 text-slate-100 placeholder-slate-500 transition-all focus:bg-slate-900" 
+                                    className="pl-10 w-full px-4 py-3 border border-white/10 rounded-xl shadow-sm focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 bg-black/20 text-white placeholder-slate-600 transition-all focus:bg-black/40 outline-none" 
                                 />
                             </div>
                         </div>
@@ -121,16 +121,17 @@ const Auth: React.FC = () => {
                             <button 
                                 type="submit" 
                                 disabled={isLoading} 
-                                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-bold text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-primary-400 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                                className="w-full flex justify-center py-3.5 px-4 rounded-xl shadow-lg text-sm font-bold text-white bg-primary-600 hover:bg-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 disabled:bg-primary-900 disabled:text-slate-500 disabled:cursor-not-allowed transition-all transform hover:-translate-y-0.5"
                             >
-                                {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : <><LogIn size={18} className="mr-2"/> Entrar</>}
+                                {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : <><LogIn size={18} className="mr-2"/> Entrar al Panel</>}
                             </button>
                         </div>
                     </form>
                 </div>
-                 <p className="text-center text-xs text-slate-500 mt-6">
-                    Tus datos se almacenan de forma segura en Google Cloud (Firebase).
-                </p>
+                 <div className="text-center mt-8 flex items-center justify-center gap-2 text-slate-600">
+                    <ShieldCheck size={14} />
+                    <p className="text-xs">Conexión segura SSL/TLS</p>
+                </div>
             </div>
         </div>
     );

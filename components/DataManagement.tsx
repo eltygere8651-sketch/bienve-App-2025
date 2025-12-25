@@ -1,20 +1,17 @@
 
 import React, { useState } from 'react';
-import { DatabaseBackup, ShieldCheck, FlaskConical, Trash2, Download, Loader2, Activity, Copy, Lock } from 'lucide-react';
+import { DatabaseBackup, Download, Loader2, ShieldCheck } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
-import { testConnection } from '../services/firebaseService';
 
 const DataManagement: React.FC = () => {
-    const { showConfirmModal, showToast } = useAppContext();
-    const { clients, loans, requests, handleGenerateTestRequest, handleDeleteTestRequests } = useDataContext();
+    const { showToast } = useAppContext();
+    const { clients, loans, requests } = useDataContext();
     const [isExporting, setIsExporting] = useState(false);
-    const [isTesting, setIsTesting] = useState(false);
 
     const handleExportBackup = async () => {
         setIsExporting(true);
         try {
-            // FIX: Usar los datos del Context (que vienen de Firebase) en lugar de dbService (Dexie)
             const data = {
                 clients,
                 loans,
@@ -48,129 +45,11 @@ const DataManagement: React.FC = () => {
         }
     };
 
-    const handleTestConnection = async () => {
-        setIsTesting(true);
-        try {
-            const success = await testConnection();
-            if (success) {
-                showToast('¡Conexión a Firebase exitosa! La base de datos responde.', 'success');
-            } else {
-                showToast('Falló la prueba de conexión.', 'error');
-            }
-        } catch (e: any) {
-            showToast('Error de conexión: ' + e.message, 'error');
-        } finally {
-            setIsTesting(false);
-        }
-    };
-
-    const onGenerateTestRequest = () => {
-        showConfirmModal({
-            title: 'Generar Solicitud de Prueba',
-            message: 'Esto añadirá una solicitud con datos falsos al sistema. Es útil para depurar si no ves ninguna solicitud. ¿Continuar?',
-            onConfirm: () => {
-                handleGenerateTestRequest();
-            },
-            type: 'info',
-        });
-    };
-
-    const onDeleteTestRequests = () => {
-        showConfirmModal({
-            title: 'Eliminar Solicitudes de Prueba',
-            message: 'Esta acción eliminará permanentemente todas las solicitudes cuyo nombre comience con "Cliente de Prueba". Esta acción no se puede deshacer. ¿Deseas continuar?',
-            onConfirm: handleDeleteTestRequests,
-            type: 'warning',
-        });
-    };
-
-    const RULES_CODE = `rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // 1. Permite crear solicitudes a cualquiera (clientes anónimos)
-    // 2. Permite leer/borrar solo al administrador autenticado
-    match /requests/{document=**} {
-      allow create: if true;
-      allow read, write: if request.auth != null;
-    }
-    
-    // El resto (clientes, préstamos) solo para el Admin
-    match /{document=**} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}`;
-
-    const handleCopyRules = () => {
-        navigator.clipboard.writeText(RULES_CODE);
-        showToast('Reglas copiadas al portapapeles', 'success');
-    };
-
     return (
         <div className="space-y-6">
             <div className="flex items-center">
                 <DatabaseBackup className="h-8 w-8 mr-3 text-primary-400" />
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Gestión de Datos</h1>
-            </div>
-
-            {/* SECCIÓN CRÍTICA: REGLAS DE SEGURIDAD */}
-            <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-amber-500/30 ring-1 ring-amber-500/20">
-                <div className="flex items-start">
-                    <Lock className="h-8 w-8 text-amber-400 mr-4 flex-shrink-0" />
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-100">Configuración de Permisos (Obligatorio)</h2>
-                        <p className="text-slate-300 mt-1 text-sm">
-                            Si no puedes ver las solicitudes de tus clientes, copia este código y pégalo en la consola de Firebase. Esto asegura que el Admin pueda ver todo.
-                        </p>
-                    </div>
-                </div>
-                
-                <div className="mt-4 bg-slate-900 p-4 rounded-lg border border-slate-700 relative group">
-                    <pre className="text-xs sm:text-sm text-green-400 font-mono overflow-x-auto whitespace-pre-wrap">
-                        {RULES_CODE}
-                    </pre>
-                    <button 
-                        onClick={handleCopyRules}
-                        className="absolute top-2 right-2 p-2 bg-slate-700 text-slate-200 rounded hover:bg-slate-600 transition-colors"
-                        title="Copiar código"
-                    >
-                        <Copy size={16} />
-                    </button>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-slate-700 text-sm text-slate-400">
-                    <p className="font-semibold text-slate-300 mb-1">Pasos a seguir:</p>
-                    <ol className="list-decimal list-inside space-y-1">
-                        <li>Ve a <a href="https://console.firebase.google.com" target="_blank" className="text-primary-400 underline" rel="noreferrer">console.firebase.google.com</a></li>
-                        <li>Entra en tu proyecto {'>'} <strong>Firestore Database</strong> {'>'} Pestaña <strong>Reglas</strong>.</li>
-                        <li>Borra todo lo que haya, pega el código de arriba y dale a <strong>Publicar</strong>.</li>
-                    </ol>
-                </div>
-            </div>
-
-            <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
-                <div className="flex items-start sm:items-center">
-                    <Activity className="h-10 w-10 text-emerald-400 mr-4 flex-shrink-0" />
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-100">Diagnóstico de Conexión</h2>
-                        <p className="text-slate-300 mt-1">
-                            Verifica que tu aplicación está conectada correctamente a los servidores de Google Firebase.
-                        </p>
-                    </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-                     <p className="text-sm text-slate-400">
-                        Esta prueba intenta escribir y borrar un documento temporal en la nube.
-                    </p>
-                    <button
-                        onClick={handleTestConnection}
-                        disabled={isTesting}
-                        className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-emerald-600 text-white font-bold rounded-lg shadow-md hover:bg-emerald-700 disabled:bg-emerald-400 transition-all hover:scale-105"
-                    >
-                        {isTesting ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Activity size={18} className="mr-2" />}
-                        {isTesting ? 'Probando...' : 'Probar Conexión a la Nube'}
-                    </button>
-                </div>
             </div>
 
             <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
@@ -179,13 +58,13 @@ service cloud.firestore {
                     <div>
                         <h2 className="text-xl font-bold text-slate-100">Copia de Seguridad</h2>
                         <p className="text-slate-300 mt-1">
-                            Descarga una copia local de todos tus datos almacenados en la nube.
+                            Descarga una copia local de todos tus datos (clientes, préstamos y solicitudes) almacenados en la nube.
                         </p>
                     </div>
                 </div>
                 <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <p className="text-sm text-slate-400">
-                        El archivo descargado contiene toda la base de datos en formato JSON.
+                        El archivo descargado contiene toda la base de datos en formato JSON para tu seguridad.
                     </p>
                     <button
                         onClick={handleExportBackup}
@@ -196,47 +75,6 @@ service cloud.firestore {
                         {isExporting ? 'Exportando...' : 'Descargar Copia Completa'}
                     </button>
                 </div>
-            </div>
-
-            <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
-                 <h2 className="text-xl font-bold text-slate-100 mb-2">Herramientas de Depuración</h2>
-                 <p className="text-slate-300 mb-4">
-                    Usa estas herramientas si encuentras problemas con los datos o para realizar pruebas.
-                 </p>
-                 <div className="mt-4 pt-4 border-t border-slate-700">
-                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                        <div>
-                             <h3 className="font-semibold text-amber-400">Generar Solicitud de Prueba</h3>
-                             <p className="text-sm text-slate-400 mt-1">
-                                Crea una solicitud con datos ficticios para verificar el funcionamiento del sistema.
-                             </p>
-                        </div>
-                        <button
-                            onClick={onGenerateTestRequest}
-                            className="mt-3 sm:mt-0 inline-flex items-center justify-center px-4 py-2 bg-amber-600/80 text-white font-bold rounded-lg shadow-md hover:bg-amber-700/80 transition-transform hover:scale-105"
-                        >
-                            <FlaskConical size={18} className="mr-2" />
-                            Generar Prueba
-                        </button>
-                    </div>
-                 </div>
-                 <div className="mt-4 pt-4 border-t border-slate-700">
-                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                        <div>
-                             <h3 className="font-semibold text-red-400">Eliminar Solicitudes de Prueba</h3>
-                             <p className="text-sm text-slate-400 mt-1">
-                                Limpia la base de datos eliminando todas las solicitudes generadas con la herramienta de prueba.
-                             </p>
-                        </div>
-                        <button
-                            onClick={onDeleteTestRequests}
-                            className="mt-3 sm:mt-0 inline-flex items-center justify-center px-4 py-2 bg-red-600/80 text-white font-bold rounded-lg shadow-md hover:bg-red-700/80 transition-transform hover:scale-105"
-                        >
-                            <Trash2 size={18} className="mr-2" />
-                            Eliminar Datos de Prueba
-                        </button>
-                    </div>
-                 </div>
             </div>
         </div>
     );

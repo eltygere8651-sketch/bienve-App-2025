@@ -10,19 +10,25 @@ import LoanDetailsModal from './LoanDetailsModal';
 import { DashboardStats } from '../services/geminiService';
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; change?: string; changeType?: 'increase' | 'decrease' }> = ({ title, value, icon, change, changeType }) => (
-    <div className="bg-slate-800 p-6 rounded-xl shadow-lg flex items-center justify-between transition-transform hover:scale-105 border border-slate-700">
-        <div>
-            <p className="text-sm text-slate-400 font-medium">{title}</p>
-            <p className="text-2xl font-bold text-slate-100">{value}</p>
+    <div className="glass-card p-6 rounded-2xl relative overflow-hidden group transition-all hover:-translate-y-1 bg-slate-800/60 border border-white/5">
+        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity scale-150 transform translate-x-2 -translate-y-2">
+            {icon}
+        </div>
+        <div className="relative z-10">
+            <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-white/5 rounded-xl text-primary-400 ring-1 ring-white/10">
+                    {icon}
+                </div>
+            </div>
+            <p className="text-3xl font-heading font-bold text-white tracking-tight">{value}</p>
+            <p className="text-sm text-slate-400 font-medium mt-1">{title}</p>
+            
             {change && (
-                <div className={`text-xs flex items-center mt-1 ${changeType === 'increase' ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`text-xs flex items-center mt-3 font-medium ${changeType === 'increase' ? 'text-emerald-400' : 'text-red-400'}`}>
                     {changeType === 'increase' ? <ArrowUpRight size={14} className="mr-1"/> : <ArrowDownRight size={14} className="mr-1"/>}
                     {change}
                 </div>
             )}
-        </div>
-        <div className="bg-primary-500/10 text-primary-400 p-3 rounded-full">
-            {icon}
         </div>
     </div>
 );
@@ -82,21 +88,21 @@ const Dashboard: React.FC = () => {
     }, [loans, detailedStats]);
 
     const COLORS: { [key: string]: string } = {
-        [LoanStatus.PENDING]: '#3b82f6', // primary-500
-        [LoanStatus.PAID]: '#22c55e',     // green-500
+        [LoanStatus.PENDING]: '#6366f1', // primary-500
+        [LoanStatus.PAID]: '#10b981',     // emerald-500
         [LoanStatus.OVERDUE]: '#ef4444',  // red-500
-        'Sin datos': '#64748b' // slate-500
+        'Sin datos': '#475569'
     };
 
     const StatusBadge: React.FC<{ status: LoanStatus }> = ({ status }) => {
-        const baseClasses = "px-3 py-1 text-xs font-semibold rounded-full inline-flex items-center";
+        const baseClasses = "px-2.5 py-0.5 text-xs font-bold rounded-full inline-flex items-center ring-1 ring-inset";
         switch (status) {
             case LoanStatus.PAID:
-                return <span className={`${baseClasses} bg-green-500/10 text-green-400`}><ThumbsUp size={12} className="mr-1"/> {status}</span>;
+                return <span className={`${baseClasses} bg-emerald-500/10 text-emerald-400 ring-emerald-500/20`}><ThumbsUp size={12} className="mr-1"/> {status}</span>;
             case LoanStatus.PENDING:
-                return <span className={`${baseClasses} bg-primary-500/10 text-primary-400`}><Clock size={12} className="mr-1"/> {status}</span>;
+                return <span className={`${baseClasses} bg-primary-500/10 text-primary-400 ring-primary-500/20`}><Clock size={12} className="mr-1"/> {status}</span>;
             case LoanStatus.OVERDUE:
-                return <span className={`${baseClasses} bg-red-500/10 text-red-400`}><AlertTriangle size={12} className="mr-1"/> {status}</span>;
+                return <span className={`${baseClasses} bg-red-500/10 text-red-400 ring-red-500/20`}><AlertTriangle size={12} className="mr-1"/> {status}</span>;
             default:
                 return null;
         }
@@ -137,69 +143,73 @@ const Dashboard: React.FC = () => {
                 loan={selectedLoan}
                 client={selectedClient}
             />
-            <div className="space-y-6">
+            <div className="space-y-8 animate-fade-in">
                  {showPermissionBanner && (
-                    <div className="bg-primary-900/50 border border-primary-500/30 text-primary-200 p-4 rounded-lg flex flex-col sm:flex-row justify-between items-center gap-4 animate-fade-in-down">
+                    <div className="bg-primary-900/30 border border-primary-500/30 text-primary-100 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-4 animate-fade-in-down backdrop-blur-sm">
                         <p className="text-sm text-center sm:text-left">
-                            <span className="font-bold">Activa las notificaciones</span> para recibir alertas instantáneas de nuevas solicitudes de préstamo.
+                            <span className="font-bold">Activa las notificaciones</span> para recibir alertas instantáneas de nuevas solicitudes.
                         </p>
                         <div className="flex gap-2 flex-shrink-0">
-                            <button onClick={() => setShowPermissionBanner(false)} className="px-4 py-1.5 text-xs font-semibold rounded-md hover:bg-slate-700">Ahora no</button>
-                            <button onClick={handleRequestPermission} className="px-4 py-1.5 bg-primary-600 text-white text-xs font-semibold rounded-md hover:bg-primary-700">Activar</button>
+                            <button onClick={() => setShowPermissionBanner(false)} className="px-3 py-1.5 text-xs font-semibold rounded-lg hover:bg-white/5 text-slate-300">Ahora no</button>
+                            <button onClick={handleRequestPermission} className="px-4 py-1.5 bg-primary-600 text-white text-xs font-semibold rounded-lg hover:bg-primary-500 shadow-lg shadow-primary-900/20">Activar</button>
                         </div>
                     </div>
                 )}
-                <div className="flex justify-between items-center">
-                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Panel Contable</h1>
+
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h1 className="text-3xl font-heading font-bold text-white">Panel Contable</h1>
                     {isOnline ? (
-                        <div className="flex items-center text-emerald-400 bg-emerald-900/20 px-3 py-1 rounded-full text-xs font-medium border border-emerald-500/20 animate-fade-in">
-                            <CloudCheck size={16} className="mr-2" />
-                            Conectado a la Nube
+                        <div className="flex items-center text-emerald-400 bg-emerald-900/10 px-3 py-1 rounded-full text-xs font-medium border border-emerald-500/10">
+                            <CloudCheck size={14} className="mr-2" />
+                            Sincronizado
                         </div>
                     ) : (
-                        <div className="flex items-center text-amber-400 bg-amber-900/20 px-3 py-1 rounded-full text-xs font-medium border border-amber-500/20 animate-pulse">
-                            <CloudOff size={16} className="mr-2" />
-                            Modo Offline
+                        <div className="flex items-center text-amber-400 bg-amber-900/10 px-3 py-1 rounded-full text-xs font-medium border border-amber-500/10 animate-pulse">
+                            <CloudOff size={14} className="mr-2" />
+                            Offline
                         </div>
                     )}
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <StatCard title="Total Prestado (Capital)" value={formatCurrency(detailedStats.totalLoaned)} icon={<Banknote />} />
-                    <StatCard title="Total Pendiente (Capital)" value={formatCurrency(detailedStats.totalOutstanding)} icon={<Clock />} />
+                    <StatCard title="Capital Pendiente" value={formatCurrency(detailedStats.totalOutstanding)} icon={<Clock />} />
                     <StatCard title="Préstamos Activos" value={detailedStats.activeLoans.toString()} icon={<FileWarning />} />
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
-                        <h2 className="text-lg font-semibold text-slate-200 mb-4">
-                            Préstamos Recientes
-                        </h2>
+                    {/* Lista Reciente */}
+                    <div className="lg:col-span-2 glass-panel rounded-2xl overflow-hidden flex flex-col bg-slate-800/60 border border-white/5">
+                        <div className="p-6 border-b border-white/5">
+                            <h2 className="text-lg font-heading font-semibold text-white">
+                                Actividad Reciente
+                            </h2>
+                        </div>
                         {filteredLoans.length > 0 ? (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-left min-w-[400px]">
-                                    <thead className="text-xs text-slate-400 uppercase bg-slate-700/50">
+                                <table className="w-full text-left min-w-[500px]">
+                                    <thead className="text-xs text-slate-400 uppercase bg-black/20">
                                         <tr>
-                                            <th className="p-3">Cliente</th>
-                                            <th className="p-3">Pendiente</th>
-                                            <th className="p-3">Estado</th>
-                                            <th className="p-3 text-right">Detalle</th>
+                                            <th className="px-6 py-4 font-medium">Cliente</th>
+                                            <th className="px-6 py-4 font-medium">Deuda Pendiente</th>
+                                            <th className="px-6 py-4 font-medium">Estado</th>
+                                            <th className="px-6 py-4 text-right font-medium">Acción</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody className="divide-y divide-white/5">
                                         {filteredLoans.map(loan => (
                                             <tr 
                                                 key={loan.id} 
                                                 onClick={() => handleLoanClick(loan)}
-                                                className={`border-b border-slate-700 hover:bg-slate-700/50 cursor-pointer ${loan.status === LoanStatus.OVERDUE ? 'bg-red-500/10' : ''}`}
+                                                className="group hover:bg-white/5 transition-colors cursor-pointer"
                                             >
-                                                <td className="p-3 font-medium text-slate-100">{loan.clientName}</td>
-                                                <td className="p-3 text-slate-300 font-mono">{formatCurrency(loan.remainingCapital)}</td>
-                                                <td className="p-3"><StatusBadge status={loan.status} /></td>
-                                                <td className="p-3 text-right">
-                                                    <button className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300 hover:bg-primary-600 hover:text-white transition-colors">
-                                                        Ver / Pagar
-                                                    </button>
+                                                <td className="px-6 py-4 font-medium text-slate-200 group-hover:text-white">{loan.clientName}</td>
+                                                <td className="px-6 py-4 text-slate-300 font-mono tracking-wide">{formatCurrency(loan.remainingCapital)}</td>
+                                                <td className="px-6 py-4"><StatusBadge status={loan.status} /></td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <span className="text-xs font-medium text-primary-400 group-hover:text-primary-300 transition-colors">
+                                                        Ver Detalles →
+                                                    </span>
                                                 </td>
                                             </tr>
                                         ))}
@@ -207,39 +217,67 @@ const Dashboard: React.FC = () => {
                                 </table>
                             </div>
                         ) : (
-                            <div className="text-center py-10">
-                                <FileWarning size={40} className="mx-auto text-slate-500" />
-                                <h3 className="mt-4 font-semibold text-slate-300">
-                                    No hay préstamos
+                            <div className="flex-1 flex flex-col justify-center items-center py-16 text-center">
+                                <div className="bg-slate-800/50 p-4 rounded-full mb-3">
+                                    <FileWarning size={32} className="text-slate-500" />
+                                </div>
+                                <h3 className="font-medium text-slate-300">
+                                    No hay préstamos registrados
                                 </h3>
                             </div>
                         )}
                     </div>
-                    <div className="space-y-6">
-                        <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
-                            <h2 className="text-lg font-semibold text-slate-200 mb-4">Estado de Cartera</h2>
-                            {loans.length > 0 ? (
-                                <ResponsiveContainer width="100%" height={200}>
+
+                    {/* Gráfico */}
+                    <div className="glass-panel rounded-2xl p-6 flex flex-col bg-slate-800/60 border border-white/5">
+                        <h2 className="text-lg font-heading font-semibold text-white mb-6">Estado de Cartera</h2>
+                        {loans.length > 0 ? (
+                            <div className="flex-1 flex items-center justify-center min-h-[250px]">
+                                <ResponsiveContainer width="100%" height={250}>
                                     <PieChart>
-                                        <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8" label>
+                                        <Pie 
+                                            data={pieChartData} 
+                                            dataKey="value" 
+                                            nameKey="name" 
+                                            cx="50%" 
+                                            cy="50%" 
+                                            innerRadius={60}
+                                            outerRadius={80} 
+                                            paddingAngle={5}
+                                            stroke="none"
+                                        >
                                             {pieChartData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[entry.name]} cursor="pointer"/>
+                                                <Cell key={`cell-${index}`} fill={COLORS[entry.name]}/>
                                             ))}
                                         </Pie>
-                                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '0.5rem' }} itemStyle={{ color: '#e2e8f0' }} formatter={(value) => `${value} Préstamo(s)`}/>
-                                        <Legend wrapperStyle={{fontSize: '12px', cursor: 'pointer', color: '#94a3b8'}} onClick={handleLegendClick}/>
+                                        <Tooltip 
+                                            contentStyle={{ 
+                                                backgroundColor: 'rgba(30, 41, 59, 0.9)', 
+                                                border: '1px solid rgba(255,255,255,0.1)', 
+                                                borderRadius: '12px',
+                                                boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                                            }} 
+                                            itemStyle={{ color: '#f1f5f9', fontSize: '12px' }} 
+                                            formatter={(value) => `${value} Préstamo(s)`}
+                                        />
+                                        <Legend 
+                                            verticalAlign="bottom" 
+                                            height={36} 
+                                            iconType="circle"
+                                            formatter={(value) => <span className="text-slate-400 text-xs ml-1">{value}</span>}
+                                            onClick={handleLegendClick}
+                                        />
                                     </PieChart>
                                 </ResponsiveContainer>
-                            ) : (
-                                <div className="h-[200px] flex flex-col justify-center items-center text-center">
-                                    <FileWarning size={40} className="text-slate-500" />
-                                    <p className="mt-1 text-sm text-slate-400">No hay datos</p>
-                                </div>
-                            )}
-                        </div>
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex flex-col justify-center items-center text-center opacity-50">
+                                <div className="w-32 h-32 rounded-full border-4 border-slate-700/50 border-dashed mb-2"></div>
+                                <p className="text-sm text-slate-400">Sin datos para mostrar</p>
+                            </div>
+                        )}
                     </div>
                 </div>
-
             </div>
         </>
     );

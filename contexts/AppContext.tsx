@@ -40,7 +40,7 @@ interface AppContextType {
     isConfigReady: boolean;
     initializationStatus: InitializationStatus;
     annualInterestRate: number;
-    isOnline: boolean; // Nuevo estado para Point 8
+    isOnline: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -52,7 +52,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [currentView, setCurrentView] = useState<AppView>('welcome');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [hasAdminAccount, setHasAdminAccount] = useState(true); 
-    const [isOnline, setIsOnline] = useState(navigator.onLine); // Estado inicial de conexión
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
     
     const [confirmState, setConfirmState] = useState<ConfirmState>({
         isOpen: false,
@@ -69,7 +69,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setToast({ message, type });
     }, []);
 
-    // Listeners de Conectividad (Point 8)
     useEffect(() => {
         const handleOnline = () => {
             setIsOnline(true);
@@ -89,7 +88,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         };
     }, [showToast]);
 
-    // Inicialización de Firebase
     useEffect(() => {
         const init = async () => {
             const configured = initializeFirebase();
@@ -98,7 +96,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 return;
             }
 
-            // Safety timeout increased to 5s to allow Firebase Auth to restore session on slow networks
             const safetyTimeout = setTimeout(() => {
                 if (initializationStatus === 'pending') {
                     console.warn("Auth check timed out, forcing initialization");
@@ -108,15 +105,12 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
             const unsubscribe = onAuthStateChanged((firebaseUser) => {
                 if (firebaseUser) {
-                    // Si el usuario no es anónimo (es admin), restauramos sesión y vista
                     if (!firebaseUser.isAnonymous) {
                         setUser(firebaseUser);
                         setIsAuthenticated(true);
                         setHasAdminAccount(true);
-                        // REDIRECCIÓN AUTOMÁTICA: Si detectamos login, vamos directo al Dashboard
                         setCurrentView((prev) => (prev === 'welcome' || prev === 'auth') ? 'dashboard' : prev);
                     } else {
-                        // Usuario anónimo (cliente enviando solicitud)
                         setIsAuthenticated(false);
                     }
                 } else {
@@ -139,7 +133,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     useEffect(() => {
         const adminOnlyViews: AppView[] = ['clients', 'receiptGenerator', 'settings', 'dataManagement', 'newClient', 'dashboard', 'requests'];
         if (!isAuthenticated && adminOnlyViews.includes(currentView)) {
-            // No redirigir inmediatamente si estamos inicializando, para evitar flashes
             if (initializationStatus === 'success') {
                 setCurrentView('auth');
             }
@@ -152,7 +145,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             showToast('Cuenta creada con éxito.', 'success');
             return true;
         } catch (error: any) {
-            console.error("Registration failed", error);
             if (error.code === 'auth/email-already-in-use') {
                  showToast('El email ya está registrado. Por favor inicia sesión.', 'error');
             } else {
@@ -169,7 +161,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             setCurrentView('dashboard');
             return true;
         } catch (error: any) {
-            console.error("Login failed", error);
             return false;
         }
     }, [showToast]);
@@ -213,7 +204,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isConfigReady: initializationStatus !== 'not_configured',
         initializationStatus,
         annualInterestRate,
-        isOnline
+        isOnline,
     }), [
         toast, showToast, currentView, user, isAuthenticated, login, registerAdmin, logout, hasAdminAccount,
         isSidebarOpen, confirmState, showConfirmModal, hideConfirmModal,

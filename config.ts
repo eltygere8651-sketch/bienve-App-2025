@@ -12,11 +12,11 @@ export const INTEREST_RATE_CONFIG = {
 /**
  * Calcula los detalles de un préstamo basado en la configuración centralizada.
  * @param amount Capital prestado
- * @param term Plazo en meses
+ * @param term Plazo en meses (0 para indefinido)
  * @param annualRate Tasa anual (por defecto la configurada globalmente)
  */
 export const calculateLoanParameters = (amount: number, term: number, annualRate: number = DEFAULT_ANNUAL_INTEREST_RATE) => {
-    if (isNaN(amount) || isNaN(term) || amount <= 0 || term <= 0) {
+    if (isNaN(amount) || amount <= 0) {
         return {
             monthlyPayment: 0,
             totalRepayment: 0,
@@ -28,15 +28,35 @@ export const calculateLoanParameters = (amount: number, term: number, annualRate
     const monthlyRatePercentage = annualRate / 12;
     const monthlyRateDecimal = monthlyRatePercentage / 100;
     
-    // Fórmula de amortización (Cuota fija)
-    const monthlyPayment = (amount * monthlyRateDecimal) / (1 - Math.pow(1 + monthlyRateDecimal, -term));
-    const totalRepayment = monthlyPayment * term;
+    // MODALIDAD INDEFINIDA (term = 0)
+    if (term === 0) {
+        const monthlyInterest = amount * monthlyRateDecimal;
+        return {
+            monthlyPayment: isFinite(monthlyInterest) ? monthlyInterest : 0, // Solo interés
+            totalRepayment: amount, // En teoría infinito, pero retornamos el capital base como referencia de deuda mínima
+            monthlyRate: monthlyRateDecimal,
+            monthlyRatePercentage
+        };
+    }
+
+    // Fórmula de amortización (Cuota fija) para plazo definido
+    if (term > 0) {
+        const monthlyPayment = (amount * monthlyRateDecimal) / (1 - Math.pow(1 + monthlyRateDecimal, -term));
+        const totalRepayment = monthlyPayment * term;
+
+        return {
+            monthlyPayment: isFinite(monthlyPayment) ? monthlyPayment : 0,
+            totalRepayment: isFinite(totalRepayment) ? totalRepayment : 0,
+            monthlyRate: monthlyRateDecimal,
+            monthlyRatePercentage
+        };
+    }
 
     return {
-        monthlyPayment: isFinite(monthlyPayment) ? monthlyPayment : 0,
-        totalRepayment: isFinite(totalRepayment) ? totalRepayment : 0,
-        monthlyRate: monthlyRateDecimal,
-        monthlyRatePercentage
+        monthlyPayment: 0,
+        totalRepayment: 0,
+        monthlyRate: 0,
+        monthlyRatePercentage: 0
     };
 };
 

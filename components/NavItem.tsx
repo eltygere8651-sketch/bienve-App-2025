@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AppView } from '../types';
 
@@ -12,29 +13,37 @@ interface NavItemProps {
     isTestButton?: boolean;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, view, currentView, onClick, isSidebarOpen, badge, isTestButton }) => (
-    <li>
-        <button
-            onClick={() => onClick(view)}
-            className={`w-full flex items-center justify-between p-3 my-1 rounded-lg cursor-pointer transition-all duration-200 text-left ${
-                currentView === view && !isTestButton
-                    ? 'bg-primary-600 text-white shadow-md'
-                    : isTestButton 
-                    ? 'text-amber-400 hover:bg-amber-500/10 hover:text-amber-300' 
-                    :'text-slate-300 hover:bg-slate-700 hover:text-white'
-            }`}
-        >
-            <div className="flex items-center">
-                <span className={currentView === view ? 'text-white' : 'text-slate-400'}>{icon}</span>
-                <span className={`ml-4 font-semibold transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 h-0 w-0 pointer-events-none'}`}>{label}</span>
-            </div>
-            {isSidebarOpen && badge != null && badge > 0 && (
-                <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                    {badge}
-                </span>
-            )}
-        </button>
-    </li>
-);
+const NavItem: React.FC<NavItemProps> = ({ icon, label, view, currentView, onClick, isSidebarOpen, badge, isTestButton }) => {
+    const isActive = currentView === view;
+
+    return (
+        <li>
+            <button
+                onClick={() => onClick(view)}
+                className={`w-full flex items-center justify-between p-3 my-1 rounded-xl cursor-pointer transition-all duration-200 text-left group border border-transparent ${
+                    isActive && !isTestButton
+                        ? 'bg-primary-500/10 text-primary-300 border-primary-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                        : isTestButton 
+                        ? 'text-amber-400 hover:bg-amber-500/10 hover:text-amber-300' 
+                        :'text-slate-400 hover:bg-white/5 hover:text-slate-100'
+                }`}
+            >
+                <div className="flex items-center min-w-0">
+                    <span className={`flex-shrink-0 transition-colors ${isActive ? 'text-primary-400' : 'text-slate-500 group-hover:text-slate-300'}`}>
+                        {React.cloneElement(icon as React.ReactElement, { size: 20 })}
+                    </span>
+                    <span className={`ml-3 font-medium truncate transition-all duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0 w-0'}`}>
+                        {label}
+                    </span>
+                </div>
+                {isSidebarOpen && badge != null && badge > 0 && (
+                    <span className={`text-[10px] font-bold rounded-full h-5 min-w-[1.25rem] px-1 flex items-center justify-center transition-colors ${isActive ? 'bg-primary-500 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                        {badge}
+                    </span>
+                )}
+            </button>
+        </li>
+    );
+};
 
 export default NavItem;

@@ -73,18 +73,37 @@ export const exportLoanToCSV = (loan: Loan) => {
     document.body.removeChild(link);
 };
 
-// --- NUEVAS VALIDACIONES ---
+// --- NUEVAS VALIDACIONES Y FORMATEADORES ---
 
 export const isValidDNI = (dni: string): boolean => {
     if (!dni) return false;
-    // Formato simple: empieza opcionalmente con X, Y, Z, siguen 7-8 dígitos, termina en letra
     const dniRegex = /^[XYZ]?\d{5,8}[A-Z]$/i;
     return dniRegex.test(dni.trim());
 };
 
+export const formatDNI = (value: string): string => {
+    return value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+};
+
 export const isValidPhone = (phone: string): boolean => {
     if (!phone) return false;
-    // Permite espacios, guiones, pero debe tener al menos 9 dígitos
     const cleanPhone = phone.replace(/[\s-]/g, '');
     return /^\d{9,15}$/.test(cleanPhone);
+};
+
+export const formatPhone = (value: string): string => {
+    // Elimina todo lo que no sea número
+    const clean = value.replace(/\D/g, '');
+    // Formato simple XXX XXX XXX (para 9 dígitos)
+    if (clean.length === 9) {
+        return clean.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
+    }
+    return clean;
+};
+
+export const calculateLoanProgress = (loan: Loan): number => {
+    if (!loan.initialCapital || loan.initialCapital <= 0) return 0;
+    const paid = loan.initialCapital - loan.remainingCapital;
+    const percent = (paid / loan.initialCapital) * 100;
+    return Math.min(100, Math.max(0, percent));
 };

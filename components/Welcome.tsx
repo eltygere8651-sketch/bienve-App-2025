@@ -1,160 +1,91 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { PenSquare, Handshake, Download, Search, Share2, Users, QrCode } from 'lucide-react';
-import BudgetCalculator from './BudgetCalculator';
+import React from 'react';
+import { PenSquare, Handshake, FileText, PenTool, Banknote, IdCard } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
-import InstallPWAInstructions from './InstallPWAInstructions';
-import ShareApp from './ShareApp';
 
 const LargeLogo = () => (
-    <div className="flex items-center justify-center w-full h-full">
-        <div className="bg-slate-700/50 rounded-full w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center shadow-2xl shadow-primary-500/10 border-4 border-slate-700">
-            <Handshake className="text-primary-500 w-32 h-32 sm:w-48 sm:h-48" strokeWidth={1.5} />
+    <div className="flex items-center justify-center mb-8">
+        <div className="relative group cursor-default">
+            <div className="absolute inset-0 bg-primary-500 blur-[60px] opacity-20 group-hover:opacity-30 transition-opacity duration-1000 rounded-full"></div>
+            <div className="relative bg-slate-900/80 backdrop-blur-xl rounded-full w-40 h-40 flex items-center justify-center shadow-2xl border border-white/10 ring-4 ring-white/5 animate-pulse-slow">
+                <Handshake className="text-primary-400 w-20 h-20" strokeWidth={1.5} />
+            </div>
         </div>
     </div>
 );
 
+const StepCard: React.FC<{ icon: React.ReactNode, title: string, desc: string, delay: string }> = ({ icon, title, desc, delay }) => (
+    <div className={`glass-card p-8 rounded-2xl flex flex-col items-center text-center transition-all duration-300 hover:-translate-y-2 hover:bg-slate-800/80 ${delay}`}>
+        <div className="bg-slate-800/80 p-4 rounded-2xl text-primary-400 mb-5 shadow-lg border border-white/5 ring-1 ring-white/5">
+            {icon}
+        </div>
+        <h3 className="font-heading font-bold text-lg text-white mb-2">{title}</h3>
+        <p className="text-sm text-slate-400 leading-relaxed">{desc}</p>
+    </div>
+);
 
 const Welcome: React.FC = () => {
-    const { setCurrentView, showToast } = useAppContext();
+    const { setCurrentView } = useAppContext();
     
-    // --- PWA Installation Logic ---
-    const [installPrompt, setInstallPrompt] = useState<any>(null);
-    const [showInstructions, setShowInstructions] = useState(false);
-    const [showShareModal, setShowShareModal] = useState(false);
-    const isInStandaloneMode = useMemo(() => window.matchMedia('(display-mode: standalone)').matches, []);
-
-    useEffect(() => {
-        const handler = (e: Event) => {
-            e.preventDefault();
-            setInstallPrompt(e);
-        };
-        if (!isInStandaloneMode) {
-            window.addEventListener('beforeinstallprompt', handler);
-        }
-        return () => {
-            if (!isInStandaloneMode) {
-                window.removeEventListener('beforeinstallprompt', handler);
-            }
-        };
-    }, [isInStandaloneMode]);
-
-    const handleInstallClick = () => {
-        if (installPrompt) {
-            installPrompt.prompt();
-            installPrompt.userChoice.then((choiceResult: { outcome: string }) => {
-                if (choiceResult.outcome === 'accepted') {
-                    showToast('¡Aplicación instalada con éxito!', 'success');
-                } else {
-                    showToast('Instalación cancelada.', 'info');
-                }
-                setInstallPrompt(null);
-            });
-        } else {
-            setShowInstructions(true);
-        }
-    };
-    // --- End PWA Installation Logic ---
-
     return (
-        <>
-            <InstallPWAInstructions isOpen={showInstructions} onClose={() => setShowInstructions(false)} />
-            <ShareApp isOpen={showShareModal} onClose={() => setShowShareModal(false)} />
+        <div className="space-y-16 animate-fade-in-down pb-8 max-w-5xl mx-auto">
             
-            <div className="space-y-8 animate-fade-in-down">
-                <div className="bg-slate-800 p-8 rounded-2xl shadow-lg border border-slate-700">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                        <div className="text-center md:text-left">
-                            <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-100 tracking-tight">
-                                Tus ideas, <span className="text-primary-400">nuestro impulso.</span>
-                            </h1>
-                            <p className="mt-4 text-lg text-slate-300">
-                                B.M Contigo fortalece lazos de confianza, permitiendo que el apoyo entre personas cercanas sea una realidad tangible y transparente para todos.
-                            </p>
-                             <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-                                <button 
-                                    onClick={() => setCurrentView('loanRequest')}
-                                    className="inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-transform hover:scale-105"
-                                 >
-                                    <PenSquare size={18} className="mr-2" />
-                                    Iniciar una Solicitud
-                                 </button>
-                                 <button 
-                                    onClick={() => setShowShareModal(true)}
-                                    className="inline-flex items-center justify-center px-6 py-3 bg-slate-700 text-slate-100 font-bold rounded-lg shadow-md hover:bg-slate-600 border border-slate-600 transition-transform hover:scale-105"
-                                 >
-                                    <Share2 size={18} className="mr-2 text-primary-400" />
-                                    Invitar a un amigo
-                                 </button>
-                             </div>
-                        </div>
-                        <div className="hidden md:block">
-                            <LargeLogo />
-                        </div>
-                    </div>
+            {/* Hero Section */}
+            <div className="text-center pt-8 sm:pt-16">
+                <LargeLogo />
+                
+                <h1 className="text-5xl sm:text-6xl font-heading font-extrabold text-white tracking-tight leading-tight mb-6">
+                    Tus ideas, <br className="hidden sm:block" />
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-primary-600">nuestro impulso.</span>
+                </h1>
+                
+                <p className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed mb-8">
+                    Plataforma segura de préstamos entre conocidos. Rápido, transparente y sin letra pequeña.
+                </p>
+
+                <div className="inline-flex items-center gap-2 bg-slate-900/50 border border-primary-500/20 px-5 py-2 rounded-full text-primary-200 text-sm font-medium backdrop-blur-sm mb-10">
+                    <IdCard size={18} className="text-primary-400"/>
+                    <span>Requisito único: DNI o NIE en vigor</span>
                 </div>
 
-                {/* Card de Compartir Destacada */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center">
-                                <div className="bg-emerald-500/10 text-emerald-400 p-3 rounded-full mr-4">
-                                <Search className="h-6 w-6" />
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-slate-100">Estado de Solicitud</h3>
-                                <p className="text-sm text-slate-400">Verifica tu préstamo con tu DNI/NIE.</p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => setCurrentView('requestStatus')}
-                            className="w-full sm:w-auto flex-shrink-0 inline-flex items-center justify-center px-5 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow-md hover:bg-emerald-700 transition-transform hover:scale-105"
-                        >
-                            Consultar
-                        </button>
-                    </div>
-
-                    {!isInStandaloneMode && (
-                        <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700 flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <div className="flex items-center">
-                                <div className="bg-primary-500/10 text-primary-400 p-3 rounded-full mr-4">
-                                    <Download className="h-6 w-6" />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-slate-100">App en tu móvil</h3>
-                                    <p className="text-sm text-slate-400">Instala para acceso rápido.</p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={handleInstallClick}
-                                className="w-full sm:w-auto flex-shrink-0 inline-flex items-center justify-center px-5 py-2 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 transition-transform hover:scale-105"
-                            >
-                                Instalar
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                <BudgetCalculator />
-
-                <div className="bg-gradient-to-r from-primary-900/20 to-slate-800 p-6 rounded-xl border border-primary-500/20 flex flex-col items-center text-center space-y-4">
-                    <div className="bg-primary-500/20 p-3 rounded-full">
-                        <Users className="text-primary-400 h-8 w-8" />
-                    </div>
-                    <div>
-                        <h3 className="text-xl font-bold text-slate-100">¿Conoces a alguien que necesite un impulso?</h3>
-                        <p className="text-slate-400 mt-1 max-w-md">Comparte B.M Contigo con tus familiares y amigos para que también puedan beneficiarse de esta red de confianza.</p>
-                    </div>
+                <div className="flex justify-center items-center">
                     <button 
-                        onClick={() => setShowShareModal(true)}
-                        className="px-8 py-3 bg-primary-600 text-white font-bold rounded-xl shadow-lg hover:bg-primary-700 transition-all flex items-center gap-2"
-                    >
-                        <QrCode size={20} />
-                        Mostrar código QR para compartir
-                    </button>
-                </div>
+                        onClick={() => setCurrentView('loanRequest')}
+                        className="group relative inline-flex items-center justify-center px-8 py-4 bg-primary-600 text-white text-lg font-bold rounded-2xl shadow-[0_0_30px_rgba(79,70,229,0.3)] hover:bg-primary-500 hover:shadow-[0_0_40px_rgba(79,70,229,0.5)] focus:outline-none focus:ring-4 focus:ring-primary-500/30 transition-all duration-300 hover:scale-105"
+                     >
+                        <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></span>
+                        <PenSquare size={22} className="mr-3" />
+                        Iniciar Solicitud
+                     </button>
+                 </div>
             </div>
-        </>
+
+            {/* Steps Section */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 px-4">
+                <StepCard 
+                    icon={<FileText size={28} />} 
+                    title="1. Rellena tus datos" 
+                    desc="Completa el formulario y sube una foto de tu documento de identidad de forma segura."
+                    delay="delay-0"
+                />
+                <StepCard 
+                    icon={<PenTool size={28} />} 
+                    title="2. Firma Digital" 
+                    desc="Lee y acepta el contrato de préstamo firmando directamente en tu pantalla."
+                    delay="delay-100"
+                />
+                <StepCard 
+                    icon={<Banknote size={28} />} 
+                    title="3. Recibe el Dinero" 
+                    desc="Tras una rápida revisión por parte de la administración, recibirás el dinero."
+                    delay="delay-200"
+                />
+            </div>
+            
+            <div className="text-center pt-8 border-t border-white/5">
+                <p className="text-slate-500 text-sm">© {new Date().getFullYear()} B.M Contigo. Finanzas personales simplificadas.</p>
+            </div>
+        </div>
     );
 };
 

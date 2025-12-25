@@ -74,6 +74,6 @@ export interface LoanRequest {
     signature?: string;
 }
 
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient' | 'requestStatus';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient';
 
 export type FilterStatus = LoanStatus | 'Todos';

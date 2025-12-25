@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { X, Save, Loader2, Lock } from 'lucide-react';
+import { X, Save, Loader2, Lock, Infinity as InfinityIcon } from 'lucide-react';
 import { Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { InputField } from './FormFields';
@@ -16,6 +16,7 @@ interface NewLoanModalProps {
 const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) => {
     const { handleAddLoan } = useDataContext();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isIndefinite, setIsIndefinite] = useState(false);
     
     // Default values - Interest locked to 96 (8% monthly)
     const [loanData, setLoanData] = useState({
@@ -28,12 +29,12 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
 
     const calculations = useMemo(() => {
         const amount = parseFloat(loanData.amount);
-        const term = parseInt(loanData.term);
+        const term = isIndefinite ? 0 : parseInt(loanData.term);
         const rate = parseFloat(loanData.interestRate);
 
         return calculateLoanParameters(amount, term, rate);
 
-    }, [loanData.amount, loanData.term, loanData.interestRate]);
+    }, [loanData.amount, loanData.term, loanData.interestRate, isIndefinite]);
 
     if (!isOpen || !client) return null;
 
@@ -48,7 +49,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
         try {
             await handleAddLoan(client.id, client.name, {
                 amount: parseFloat(loanData.amount),
-                term: parseInt(loanData.term),
+                term: isIndefinite ? 0 : parseInt(loanData.term),
                 interestRate: parseFloat(loanData.interestRate),
                 startDate: loanData.startDate,
                 notes: loanData.notes
@@ -62,6 +63,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                 startDate: new Date().toISOString().split('T')[0],
                 notes: ''
             });
+            setIsIndefinite(false);
         } catch (error) {
             console.error(error);
         } finally {
@@ -86,7 +88,33 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                 <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
                     <div className="grid grid-cols-2 gap-4">
                         <InputField label="Monto (€)" name="amount" type="number" value={loanData.amount} onChange={handleInputChange as any} required min="1" step="0.01" />
-                        <InputField label="Plazo (meses)" name="term" type="number" value={loanData.term} onChange={handleInputChange as any} required min="1" />
+                        
+                         <div className="space-y-2">
+                            {/* Toggle Indefinido */}
+                            <div className="flex items-center justify-between bg-slate-700/50 p-2 rounded-lg border border-slate-600">
+                                <span className="text-xs font-medium text-slate-300 flex items-center gap-1">
+                                    <InfinityIcon size={14} className="text-primary-400" />
+                                    Indefinido
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsIndefinite(!isIndefinite)}
+                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${isIndefinite ? 'bg-primary-600' : 'bg-slate-600'}`}
+                                >
+                                    <span
+                                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isIndefinite ? 'translate-x-5' : 'translate-x-1'}`}
+                                    />
+                                </button>
+                            </div>
+                            
+                            {!isIndefinite ? (
+                                <InputField label="Plazo (meses)" name="term" type="number" value={loanData.term} onChange={handleInputChange as any} required min="1" />
+                            ) : (
+                                <div className="h-[62px] flex items-center justify-center text-xs text-slate-500 border border-slate-700 border-dashed rounded bg-slate-800/50">
+                                    Sin límite de tiempo
+                                </div>
+                            )}
+                        </div>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
@@ -119,12 +147,14 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                             <span className="text-slate-200 font-bold">{calculations.monthlyRatePercentage.toFixed(2)}%</span>
                          </div>
                          <div className="flex justify-between text-sm">
-                            <span className="text-slate-400">Cuota Mensual:</span>
+                            <span className="text-slate-400">{isIndefinite ? 'Solo Interés:' : 'Cuota Mensual:'}</span>
                             <span className="text-green-400 font-bold">{formatCurrency(calculations.monthlyPayment)}</span>
                          </div>
                          <div className="flex justify-between text-sm border-t border-slate-700 pt-2">
                             <span className="text-slate-400">Total a Pagar:</span>
-                            <span className="text-primary-400 font-bold">{formatCurrency(calculations.totalRepayment)}</span>
+                            <span className="text-primary-400 font-bold">
+                                {isIndefinite ? 'Capital + Intereses' : formatCurrency(calculations.totalRepayment)}
+                            </span>
                          </div>
                     </div>
 

@@ -171,14 +171,14 @@ export const generateClientReport = (client: Client, loans: Loan[]) => {
 
     (doc as any).autoTable({
         startY: 50,
-        head: [['ID Préstamo', 'Fecha Inicio', 'Monto (€)', 'Plazo (m)', 'Estado', 'Pagos']],
+        head: [['ID Préstamo', 'Fecha Inicio', 'Monto (€)', 'Plazo', 'Estado', 'Pagos']],
         body: loans.map(l => [
             l.id.substring(l.id.length - 6),
             new Date(l.startDate).toLocaleDateString(),
             l.amount.toLocaleString('es-ES'),
-            l.term,
+            l.term === 0 ? 'Indefinido' : `${l.term} meses`,
             l.status,
-            `${l.paymentsMade}/${l.term}`
+            l.term === 0 ? l.paymentsMade : `${l.paymentsMade}/${l.term}`
         ]),
         theme: 'striped',
         headStyles: { fillColor: [37, 99, 235] },
@@ -292,12 +292,21 @@ export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: strin
 
     const finalY = (doc as any).lastAutoTable.finalY;
 
-    // Signature
+    // Signature Logic
     if (signatureImage) {
         doc.addImage(signatureImage, 'PNG', 75, finalY + 15, 60, 30);
     } else {
-        doc.line(45, finalY + 30, 165, finalY + 30);
-        doc.text('Firma del Prestamista', 105, finalY + 35, { align: 'center' });
+        // SUSTITUCIÓN: Sello digital en lugar de línea vacía
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(200, 200, 200); // Marca de agua gris claro
+        doc.text('B.M CONTIGO', 105, finalY + 30, { align: 'center' });
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text('Recibo Generado Digitalmente', 105, finalY + 35, { align: 'center' });
+        doc.setTextColor(0, 0, 0); // Reset a negro
     }
 
     // Footer
