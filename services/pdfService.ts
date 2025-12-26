@@ -617,3 +617,64 @@ export const generateIdDocumentsPDF = async (request: LoanRequest) => {
         throw new Error("Could not fetch images to generate PDF.");
     }
 };
+
+export const generateLoanHistoryPDF = (loan: Loan) => {
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFillColor(30, 41, 59); // Slate 800
+    doc.rect(0, 0, 210, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("B.M CONTIGO", 14, 18);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text("Historial de Pagos", 195, 18, { align: 'right' });
+
+    // Loan Info
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.text(`Cliente: ${loan.clientName}`, 14, 40);
+    doc.text(`ID Préstamo: ${loan.id}`, 14, 46);
+    doc.text(`Fecha Inicio: ${new Date(loan.startDate).toLocaleDateString()}`, 14, 52);
+    
+    doc.text(`Monto Inicial: ${formatCurrency(loan.initialCapital || loan.amount)}`, 130, 40);
+    doc.text(`Total Interés Pagado: ${formatCurrency(loan.totalInterestPaid)}`, 130, 46);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Saldo Pendiente: ${formatCurrency(loan.remainingCapital)}`, 130, 52);
+
+    // Payments Table
+    const history = [...(loan.paymentHistory || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    (doc as any).autoTable({
+        startY: 60,
+        head: [['Fecha', 'Monto Pagado', 'Interés', 'Capital', 'Nuevo Saldo', 'Notas']],
+        body: history.map(p => [
+            new Date(p.date).toLocaleDateString(),
+            formatCurrency(p.amount),
+            formatCurrency(p.interestPaid),
+            formatCurrency(p.capitalPaid),
+            formatCurrency(p.remainingCapitalAfter),
+            p.notes || '-'
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [59, 130, 246] }, // Blue header
+        styles: { fontSize: 9 },
+        columnStyles: {
+            4: { fontStyle: 'bold' }
+        }
+    });
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Generado el ${new Date().toLocaleString()}`, 14, 290);
+        doc.text(`Página ${i} de ${pageCount}`, 195, 290, { align: 'right' });
+    }
+
+    doc.save(`Historial_${loan.clientName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+};

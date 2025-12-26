@@ -6,7 +6,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     AreaChart, Area, PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, Wallet, ArrowUpRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, Wallet, ArrowUpRight, BarChart3 } from 'lucide-react';
 
 const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: any, color: string }> = ({ title, value, subtext, icon: Icon, color }) => (
     <div className="bg-slate-800/60 border border-slate-700 p-6 rounded-2xl flex flex-col justify-between backdrop-blur-md relative overflow-hidden group hover:-translate-y-1 transition-transform">
@@ -34,7 +34,7 @@ const Accounting: React.FC = () => {
         let totalRecoveredCapital = 0;
         let totalInterestEarned = 0;
         let currentOutstanding = 0;
-        let potentialTotalInterest = 0;
+        let forecastedMonthlyIncome = 0;
 
         allLoans.forEach(loan => {
             const initial = loan.initialCapital || loan.amount;
@@ -43,11 +43,9 @@ const Accounting: React.FC = () => {
             totalRecoveredCapital += (loan.totalCapitalPaid || 0);
             totalInterestEarned += (loan.totalInterestPaid || 0);
             
-            // Calculate potential interest if all goes well (simple estimation)
-            // Monthly Payment * Term - Initial Capital
-            // For indefinite, we can't easily calculate total potential without a date range
-            if (loan.term > 0) {
-                potentialTotalInterest += (loan.monthlyPayment * loan.term) - initial;
+            // Forecast: 8% of current outstanding balance for active loans
+            if (!loan.archived && loan.status !== 'Pagado') {
+                forecastedMonthlyIncome += loan.remainingCapital * 0.08;
             }
         });
 
@@ -56,7 +54,7 @@ const Accounting: React.FC = () => {
             totalRecoveredCapital,
             totalInterestEarned,
             currentOutstanding,
-            potentialTotalInterest
+            forecastedMonthlyIncome
         };
     }, [allLoans]);
 
@@ -96,7 +94,7 @@ const Accounting: React.FC = () => {
     ];
 
     return (
-        <div className="space-y-8 animate-fade-in max-w-7xl mx-auto pb-10">
+        <div className="space-y-8 animate-fade-in pb-10">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-heading font-bold text-white flex items-center gap-3">
@@ -107,8 +105,8 @@ const Accounting: React.FC = () => {
                 </div>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* KPI Cards - Responsive Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 <KPICard 
                     title="Capital Prestado" 
                     value={formatCurrency(stats.totalInvested)} 
@@ -124,11 +122,11 @@ const Accounting: React.FC = () => {
                     color="emerald" 
                 />
                 <KPICard 
-                    title="Capital Recuperado" 
-                    value={formatCurrency(stats.totalRecoveredCapital)} 
-                    subtext="Retorno de inversión (Amortización)"
-                    icon={ArrowUpRight} 
-                    color="indigo" 
+                    title="Proyección Mes" 
+                    value={formatCurrency(stats.forecastedMonthlyIncome)} 
+                    subtext="Ingreso esperado (8% de deuda)"
+                    icon={BarChart3} 
+                    color="amber" 
                 />
                 <KPICard 
                     title="Cartera Pendiente" 
@@ -139,26 +137,26 @@ const Accounting: React.FC = () => {
                 />
             </div>
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Charts Section - Flexible layout */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 
                 {/* Monthly Cash Flow */}
-                <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                <div className="xl:col-span-2 bg-slate-800 p-4 sm:p-6 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
                     <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                         <TrendingUp size={20} className="text-primary-400" />
                         Flujo de Caja Mensual (Ingresos)
                     </h3>
-                    <div className="h-[300px] w-full">
+                    <div className="h-[250px] sm:h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `€${val}`} />
+                                <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `€${val}`} />
                                 <Tooltip 
                                     contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
                                     formatter={(value: number) => formatCurrency(value)}
                                 />
-                                <Legend />
+                                <Legend wrapperStyle={{fontSize: '12px', paddingTop: '10px'}}/>
                                 <Bar dataKey="capital" name="Capital Amortizado" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
                                 <Bar dataKey="interes" name="Interés (Ganancia)" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
                             </BarChart>
@@ -167,7 +165,7 @@ const Accounting: React.FC = () => {
                 </div>
 
                 {/* Distribution Pie */}
-                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg flex flex-col">
+                <div className="bg-slate-800 p-4 sm:p-6 rounded-2xl border border-slate-700 shadow-lg flex flex-col overflow-hidden">
                     <h3 className="text-lg font-bold text-white mb-6">Distribución de Activos</h3>
                     <div className="flex-1 min-h-[250px] relative">
                         <ResponsiveContainer width="100%" height="100%">
@@ -189,27 +187,27 @@ const Accounting: React.FC = () => {
                                      contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
                                      formatter={(value: number) => formatCurrency(value)}
                                 />
-                                <Legend verticalAlign="bottom" height={36}/>
+                                <Legend verticalAlign="bottom" height={36} wrapperStyle={{fontSize: '12px'}}/>
                             </PieChart>
                         </ResponsiveContainer>
                         {/* Center Text */}
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                             <div className="text-center">
                                 <p className="text-xs text-slate-400 font-bold uppercase">Total Movido</p>
-                                <p className="text-xl font-bold text-white">{formatCurrency(stats.totalInvested + stats.totalInterestEarned)}</p>
+                                <p className="text-lg sm:text-xl font-bold text-white">{formatCurrency(stats.totalInvested + stats.totalInterestEarned)}</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Detailed Table */}
+            {/* Detailed Table - Horizontal Scroll enabled for Mobile */}
             <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
                 <div className="p-6 border-b border-slate-700">
                     <h3 className="text-lg font-bold text-white">Desglose por Préstamo</h3>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead className="bg-slate-900/50 text-slate-400 uppercase font-bold text-xs">
                             <tr>
                                 <th className="px-6 py-4">Cliente</th>

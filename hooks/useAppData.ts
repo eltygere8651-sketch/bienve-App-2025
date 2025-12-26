@@ -16,7 +16,7 @@ import { DEFAULT_ANNUAL_INTEREST_RATE, calculateLoanParameters, calculateMonthly
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
     user: User | null,
-    isConfigReady: boolean // New dependency to ensure DB is ready
+    isConfigReady: boolean
 ) => {
     const [clients, setClients] = useState<Client[]>([]);
     const [loans, setLoans] = useState<Loan[]>([]);
@@ -29,9 +29,6 @@ export const useAppData = (
 
     // Cargar datos en tiempo real con Firebase
     useEffect(() => {
-        // CRITICAL FIX: Ensure both Config AND User are ready before subscribing.
-        // Firebase rules usually require an authenticated user (even anonymous).
-        // If we subscribe before 'user' is populated, we get "Missing Permissions" and the listener dies.
         if (!isConfigReady || !user) return;
 
         setIsLoading(true);
@@ -52,23 +49,20 @@ export const useAppData = (
             }
         }, 5000); 
 
-        // 1. Clients Subscription
         const unsubClients = subscribeToCollection('clients', (data) => {
             const mappedClients = (data as any[]).map(c => ({
                 ...c,
-                archived: c.archived ?? false // Default to false
+                archived: c.archived ?? false
             }));
             setClients(mappedClients as Client[]);
             clientsLoaded = true;
             checkAllLoaded();
         }, [], (err) => {
             console.error("Error loading clients", err);
-            // Do not block UI on error, but log it
             clientsLoaded = true; 
             checkAllLoaded();
         });
 
-        // 2. Loans Subscription
         const unsubLoans = subscribeToCollection('loans', (data) => {
             const mappedLoans = (data as any[]).map(l => ({
                 ...l,
@@ -89,7 +83,6 @@ export const useAppData = (
              checkAllLoaded();
         });
 
-        // 3. Requests Subscription
         const unsubRequests = subscribeToCollection(
             'requests', 
             (data) => {
@@ -113,9 +106,8 @@ export const useAppData = (
             unsubLoans();
             unsubRequests();
         };
-    }, [isConfigReady, user]); // Added 'user' to dependency array to trigger re-sync on auth change
+    }, [isConfigReady, user]);
 
-    // Derived State
     const activeLoans = useMemo(() => loans.filter(l => !l.archived), [loans]);
     const archivedLoans = useMemo(() => loans.filter(l => l.archived), [loans]);
     
@@ -376,6 +368,44 @@ export const useAppData = (
         }
     }, [loans, showToast]);
 
+    const handleBalanceCorrection = useCallback(async (loanId: string, newBalance: number, notes: string) => {
+        try {
+            const loan = loans.find(l => l.id === loanId);
+            if (!loan) throw new Error("Préstamo no encontrado");
+
+            const balanceDifference = loan.remainingCapital - newBalance;
+            // Si la diferencia es positiva, se redujo la deuda (como un pago de capital)
+            // Si es negativa, aumentó la deuda (como un cargo extra o corrección)
+            
+            const newPaymentRecord: PaymentRecord = {
+                id: `ADJ-${Date.now()}`,
+                date: new Date().toISOString(),
+                amount: 0, // No cash exchange usually
+                interestPaid: 0,
+                capitalPaid: balanceDifference, // Tracking the impact on capital
+                remainingCapitalAfter: newBalance,
+                notes: `[SISTEMA] Corrección de saldo: ${notes}`
+            };
+
+            const updatedHistory = [...(loan.paymentHistory || []), newPaymentRecord];
+            const newTotalCapitalPaid = (loan.totalCapitalPaid || 0) + balanceDifference;
+
+            await updateDocument('loans', loanId, {
+                remainingCapital: newBalance,
+                totalCapitalPaid: newTotalCapitalPaid,
+                paymentHistory: updatedHistory,
+                status: newBalance <= 0.1 ? LoanStatus.PAID : LoanStatus.PENDING
+            });
+
+            showToast("Saldo corregido y registrado en historial.", "success");
+
+        } catch (err: any) {
+            console.error("Error adjusting balance:", err);
+            showToast(`Error al ajustar saldo: ${err.message}`, 'error');
+            throw err;
+        }
+    }, [loans, showToast]);
+
     const handleAddClientAndLoan = useCallback(async (clientData: any, loanData: { amount: number; term: number }) => {
         try {
             if (isNaN(loanData.amount) || loanData.amount <= 0) throw new Error("El monto del préstamo debe ser válido.");
@@ -472,11 +502,6 @@ export const useAppData = (
     const handleUpdateClient = useCallback(async (clientId: string, updatedData: Partial<Client>) => {
         try {
             await updateDocument('clients', clientId, updatedData);
-            
-            // Note: If client name changed, ideally we should update clientName in their active loans too
-            // For simplicity, we are just updating the client document here. 
-            // A more robust solution would query all loans by clientId and update clientName there too.
-            
             showToast('Datos del cliente actualizados.', 'success');
         } catch (err: any) {
             showToast(`Error al actualizar cliente: ${err.message}`, 'error');
@@ -624,6 +649,7 @@ export const useAppData = (
         handleUpdateRequestStatus,
         handleRegisterPayment,
         handleUpdatePayment,
+        handleBalanceCorrection,
         handleAddClientAndLoan,
         handleAddLoan,
         handleGenerateTestRequest,

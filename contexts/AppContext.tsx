@@ -21,6 +21,11 @@ interface ConfirmState {
     type: ConfirmModalType;
 }
 
+interface LoginResult {
+    success: boolean;
+    error?: string;
+}
+
 interface AppContextType {
     toast: ToastMessage;
     showToast: (message: string, type: 'success' | 'error' | 'info') => void;
@@ -28,7 +33,7 @@ interface AppContextType {
     setCurrentView: (view: AppView) => void;
     user: any | null; 
     isAuthenticated: boolean;
-    login: (email: string, password: string) => Promise<boolean>;
+    login: (email: string, password: string) => Promise<LoginResult>;
     registerAdmin: (email: string, password: string) => Promise<boolean>;
     logout: () => void;
     hasAdminAccount: boolean;
@@ -142,13 +147,15 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const registerAdmin = useCallback(async (email: string, password: string) => {
         try {
             await signUp(email, password);
-            showToast('Cuenta creada con éxito.', 'success');
+            showToast('Cuenta creada con éxito. Sesión iniciada.', 'success');
             return true;
         } catch (error: any) {
             if (error.code === 'auth/email-already-in-use') {
                  showToast('El email ya está registrado. Por favor inicia sesión.', 'error');
+            } else if (error.code === 'auth/weak-password') {
+                 showToast('La contraseña es muy débil. Usa al menos 6 caracteres.', 'error');
             } else {
-                 showToast('Error al registrar: ' + error.message, 'error');
+                 showToast('Error al registrar: ' + (error.message || error.code), 'error');
             }
             return false;
         }
@@ -159,9 +166,10 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             await signIn(email, password);
             showToast('Bienvenido, Admin.', 'success');
             setCurrentView('dashboard');
-            return true;
+            return { success: true };
         } catch (error: any) {
-            return false;
+            console.error("Login failed", error);
+            return { success: false, error: error.code || error.message };
         }
     }, [showToast]);
 

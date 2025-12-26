@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loan, Client, LoanStatus } from '../types';
-import { X, Banknote, Calendar, Percent, Clock, AlertTriangle, Edit, Trash2, Save, Loader2, TrendingDown, Infinity as InfinityIcon, User, MapPin, Phone, Mail, FileText, Check, Copy } from 'lucide-react';
-import { formatCurrency, exportLoanToCSV, calculateLoanProgress, formatPhone } from '../services/utils';
+import { X, Banknote, Calendar, Percent, Clock, AlertTriangle, Edit, Trash2, Save, Loader2, TrendingDown, Infinity as InfinityIcon, User, MapPin, Phone, Mail, FileText, Check, Copy, Lock, RotateCcw, FileDown } from 'lucide-react';
+import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import PaymentHistory from './PaymentHistory';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField, MoneyInput } from './FormFields';
 import { calculateMonthlyInterest } from '../config';
+import { generateLoanHistoryPDF } from '../services/pdfService';
 
 interface LoanDetailsModalProps {
     isOpen: boolean;
@@ -47,7 +48,7 @@ const InfoRow = ({ icon: Icon, label, value, onCopy }: { icon: any, label: strin
 };
 
 const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, loan, client, initialTab = 'details' }) => {
-    const { handleUpdateLoan, handleUpdateClient, handleDeleteLoan, handleRegisterPayment } = useDataContext();
+    const { handleUpdateLoan, handleUpdateClient, handleDeleteLoan, handleRegisterPayment, handleBalanceCorrection } = useDataContext();
     const { showConfirmModal, showToast } = useAppContext();
     const [activeTab, setActiveTab] = useState(initialTab);
     
@@ -55,6 +56,11 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     const [loanFormData, setLoanFormData] = useState<Partial<Loan>>({});
     const [clientFormData, setClientFormData] = useState<Partial<Client>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // Balance Correction State
+    const [showCorrectionInput, setShowCorrectionInput] = useState(false);
+    const [correctionBalance, setCorrectionBalance] = useState('');
+    const [correctionReason, setCorrectionReason] = useState('');
 
     // Payment Form State
     const [paymentAmount, setPaymentAmount] = useState('');
@@ -84,6 +90,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
             setActiveTab(initialTab);
             setPaymentAmount('');
             setPaymentNotes('');
+            setShowCorrectionInput(false);
         }
     }, [loan, client, isOpen, initialTab]);
 
@@ -108,6 +115,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     if (!isOpen || !loan || !client) return null;
 
     const isIndefinite = loan.term === 0;
+    const hasHistory = loan.paymentsMade > 0;
 
     const handleUpdateSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -122,6 +130,10 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                 updatedLoan.amount = updatedLoan.initialCapital;
             }
             
+            // Removing dangerous manual edits for remainingCapital from this specific submit to avoid history desync
+            // (Remaining capital is now handled via handleCorrectionSubmit)
+            delete updatedLoan.remainingCapital; 
+
             await Promise.all([
                 handleUpdateLoan(loan.id, updatedLoan),
                 handleUpdateClient(client.id, clientFormData)
@@ -133,6 +145,26 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
             console.error(error);
         } finally { 
             setIsSubmitting(false); 
+        }
+    };
+
+    const handleCorrectionSubmit = async () => {
+        const newBalance = parseFloat(correctionBalance);
+        if (isNaN(newBalance) || newBalance < 0) {
+            showToast("Introduce un saldo válido.", "error");
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            await handleBalanceCorrection(loan.id, newBalance, correctionReason || 'Ajuste manual');
+            setShowCorrectionInput(false);
+            setCorrectionBalance('');
+            setCorrectionReason('');
+            setLoanFormData(prev => ({ ...prev, remainingCapital: newBalance })); // UI Update
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -164,16 +196,17 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex justify-center items-center z-50 p-2 sm:p-4 animate-modal-backdrop" onClick={onClose}>
+            {/* Modal Card - Fixed Max Height on Desktop, Full on Mobile */}
             <div className="bg-slate-900 w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-6xl rounded-none sm:rounded-2xl shadow-2xl flex flex-col border border-slate-700 overflow-hidden animate-modal-content" onClick={e => e.stopPropagation()}>
                 
                 {/* 1. Header Global */}
-                <div className="px-6 py-4 bg-slate-800/80 border-b border-slate-700 flex justify-between items-center shrink-0">
+                <div className="px-6 py-4 bg-slate-800/80 border-b border-slate-700 flex justify-between items-center shrink-0 z-10 backdrop-blur-md">
                     <div className="flex items-center gap-4">
                         <div className="h-12 w-12 bg-gradient-to-br from-primary-600 to-indigo-700 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-primary-900/50">
                             {client.name.charAt(0)}
                         </div>
-                        <div>
-                            <h2 className="text-xl font-heading font-bold text-white leading-tight">{client.name}</h2>
+                        <div className="min-w-0">
+                            <h2 className="text-xl font-heading font-bold text-white leading-tight truncate pr-4">{client.name}</h2>
                             <div className="flex items-center gap-2 text-sm text-slate-400">
                                 <span className="font-mono bg-slate-700/50 px-1.5 rounded">{client.idNumber || 'Sin ID'}</span>
                                 <span className="w-1 h-1 bg-slate-600 rounded-full"></span>
@@ -181,13 +214,14 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                             </div>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 transition-colors"><X size={24} /></button>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 transition-colors shrink-0"><X size={24} /></button>
                 </div>
 
-                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+                {/* Body Wrapper */}
+                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
                     
                     {/* 2. Sidebar: Detalles del Cliente (Estilo Expediente) */}
-                    <div className="lg:w-80 bg-slate-800/30 border-r border-slate-700 overflow-y-auto p-6 hidden lg:block">
+                    <div className="lg:w-80 bg-slate-800/30 border-r border-slate-700 overflow-y-auto p-6 hidden lg:block shrink-0">
                         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
                             <User size={14} /> Ficha del Cliente
                         </h3>
@@ -210,24 +244,32 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                     </div>
 
                     {/* 3. Main Content: Tabs y Vistas */}
-                    <div className="flex-1 flex flex-col bg-slate-900/50 min-w-0">
+                    <div className="flex-1 flex flex-col bg-slate-900/50 min-w-0 min-h-0">
                          {/* Tabs Navigation */}
-                         <div className="flex border-b border-slate-700 bg-slate-800/50 text-sm shrink-0 overflow-x-auto">
-                            <button onClick={() => setActiveTab('details')} className={`flex-1 min-w-[100px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'details' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Gestión</button>
-                            <button onClick={() => setActiveTab('payment')} className={`flex-1 min-w-[100px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'payment' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Registrar Pago</button>
-                            <button onClick={() => setActiveTab('history')} className={`flex-1 min-w-[100px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'history' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Historial</button>
-                            <button onClick={() => setActiveTab('edit')} className={`flex-1 min-w-[100px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'edit' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Editar</button>
+                         <div className="flex border-b border-slate-700 bg-slate-800/50 text-sm shrink-0 overflow-x-auto no-scrollbar">
+                            <button onClick={() => setActiveTab('details')} className={`flex-1 min-w-[90px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'details' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Gestión</button>
+                            <button onClick={() => setActiveTab('payment')} className={`flex-1 min-w-[90px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'payment' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Cobrar</button>
+                            <button onClick={() => setActiveTab('history')} className={`flex-1 min-w-[90px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'history' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Historial</button>
+                            <button onClick={() => setActiveTab('edit')} className={`flex-1 min-w-[90px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'edit' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Editar</button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-4 sm:p-6 scroll-smooth">
+                        {/* Scrollable Container with Fixes */}
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 scroll-smooth pb-32 touch-pan-y min-h-0">
                             
                             {/* TAB: GESTIÓN (Dashboard) */}
                             {activeTab === 'details' && (
                                 <div className="space-y-6 animate-fade-in">
-                                    {/* Mobile Client Info (Visible only on small screens) */}
+                                    {/* Mobile Client Info */}
                                     <div className="lg:hidden bg-slate-800 p-4 rounded-xl border border-slate-700 mb-4">
-                                        <div className="flex items-center gap-3 text-sm text-slate-300">
-                                            <Phone size={16} /> {formatPhone(client.phone || '')}
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex items-center gap-3 text-sm text-slate-300">
+                                                <Phone size={16} className="text-slate-500" /> <a href={`tel:${client.phone}`} className="hover:text-primary-400 transition-colors">{formatPhone(client.phone || '')}</a>
+                                            </div>
+                                            {client.address && (
+                                                <div className="flex items-center gap-3 text-sm text-slate-300">
+                                                    <MapPin size={16} className="text-slate-500" /> <span className="truncate">{client.address}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -352,8 +394,8 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                 <div className="space-y-4 animate-fade-in">
                                     <div className="flex justify-between items-center mb-2">
                                         <h3 className="font-bold text-slate-200">Historial de Transacciones</h3>
-                                        <button onClick={() => exportLoanToCSV(loan)} className="text-xs flex items-center gap-1 bg-slate-700 px-3 py-1.5 rounded hover:bg-slate-600 text-white transition-colors">
-                                            <TrendingDown size={14} /> Exportar CSV
+                                        <button onClick={() => generateLoanHistoryPDF(loan)} className="text-xs flex items-center gap-1 bg-slate-700 px-3 py-1.5 rounded hover:bg-slate-600 text-white transition-colors">
+                                            <FileDown size={14} /> Exportar PDF
                                         </button>
                                     </div>
                                     <PaymentHistory loan={loan} />
@@ -361,132 +403,167 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                             )}
 
                             {activeTab === 'edit' && (
-                                <form onSubmit={handleUpdateSubmit} className="max-w-3xl mx-auto space-y-6 animate-fade-in">
+                                <div className="max-w-3xl mx-auto space-y-6 animate-fade-in pb-10">
                                     <div className="bg-red-900/10 border border-red-500/20 p-4 rounded-xl flex items-start gap-3">
                                         <AlertTriangle className="text-red-400 shrink-0 mt-0.5" />
                                         <div>
                                             <p className="text-sm text-red-200 font-bold mb-1">Modo Edición Avanzada</p>
                                             <p className="text-xs text-red-300/80">
-                                                Modificar estos valores manualmente (especialmente Capital o Deuda) afectará al historial y los cálculos futuros. Úsalo solo para corregir errores de registro.
+                                                Ten cuidado al modificar estos datos. Los ajustes de saldo generan automáticamente un registro en el historial para mantener la contabilidad.
                                             </p>
                                         </div>
                                     </div>
 
-                                    {/* SECCIÓN 1: DATOS DEL PRÉSTAMO */}
-                                    <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
-                                        <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-2">
-                                            <Banknote size={20} className="text-green-400" />
-                                            Datos del Préstamo
-                                        </h3>
+                                    {/* Unified Form for better submission handling */}
+                                    <form onSubmit={handleUpdateSubmit} className="space-y-6">
                                         
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                            <InputField 
-                                                label="Capital Inicial (€)" 
-                                                name="amount" 
-                                                type="number" 
-                                                value={String(loanFormData.amount || '')} 
-                                                onChange={(e) => {
-                                                    const newAmount = Number(e.target.value);
-                                                    // Auto-update remaining capital preserving the amount already paid
-                                                    const capitalPaid = (loan.initialCapital || loan.amount) - loan.remainingCapital;
-                                                    const newRemaining = Math.max(0, newAmount - capitalPaid);
-                                                    
-                                                    setLoanFormData({
-                                                        ...loanFormData, 
-                                                        amount: newAmount,
-                                                        remainingCapital: newRemaining
-                                                    });
-                                                }}
-                                                step="0.01" 
-                                            />
-                                            <InputField 
-                                                label="Deuda Actual / Capital Pendiente (€)" 
-                                                name="remainingCapital" 
-                                                type="number" 
-                                                value={String(loanFormData.remainingCapital || '')} 
-                                                onChange={(e) => setLoanFormData({...loanFormData, remainingCapital: Number(e.target.value)})} 
-                                                step="0.01" 
-                                            />
-                                            <InputField 
-                                                label="Tasa Interés Anual (%)" 
-                                                name="interestRate" 
-                                                type="number" 
-                                                value={String(loanFormData.interestRate || '')} 
-                                                onChange={(e) => setLoanFormData({...loanFormData, interestRate: Number(e.target.value)})} 
-                                                step="0.01" 
-                                            />
-                                            <InputField 
-                                                label="Plazo (Meses)" 
-                                                name="term" 
-                                                type="number" 
-                                                value={String(loanFormData.term || '')} 
-                                                onChange={(e) => setLoanFormData({...loanFormData, term: Number(e.target.value)})} 
-                                            />
-                                            <InputField 
-                                                label="Fecha Inicio" 
-                                                name="startDate" 
-                                                type="date" 
-                                                value={String(loanFormData.startDate || '')} 
-                                                onChange={(e) => setLoanFormData({...loanFormData, startDate: e.target.value})} 
-                                            />
-                                        </div>
-                                    </div>
+                                        {/* SECCIÓN 1: DATOS DEL PRÉSTAMO */}
+                                        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
+                                            <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-2">
+                                                <Banknote size={20} className="text-green-400" />
+                                                Datos del Préstamo
+                                            </h3>
+                                            
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                                <div className="relative">
+                                                    <InputField 
+                                                        label="Capital Inicial (€)" 
+                                                        name="amount" 
+                                                        type="number" 
+                                                        value={String(loanFormData.amount || '')} 
+                                                        onChange={(e) => setLoanFormData({...loanFormData, amount: Number(e.target.value)})} 
+                                                        step="0.01" 
+                                                    />
+                                                    {hasHistory && (
+                                                        <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center rounded border border-slate-600 cursor-not-allowed">
+                                                            <span className="text-xs text-slate-300 flex items-center gap-1 font-bold bg-slate-900 px-2 py-1 rounded-full border border-slate-700">
+                                                                <Lock size={12}/> Bloqueado por Historial
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
 
-                                    {/* SECCIÓN 2: DATOS DEL CLIENTE */}
-                                    <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
-                                        <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-2">
-                                            <User size={20} className="text-blue-400" />
-                                            Datos del Cliente
-                                        </h3>
-                                        
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                            <div className="sm:col-span-2">
+                                                {/* Safe Balance Adjustment */}
+                                                <div className="relative">
+                                                    <label className="block text-sm font-medium text-slate-300 mb-1">Deuda Actual / Saldo (€)</label>
+                                                    <div className="flex gap-2">
+                                                        <div className="relative flex-1">
+                                                            <input 
+                                                                type="number" 
+                                                                value={String(loanFormData.remainingCapital || '')} 
+                                                                readOnly
+                                                                className="w-full px-3 py-2 border border-slate-600 rounded-lg shadow-sm bg-slate-900/50 text-slate-400 cursor-not-allowed" 
+                                                            />
+                                                            <Lock size={16} className="absolute right-3 top-3 text-slate-500" />
+                                                        </div>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setShowCorrectionInput(!showCorrectionInput)} 
+                                                            className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 transition-colors"
+                                                            title="Corregir Saldo"
+                                                        >
+                                                            <RotateCcw size={18} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {showCorrectionInput && (
+                                                    <div className="sm:col-span-2 bg-slate-900/50 p-4 rounded-lg border border-slate-600 animate-fade-in-down">
+                                                        <h4 className="text-sm font-bold text-slate-200 mb-3">Corrección de Saldo Segura</h4>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                                                            <InputField label="Nuevo Saldo Real (€)" name="newBalance" type="number" value={correctionBalance} onChange={e => setCorrectionBalance(e.target.value)} />
+                                                            <InputField label="Motivo del Ajuste" name="reason" type="text" value={correctionReason} onChange={e => setCorrectionReason(e.target.value)} placeholder="Ej: Error de cálculo, Descuento..." />
+                                                        </div>
+                                                        <div className="flex justify-end gap-2">
+                                                            <button type="button" onClick={() => setShowCorrectionInput(false)} className="px-3 py-2 text-xs font-bold text-slate-400 hover:text-white">Cancelar</button>
+                                                            <button type="button" onClick={handleCorrectionSubmit} disabled={isSubmitting} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg flex items-center gap-2">
+                                                                {isSubmitting ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Aplicar Corrección
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 <InputField 
-                                                    label="Nombre Completo" 
-                                                    name="name" 
-                                                    type="text" 
-                                                    value={clientFormData.name || ''} 
-                                                    onChange={(e) => setClientFormData({...clientFormData, name: e.target.value})} 
+                                                    label="Tasa Interés Anual (%)" 
+                                                    name="interestRate" 
+                                                    type="number" 
+                                                    value={String(loanFormData.interestRate || '')} 
+                                                    onChange={(e) => setLoanFormData({...loanFormData, interestRate: Number(e.target.value)})} 
+                                                    step="0.01" 
                                                 />
-                                            </div>
-                                            <InputField 
-                                                label="DNI / NIE" 
-                                                name="idNumber" 
-                                                type="text" 
-                                                value={clientFormData.idNumber || ''} 
-                                                onChange={(e) => setClientFormData({...clientFormData, idNumber: e.target.value})} 
-                                            />
-                                            <InputField 
-                                                label="Teléfono" 
-                                                name="phone" 
-                                                type="text" 
-                                                value={clientFormData.phone || ''} 
-                                                onChange={(e) => setClientFormData({...clientFormData, phone: e.target.value})} 
-                                            />
-                                            <div className="sm:col-span-2">
                                                 <InputField 
-                                                    label="Dirección" 
-                                                    name="address" 
-                                                    type="text" 
-                                                    value={clientFormData.address || ''} 
-                                                    onChange={(e) => setClientFormData({...clientFormData, address: e.target.value})} 
+                                                    label="Plazo (Meses)" 
+                                                    name="term" 
+                                                    type="number" 
+                                                    value={String(loanFormData.term || '')} 
+                                                    onChange={(e) => setLoanFormData({...loanFormData, term: Number(e.target.value)})} 
+                                                />
+                                                <InputField 
+                                                    label="Fecha Inicio" 
+                                                    name="startDate" 
+                                                    type="date" 
+                                                    value={String(loanFormData.startDate || '')} 
+                                                    onChange={(e) => setLoanFormData({...loanFormData, startDate: e.target.value})} 
                                                 />
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div className="pt-4 flex flex-col sm:flex-row justify-between items-center border-t border-slate-700 mt-4 gap-4">
-                                        <button type="button" onClick={onDelete} className="text-red-400 text-sm flex items-center gap-2 hover:bg-red-500/10 px-3 py-2 rounded transition-colors w-full sm:w-auto justify-center"><Trash2 size={16} /> Cerrar/Eliminar Préstamo</button>
-                                        <button 
-                                            type="submit" 
-                                            disabled={isSubmitting}
-                                            className="px-8 py-3 bg-primary-600 text-white font-bold rounded-lg hover:bg-primary-500 shadow-lg w-full sm:w-auto flex items-center justify-center gap-2"
-                                        >
-                                            {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
-                                            Guardar Todos los Cambios
-                                        </button>
-                                    </div>
-                                </form>
+                                        {/* SECCIÓN 2: DATOS DEL CLIENTE */}
+                                        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
+                                            <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-2">
+                                                <User size={20} className="text-blue-400" />
+                                                Datos del Cliente
+                                            </h3>
+                                            
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                                <div className="sm:col-span-2">
+                                                    <InputField 
+                                                        label="Nombre Completo" 
+                                                        name="name" 
+                                                        type="text" 
+                                                        value={clientFormData.name || ''} 
+                                                        onChange={(e) => setClientFormData({...clientFormData, name: e.target.value})} 
+                                                    />
+                                                </div>
+                                                <InputField 
+                                                    label="DNI / NIE" 
+                                                    name="idNumber" 
+                                                    type="text" 
+                                                    value={clientFormData.idNumber || ''} 
+                                                    onChange={(e) => setClientFormData({...clientFormData, idNumber: e.target.value})} 
+                                                />
+                                                <InputField 
+                                                    label="Teléfono" 
+                                                    name="phone" 
+                                                    type="text" 
+                                                    value={clientFormData.phone || ''} 
+                                                    onChange={(e) => setClientFormData({...clientFormData, phone: e.target.value})} 
+                                                />
+                                                <div className="sm:col-span-2">
+                                                    <InputField 
+                                                        label="Dirección" 
+                                                        name="address" 
+                                                        type="text" 
+                                                        value={clientFormData.address || ''} 
+                                                        onChange={(e) => setClientFormData({...clientFormData, address: e.target.value})} 
+                                                    />
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="pt-4 flex flex-col sm:flex-row justify-between items-center border-t border-slate-700 mt-4 gap-4 pb-2">
+                                                <button type="button" onClick={onDelete} className="text-red-400 text-sm flex items-center gap-2 hover:bg-red-500/10 px-3 py-2 rounded transition-colors w-full sm:w-auto justify-center"><Trash2 size={16} /> Cerrar/Eliminar Préstamo</button>
+                                                <button 
+                                                    type="submit"
+                                                    disabled={isSubmitting}
+                                                    className="px-8 py-3 bg-primary-600 text-white font-bold rounded-lg hover:bg-primary-500 shadow-lg w-full sm:w-auto flex items-center justify-center gap-2"
+                                                >
+                                                    {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
+                                                    Guardar Cambios
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
                             )}
                         </div>
                     </div>

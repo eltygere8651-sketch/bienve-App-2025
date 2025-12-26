@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, FilterStatus, Client } from '../types';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, FileWarning, CloudCheck, CloudOff } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, FileWarning, CloudCheck, CloudOff, Wallet } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCurrency } from '../services/utils';
@@ -38,6 +38,7 @@ const Dashboard: React.FC = () => {
     const { showToast, isOnline } = useAppContext();
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('Todos');
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+    const [initialTab, setInitialTab] = useState<'details' | 'payment'>('details');
     const [showPermissionBanner, setShowPermissionBanner] = useState(false);
 
     useEffect(() => {
@@ -123,6 +124,13 @@ const Dashboard: React.FC = () => {
     };
 
     const handleLoanClick = (loan: Loan) => {
+        setInitialTab('details');
+        setSelectedLoan(loan);
+    };
+
+    const handleQuickPay = (e: React.MouseEvent, loan: Loan) => {
+        e.stopPropagation();
+        setInitialTab('payment');
         setSelectedLoan(loan);
     };
     
@@ -142,6 +150,7 @@ const Dashboard: React.FC = () => {
                 onClose={closeModal}
                 loan={selectedLoan}
                 client={selectedClient}
+                initialTab={initialTab}
             />
             <div className="space-y-8 animate-fade-in">
                  {showPermissionBanner && (
@@ -207,9 +216,20 @@ const Dashboard: React.FC = () => {
                                                 <td className="px-6 py-4 text-slate-300 font-mono tracking-wide">{formatCurrency(loan.remainingCapital)}</td>
                                                 <td className="px-6 py-4"><StatusBadge status={loan.status} /></td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <span className="text-xs font-medium text-primary-400 group-hover:text-primary-300 transition-colors">
-                                                        Ver Detalles →
-                                                    </span>
+                                                    <div className="flex justify-end gap-2">
+                                                        {loan.status !== LoanStatus.PAID && (
+                                                            <button 
+                                                                onClick={(e) => handleQuickPay(e, loan)}
+                                                                className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white transition-all border border-emerald-500/20"
+                                                                title="Cobro Rápido"
+                                                            >
+                                                                <Wallet size={16} />
+                                                            </button>
+                                                        )}
+                                                        <span className="text-xs font-medium text-primary-400 group-hover:text-primary-300 transition-colors flex items-center px-2">
+                                                            Ver →
+                                                        </span>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}

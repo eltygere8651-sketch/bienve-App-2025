@@ -59,7 +59,6 @@ const App: React.FC = () => {
             e.preventDefault();
             setInstallPrompt(e);
         };
-        // Solo escuchar si no estamos ya en modo app
         if (!isInStandaloneMode) {
             window.addEventListener('beforeinstallprompt', handler);
         }
@@ -87,15 +86,22 @@ const App: React.FC = () => {
     };
     // ---------------------------
     
+    // Close mobile menu when view changes (Integration Fix)
     useEffect(() => {
         setIsMobileMenuOpen(false);
     }, [currentView]);
 
     const handleLogoClick = () => {
         setCurrentView(isAuthenticated ? 'dashboard' : 'welcome');
+        setIsMobileMenuOpen(false);
     };
 
-    // Componente interno para los botones de acción (Solo usado en Mobile Header ahora)
+    const handleNavClick = (view?: AppView) => {
+        if (view) setCurrentView(view);
+        setIsMobileMenuOpen(false); // Auto close menu on click
+    };
+
+    // Componente interno para los botones de acción
     const HeaderActionsMobile = () => (
         <div className="flex items-center gap-1">
             {!isInStandaloneMode && (
@@ -119,7 +125,7 @@ const App: React.FC = () => {
 
     if (initializationStatus === 'pending') {
         return (
-            <div className="flex flex-col justify-center items-center h-screen bg-slate-900">
+            <div className="flex flex-col justify-center items-center h-screen bg-slate-900 fixed inset-0 z-50">
                 <div className="relative">
                     <div className="absolute inset-0 bg-primary-500/20 blur-xl rounded-full"></div>
                     <Loader2 className="h-16 w-16 animate-spin text-primary-500 relative z-10" />
@@ -140,7 +146,7 @@ const App: React.FC = () => {
 
         if (error) {
             return (
-                <div className="bg-red-900/20 border border-red-500/20 backdrop-blur-md text-red-200 p-6 rounded-2xl shadow-lg">
+                <div className="bg-red-900/20 border border-red-500/20 backdrop-blur-md text-red-200 p-6 rounded-2xl shadow-lg m-4">
                     <h3 className="font-heading font-bold text-lg">Error de Conexión</h3>
                     <p className="mt-2 text-sm opacity-80">{error}</p>
                 </div>
@@ -173,7 +179,7 @@ const App: React.FC = () => {
     const SidebarContent = () => (
         <div className="flex flex-col h-full">
             <div 
-                className="flex items-center justify-center h-20 cursor-pointer mb-2"
+                className="flex items-center justify-center h-20 cursor-pointer mb-2 flex-shrink-0"
                 onClick={handleLogoClick}
                 title="Ir al inicio"
             >
@@ -188,19 +194,19 @@ const App: React.FC = () => {
                 </div>
             </div>
 
-            <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
+            <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto scrollbar-hide">
                 {isAuthenticated ? (
                     <>
-                        <NavItem icon={<LayoutDashboard />} label="Panel" view="dashboard" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<PieChart />} label="Contabilidad" view="accounting" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<GitPullRequest />} label="Solicitudes" view="requests" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} badge={requests.length} />
-                        <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<History />} label="Historial" view="history" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<LayoutDashboard />} label="Panel" view="dashboard" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<PieChart />} label="Contabilidad" view="accounting" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<GitPullRequest />} label="Solicitudes" view="requests" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} badge={requests.length} />
+                        <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<History />} label="Historial" view="history" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                     </>
                 ) : (
                     <>
-                        <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<FileText />} label="Iniciar Solicitud" view="loanRequest" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<FileText />} label="Iniciar Solicitud" view="loanRequest" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                     </>
                 )}
 
@@ -209,15 +215,15 @@ const App: React.FC = () => {
                         <div className="mt-8 mb-2 px-3">
                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Herramientas</h3>
                         </div>
-                        <NavItem icon={<ReceiptText />} label="Recibos" view="receiptGenerator" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<DatabaseBackup />} label="Base de Datos" view="dataManagement" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={(v) => setCurrentView(v!)} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<ReceiptText />} label="Recibos" view="receiptGenerator" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<DatabaseBackup />} label="Base de Datos" view="dataManagement" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                     </>
                 )}
             </nav>
 
-             <div className="p-4 border-t border-white/5 bg-black/10">
-                {/* BOTONES DE UTILIDAD (PC) - Movidos aquí para no obstruir el contenido principal */}
+             <div className="p-4 border-t border-white/5 bg-black/10 flex-shrink-0 safe-area-bottom">
+                {/* BOTONES DE UTILIDAD (PC) */}
                 <div className={`grid ${isSidebarOpen || isMobileMenuOpen ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mb-4`}>
                      {!isInStandaloneMode && (
                         <button 
@@ -252,7 +258,7 @@ const App: React.FC = () => {
                     </button>
                 ) : (
                     <button
-                        onClick={() => setCurrentView('auth')}
+                        onClick={() => { setCurrentView('auth'); setIsMobileMenuOpen(false); }}
                         className="w-full flex items-center justify-center p-3 rounded-xl cursor-pointer text-slate-400 hover:bg-white/5 hover:text-white transition-all"
                         aria-label="Acceder"
                     >
@@ -283,11 +289,14 @@ const App: React.FC = () => {
             <ShareApp isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
             <InstallPWAInstructions isOpen={showInstallInstructions} onClose={() => setShowInstallInstructions(false)} />
             
-            {/* Opción 2: Azul Corporativo Profundo (Solid Deep Navy) */}
-            <div className="flex h-screen bg-slate-900 font-sans text-slate-300">
+            {/* 
+                LAYOUT FIXED PARA IOS/MOBILE 
+                Usamos fixed inset-0 en lugar de h-screen para evitar rebotes de scroll en body
+            */}
+            <div className="fixed inset-0 flex bg-slate-900 font-sans text-slate-300 overflow-hidden">
                  {/* Mobile Header */}
-                <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900/80 backdrop-blur-xl flex items-center justify-between px-4 z-30 border-b border-white/5">
-                    <div className="flex items-center gap-2">
+                <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900/90 backdrop-blur-xl flex items-center justify-between px-4 z-30 border-b border-white/5">
+                    <div className="flex items-center gap-2" onClick={handleLogoClick}>
                          <Handshake className="text-primary-500 h-6 w-6" />
                          <h1 className="text-lg font-heading font-bold text-white">B.M Contigo</h1>
                     </div>
@@ -303,24 +312,24 @@ const App: React.FC = () => {
                 {/* Mobile Sidebar (Overlay) */}
                 <div className={`md:hidden fixed inset-0 z-40 transition-transform duration-300 ease-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
-                     <aside className="relative bg-slate-900 w-72 h-full border-r border-white/5 shadow-2xl">
+                     <aside className="relative bg-slate-900 w-72 h-full border-r border-white/5 shadow-2xl flex flex-col">
                         <SidebarContent />
                      </aside>
                 </div>
 
                  {/* Desktop Sidebar */}
-                 <aside className={`hidden md:block transition-all duration-300 ease-in-out border-r border-white/5 bg-slate-900/40 backdrop-blur-xl ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+                 <aside className={`hidden md:flex transition-all duration-300 ease-in-out border-r border-white/5 bg-slate-900/40 backdrop-blur-xl flex-col ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
                     <SidebarContent />
                 </aside>
                 
-                <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+                {/* Main Content Area */}
+                <main className="flex-1 flex flex-col h-full relative w-full">
                     {/* Background Ambient Glow */}
                     <div className="absolute top-0 left-0 w-full h-96 bg-primary-900/10 rounded-full blur-[120px] -translate-y-1/2 pointer-events-none"></div>
 
-                    {/* Desktop Header eliminado para no obstruir botones de acción */}
-
-                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-10 pt-20 md:pt-8 scroll-smooth">
-                        <div className="max-w-7xl mx-auto w-full">
+                    {/* Scrollable Container - FIX: Added pb-32 for extra mobile spacing */}
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-10 pt-20 md:pt-8 scroll-smooth pb-32 touch-pan-y">
+                        <div className="max-w-7xl mx-auto w-full h-full">
                             {renderContent()}
                         </div>
                     </div>

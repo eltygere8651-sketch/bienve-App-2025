@@ -26,12 +26,13 @@ interface DataContextType {
     handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
     handleRegisterPayment: (loanId: string, amount: number, date: string, notes: string) => Promise<void>;
     handleUpdatePayment: (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => Promise<void>; 
+    handleBalanceCorrection: (loanId: string, newBalance: number, notes: string) => Promise<void>; // Nuevo método seguro
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
     handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => Promise<void>;
     handleGenerateTestRequest: () => Promise<void>;
     handleDeleteTestRequests: () => Promise<void>;
     handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
-    handleUpdateClient: (clientId: string, updatedData: Partial<Client>) => Promise<void>; // New
+    handleUpdateClient: (clientId: string, updatedData: Partial<Client>) => Promise<void>;
     handleDeleteLoan: (loanId: string, clientName: string) => Promise<void>;
     handleArchivePaidLoans: () => Promise<number>;
     handleArchiveClient: (clientId: string) => Promise<void>; 
@@ -45,7 +46,6 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { showToast, user, isConfigReady } = useAppContext();
-    // CRITICAL FIX: Pass isConfigReady so subscriptions wait for Firebase initialization
     const appData = useAppData(showToast, user, isConfigReady);
 
     const value = useMemo(() => appData, [appData]);
