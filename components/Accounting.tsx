@@ -6,7 +6,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, DollarSign, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, PiggyBank, Landmark, AlertTriangle, CheckCircle, XCircle, Info, Lock, ShieldCheck, Scale } from 'lucide-react';
+import { TrendingUp, DollarSign, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, PiggyBank, Landmark, AlertTriangle, CheckCircle, XCircle, Info, Lock, ShieldCheck, Scale, Calendar } from 'lucide-react';
 
 const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: any, color: string }> = ({ title, value, subtext, icon: Icon, color }) => (
     <div className="bg-slate-800/60 border border-slate-700 p-6 rounded-2xl flex flex-col justify-between backdrop-blur-md relative overflow-hidden group hover:-translate-y-1 transition-transform">
@@ -403,12 +403,59 @@ const Accounting: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Detailed Table - Horizontal Scroll enabled for Mobile */}
+                    {/* Detailed Breakdown - Responsive Hybrid View */}
                     <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
                         <div className="p-6 border-b border-slate-700">
                             <h3 className="text-lg font-bold text-white">Desglose por Préstamo</h3>
                         </div>
-                        <div className="overflow-x-auto">
+                        
+                        {/* Mobile View: Cards */}
+                        <div className="md:hidden">
+                            <div className="divide-y divide-slate-700">
+                                {allLoans.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map(loan => (
+                                    <div key={loan.id} className="p-4 flex flex-col gap-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-bold text-white text-base truncate max-w-[180px]">{loan.clientName}</p>
+                                                <div className="flex items-center text-xs text-slate-500 mt-0.5 gap-1">
+                                                    <Calendar size={12} />
+                                                    {new Date(loan.startDate).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
+                                                loan.status === 'Pagado' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                                                loan.status === 'Vencido' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                                'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                                            }`}>
+                                                {loan.status}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-2 text-sm">
+                                            <div className="bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Capital Inicial</p>
+                                                <p className="font-mono text-slate-300 font-medium">{formatCurrency(loan.initialCapital || loan.amount)}</p>
+                                            </div>
+                                            <div className="bg-slate-900/50 p-2 rounded border border-red-500/20 bg-red-900/10">
+                                                <p className="text-[10px] text-red-400 uppercase tracking-wider font-bold">Pendiente</p>
+                                                <p className="font-mono text-red-300 font-bold">{formatCurrency(loan.remainingCapital)}</p>
+                                            </div>
+                                            <div className="bg-slate-900/50 p-2 rounded border border-emerald-500/20 bg-emerald-900/10">
+                                                <p className="text-[10px] text-emerald-400 uppercase tracking-wider font-bold">Ganancia</p>
+                                                <p className="font-mono text-emerald-300 font-bold">+{formatCurrency(loan.totalInterestPaid)}</p>
+                                            </div>
+                                            <div className="bg-slate-900/50 p-2 rounded border border-blue-500/20 bg-blue-900/10">
+                                                <p className="text-[10px] text-blue-400 uppercase tracking-wider">Amortizado</p>
+                                                <p className="font-mono text-blue-300">{formatCurrency(loan.totalCapitalPaid)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Desktop View: Table */}
+                        <div className="hidden md:block overflow-x-auto">
                             <table className="w-full text-left text-sm whitespace-nowrap">
                                 <thead className="bg-slate-900/50 text-slate-400 uppercase font-bold text-xs">
                                     <tr>

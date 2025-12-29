@@ -96,7 +96,7 @@ const Dashboard: React.FC = () => {
     };
 
     const StatusBadge: React.FC<{ status: LoanStatus }> = ({ status }) => {
-        const baseClasses = "px-2.5 py-0.5 text-xs font-bold rounded-full inline-flex items-center ring-1 ring-inset";
+        const baseClasses = "px-2.5 py-0.5 text-xs font-bold rounded-full inline-flex items-center ring-1 ring-inset whitespace-nowrap";
         switch (status) {
             case LoanStatus.PAID:
                 return <span className={`${baseClasses} bg-emerald-500/10 text-emerald-400 ring-emerald-500/20`}><ThumbsUp size={12} className="mr-1"/> {status}</span>;
@@ -187,36 +187,81 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Lista Reciente */}
+                    {/* Lista Reciente Optimizada para Móvil y Desktop */}
                     <div className="lg:col-span-2 glass-panel rounded-2xl overflow-hidden flex flex-col bg-slate-800/60 border border-white/5">
                         <div className="p-6 border-b border-white/5">
                             <h2 className="text-lg font-heading font-semibold text-white">
                                 Actividad Reciente
                             </h2>
                         </div>
+                        
                         {filteredLoans.length > 0 ? (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left min-w-[500px]">
-                                    <thead className="text-xs text-slate-400 uppercase bg-black/20">
-                                        <tr>
-                                            <th className="px-6 py-4 font-medium">Cliente</th>
-                                            <th className="px-6 py-4 font-medium">Deuda Pendiente</th>
-                                            <th className="px-6 py-4 font-medium">Estado</th>
-                                            <th className="px-6 py-4 text-right font-medium">Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {filteredLoans.map(loan => (
-                                            <tr 
-                                                key={loan.id} 
-                                                onClick={() => handleLoanClick(loan)}
-                                                className="group hover:bg-white/5 transition-colors cursor-pointer"
-                                            >
-                                                <td className="px-6 py-4 font-medium text-slate-200 group-hover:text-white">{loan.clientName}</td>
-                                                <td className="px-6 py-4 text-slate-300 font-mono tracking-wide">{formatCurrency(loan.remainingCapital)}</td>
-                                                <td className="px-6 py-4"><StatusBadge status={loan.status} /></td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex justify-end gap-2">
+                            <div className="flex-1">
+                                {/* Desktop Headers - Hidden on Mobile */}
+                                <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 text-xs text-slate-400 uppercase bg-black/20 font-medium">
+                                    <div className="col-span-4">Cliente</div>
+                                    <div className="col-span-3 text-right">Deuda Pendiente</div>
+                                    <div className="col-span-3 text-center">Estado</div>
+                                    <div className="col-span-2 text-right">Acción</div>
+                                </div>
+
+                                {/* Content Grid/List */}
+                                <div className="divide-y divide-white/5">
+                                    {filteredLoans.map(loan => (
+                                        <div 
+                                            key={loan.id} 
+                                            onClick={() => handleLoanClick(loan)}
+                                            className="group hover:bg-white/5 transition-colors cursor-pointer"
+                                        >
+                                            {/* Mobile View (Stacked) */}
+                                            <div className="md:hidden p-4 flex flex-col gap-3">
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-200 text-sm truncate max-w-[150px]">{loan.clientName}</span>
+                                                        <span className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                                                            <Clock size={10} />
+                                                            {new Date(loan.startDate).toLocaleDateString()}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-slate-300 font-mono font-bold text-sm tracking-wide bg-slate-900/50 px-2 py-1 rounded border border-slate-700">
+                                                        {formatCurrency(loan.remainingCapital)}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-1">
+                                                    <StatusBadge status={loan.status} />
+                                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                         {loan.status !== LoanStatus.PAID && (
+                                                            <button 
+                                                                onClick={(e) => handleQuickPay(e, loan)}
+                                                                className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white transition-all border border-emerald-500/20 active:scale-95"
+                                                                title="Cobro Rápido"
+                                                            >
+                                                                <Wallet size={16} />
+                                                            </button>
+                                                        )}
+                                                        <button 
+                                                            onClick={() => handleLoanClick(loan)}
+                                                            className="text-xs font-medium text-primary-400 bg-primary-500/10 px-3 py-2 rounded-lg border border-primary-500/20 active:scale-95"
+                                                        >
+                                                            Ver Detalles
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Desktop View (Grid Row) */}
+                                            <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 items-center">
+                                                <div className="col-span-4 font-medium text-slate-200 group-hover:text-white truncate pr-2">
+                                                    {loan.clientName}
+                                                </div>
+                                                <div className="col-span-3 text-right text-slate-300 font-mono tracking-wide">
+                                                    {formatCurrency(loan.remainingCapital)}
+                                                </div>
+                                                <div className="col-span-3 flex justify-center">
+                                                    <StatusBadge status={loan.status} />
+                                                </div>
+                                                <div className="col-span-2 text-right">
+                                                    <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                                                         {loan.status !== LoanStatus.PAID && (
                                                             <button 
                                                                 onClick={(e) => handleQuickPay(e, loan)}
@@ -226,15 +271,18 @@ const Dashboard: React.FC = () => {
                                                                 <Wallet size={16} />
                                                             </button>
                                                         )}
-                                                        <span className="text-xs font-medium text-primary-400 group-hover:text-primary-300 transition-colors flex items-center px-2">
+                                                        <span 
+                                                            className="text-xs font-medium text-primary-400 group-hover:text-primary-300 transition-colors flex items-center px-2 cursor-pointer hover:underline"
+                                                            onClick={() => handleLoanClick(loan)}
+                                                        >
                                                             Ver →
                                                         </span>
                                                     </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col justify-center items-center py-16 text-center">
