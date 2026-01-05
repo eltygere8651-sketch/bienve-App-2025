@@ -2,6 +2,17 @@
 import React, { useRef } from 'react';
 import { UploadCloud, Camera, Image as ImageIcon, Euro } from 'lucide-react';
 
+// Helper for mobile UX: Scroll element into center view when focused (avoid keyboard overlap)
+const handleFocusAndScroll = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+    // 1. Select text for easy editing
+    e.target.select(); 
+    
+    // 2. Wait for keyboard to slide up (300ms is standard animation time), then scroll
+    setTimeout(() => {
+        e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 300);
+};
+
 export const InputField: React.FC<{
     label: string;
     name: string;
@@ -28,7 +39,7 @@ export const InputField: React.FC<{
             min={min} 
             step={step}
             placeholder={placeholder}
-            onFocus={(e) => e.target.select()} // UX: Auto-seleccionar para no borrar 1 a 1
+            onFocus={handleFocusAndScroll}
             className="w-full px-3 py-2 border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100 placeholder-slate-500 transition-all" 
         />
     </div>
@@ -56,7 +67,7 @@ export const MoneyInput: React.FC<{
                 step="0.01"
                 placeholder="0.00"
                 autoFocus={autoFocus}
-                onFocus={(e) => e.target.select()} // UX CRITICA: Auto-seleccionar texto
+                onFocus={handleFocusAndScroll}
                 className="block w-full pl-10 pr-3 py-3 bg-slate-800 border border-slate-600 rounded-xl leading-5 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 sm:text-lg font-bold transition-all shadow-inner"
             />
         </div>
@@ -75,6 +86,11 @@ export const SelectField: React.FC<{
         <label htmlFor={name} className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
         <select 
             id={name} name={name} value={value} onChange={onChange} required={required} 
+            onFocus={(e) => {
+                setTimeout(() => {
+                    e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 300);
+            }}
             className="w-full px-3 py-2 border border-slate-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-slate-100 transition-all appearance-none"
         >
             {children}

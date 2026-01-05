@@ -1,13 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
 import { useDataContext } from '../contexts/DataContext';
-import { FileText, Clock, Info, Inbox, RefreshCw, Layers, LayoutList, CheckCircle, XCircle, List, CloudFog, Loader2 } from 'lucide-react';
+import { FileText, Clock, Info, Inbox, RefreshCw, Layers, LayoutList, CheckCircle, XCircle, List, CloudFog, Loader2, ArrowDown } from 'lucide-react';
 import RequestCard from './RequestCard';
 import { RequestStatus } from '../types';
 import { useAppContext } from '../contexts/AppContext';
 
 const RequestList: React.FC = () => {
-    const { requests, reloadRequests } = useDataContext();
+    const { requests, reloadRequests, loadMoreRequests } = useDataContext();
     const { setCurrentView } = useAppContext();
     const [filter, setFilter] = useState<RequestStatus | 'ALL'>('ALL'); // Default to ALL to ensure visibility
     const [expandAll, setExpandAll] = useState(false);
@@ -64,7 +64,7 @@ const RequestList: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6 max-w-6xl mx-auto">
+        <div className="space-y-6 max-w-6xl mx-auto pb-10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-700 pb-4">
                 <div className="flex items-center gap-3">
                     <div className="bg-primary-500/10 p-2 rounded-lg">
@@ -140,6 +140,13 @@ const RequestList: React.FC = () => {
                     {filteredRequests.map(request => (
                         <RequestCard key={request.id} request={request} forceExpand={expandAll} />
                     ))}
+                    
+                    <button
+                        onClick={loadMoreRequests}
+                        className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700 rounded-xl transition-all font-medium text-sm flex items-center justify-center gap-2"
+                    >
+                        <ArrowDown size={16} /> Cargar más antiguas
+                    </button>
                 </div>
             )}
         </div>

@@ -6,10 +6,10 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, DollarSign, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, PiggyBank, Landmark, AlertTriangle, CheckCircle, XCircle, Info, Lock, ShieldCheck, Scale, Calendar } from 'lucide-react';
+import { TrendingUp, DollarSign, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, PiggyBank, Landmark, AlertTriangle, CheckCircle, XCircle, Info, Lock, ShieldCheck, Scale, Calendar, Database, Filter } from 'lucide-react';
 
-const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: any, color: string }> = ({ title, value, subtext, icon: Icon, color }) => (
-    <div className="bg-slate-800/60 border border-slate-700 p-6 rounded-2xl flex flex-col justify-between backdrop-blur-md relative overflow-hidden group hover:-translate-y-1 transition-transform">
+const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: any, color: string, isRisk?: boolean }> = ({ title, value, subtext, icon: Icon, color, isRisk }) => (
+    <div className={`bg-slate-800/60 border ${isRisk ? 'border-red-500/30 bg-red-900/10' : 'border-slate-700'} p-6 rounded-2xl flex flex-col justify-between backdrop-blur-md relative overflow-hidden group hover:-translate-y-1 transition-transform`}>
         <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:scale-125 transition-transform duration-500 text-${color}-400`}>
             <Icon size={64} />
         </div>
@@ -38,14 +38,12 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
     const isBreakEvenReached = netPosition > 0;
     
     // Cálculo de "Ganancia Real Segura"
-    // Incluso si recuperaste el capital, si tienes mucha deuda vencida, esa deuda se come tu ganancia futura.
     const safeDistributableProfit = Math.max(0, netPosition - overdueAmount);
     
-    // UI State
     const [withdrawalPercentage, setWithdrawalPercentage] = useState(0); 
     const withdrawAmount = safeDistributableProfit * (withdrawalPercentage / 100);
 
-    const progressPercent = Math.min(100, (totalCashIn / totalInvested) * 100);
+    const progressPercent = totalInvested > 0 ? Math.min(100, (totalCashIn / totalInvested) * 100) : 0;
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -193,46 +191,75 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
 };
 
 const Accounting: React.FC = () => {
-    const { loans, archivedLoans } = useDataContext();
+    const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded } = useDataContext();
     const [activeTab, setActiveTab] = useState<'global' | 'profits'>('global');
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    
+    // Time Filtering
+    const [timeRange, setTimeRange] = useState<'all' | 'year' | 'month'>('all');
 
     const allLoans = useMemo(() => [...loans, ...archivedLoans], [loans, archivedLoans]);
 
     const stats = useMemo(() => {
-        let totalInvested = 0;
-        let totalRecoveredCapital = 0;
-        let totalInterestEarned = 0;
-        let currentOutstanding = 0;
-        let forecastedMonthlyIncome = 0;
-        let overdueAmount = 0;
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
 
+        let totalInvested = 0; // Cumulative (Snapshot)
+        let currentOutstanding = 0; // Snapshot
+        let overdueAmount = 0; // Snapshot
+        
+        let periodRecoveredCapital = 0; // Flow (Filtered)
+        let periodInterestEarned = 0; // Flow (Filtered)
+        let forecastedMonthlyIncome = 0;
+
+        // 1. Snapshot Metrics (Always Total Active)
         allLoans.forEach(loan => {
-            const initial = loan.initialCapital || loan.amount;
-            totalInvested += initial;
-            
-            // Calculate active debts
-            if (!loan.archived && loan.status !== 'Pagado') {
-                currentOutstanding += loan.remainingCapital;
-                forecastedMonthlyIncome += loan.remainingCapital * 0.08;
-                
-                if (loan.status === 'Vencido') {
-                    overdueAmount += loan.remainingCapital;
+            if (!loan.archived) {
+                // If active or overdue, it contributes to current portfolio risk/value
+                if (loan.status !== 'Pagado') {
+                    currentOutstanding += loan.remainingCapital;
+                    forecastedMonthlyIncome += loan.remainingCapital * 0.08;
+                    if (loan.status === 'Vencido') {
+                        overdueAmount += loan.remainingCapital;
+                    }
                 }
             }
-
-            totalRecoveredCapital += (loan.totalCapitalPaid || 0);
-            totalInterestEarned += (loan.totalInterestPaid || 0);
+            // Invested is always total historical for context
+            totalInvested += (loan.initialCapital || loan.amount);
         });
+
+        // 2. Flow Metrics (Filtered by Date)
+        allLoans.forEach(loan => {
+            if (loan.paymentHistory) {
+                loan.paymentHistory.forEach(payment => {
+                    const payDate = new Date(payment.date);
+                    let include = false;
+
+                    if (timeRange === 'all') include = true;
+                    else if (timeRange === 'year') include = payDate.getFullYear() === currentYear;
+                    else if (timeRange === 'month') include = payDate.getMonth() === currentMonth && payDate.getFullYear() === currentYear;
+
+                    if (include) {
+                        periodRecoveredCapital += payment.capitalPaid;
+                        periodInterestEarned += payment.interestPaid;
+                    }
+                });
+            }
+        });
+
+        const defaultRate = currentOutstanding > 0 ? (overdueAmount / currentOutstanding) * 100 : 0;
 
         return {
             totalInvested,
-            totalRecoveredCapital,
-            totalInterestEarned,
+            periodRecoveredCapital,
+            periodInterestEarned,
             currentOutstanding,
             forecastedMonthlyIncome,
-            overdueAmount
+            overdueAmount,
+            defaultRate
         };
-    }, [allLoans]);
+    }, [allLoans, timeRange]);
 
     // Data for Monthly Cash Flow Chart
     const monthlyData = useMemo(() => {
@@ -242,6 +269,10 @@ const Accounting: React.FC = () => {
             if (loan.paymentHistory) {
                 loan.paymentHistory.forEach(payment => {
                     const date = new Date(payment.date);
+                    // Filter logic for chart
+                    // If 'month' is selected, show daily breakdown? No, stick to monthly for simplicity but highlight current
+                    // For now, charts always show history to provide context, filter affects the KPI numbers mainly.
+                    
                     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                     const label = date.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
 
@@ -255,19 +286,30 @@ const Accounting: React.FC = () => {
             }
         });
 
-        // Convert to array and sort chronologically
         return Object.entries(data)
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([_, val]) => val)
-            .slice(-12); // Last 12 months
+            .slice(-12); 
     }, [allLoans]);
 
-    // Data for Pie Chart (Distribution)
+    // Data for Pie Chart
     const distributionData = [
-        { name: 'Capital Recuperado', value: stats.totalRecoveredCapital, color: '#3b82f6' }, // blue-500
-        { name: 'Interés (Ganancia)', value: stats.totalInterestEarned, color: '#10b981' }, // emerald-500
-        { name: 'Pendiente de Cobro', value: stats.currentOutstanding, color: '#ef4444' }, // red-500
+        { name: 'Recuperado (Periodo)', value: stats.periodRecoveredCapital, color: '#3b82f6' }, 
+        { name: 'Ganancia (Periodo)', value: stats.periodInterestEarned, color: '#10b981' }, 
+        { name: 'Pendiente (Total)', value: stats.currentOutstanding, color: '#ef4444' }, 
     ];
+
+    const handleLoadFullHistory = async () => {
+        setIsLoadingHistory(true);
+        await loadAllHistory();
+        setIsLoadingHistory(false);
+    };
+
+    const getFilterLabel = () => {
+        if (timeRange === 'month') return 'Este Mes';
+        if (timeRange === 'year') return 'Este Año';
+        return 'Histórico Total';
+    }
 
     return (
         <div className="space-y-8 animate-fade-in pb-10">
@@ -279,74 +321,97 @@ const Accounting: React.FC = () => {
                     </h1>
                     <p className="text-slate-400 mt-1">Análisis financiero y gestión de utilidades.</p>
                 </div>
+                
+                <div className="flex gap-2">
+                    {!allHistoryLoaded && hasMoreArchivedLoans && (
+                        <button 
+                            onClick={handleLoadFullHistory}
+                            disabled={isLoadingHistory}
+                            className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                        >
+                            {isLoadingHistory ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> : <Database size={16} />}
+                            <span className="hidden sm:inline">Cargar Historial</span>
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Navigation Tabs */}
-            <div className="flex border-b border-slate-700 space-x-4 mb-6">
-                <button
-                    onClick={() => setActiveTab('global')}
-                    className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'global' ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-400 hover:text-white'}`}
-                >
-                    <BarChart3 size={16} /> Visión Global
-                </button>
-                <button
-                    onClick={() => setActiveTab('profits')}
-                    className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'profits' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'}`}
-                >
-                    <Coins size={16} /> Mis Ganancias
-                    <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded ml-1 animate-pulse">Nuevo</span>
-                </button>
+            <div className="flex flex-col sm:flex-row border-b border-slate-700 mb-6 gap-4 sm:gap-0 justify-between items-end sm:items-center">
+                <div className="flex space-x-4 w-full sm:w-auto">
+                    <button
+                        onClick={() => setActiveTab('global')}
+                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'global' ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                    >
+                        <BarChart3 size={16} /> Visión Global
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('profits')}
+                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'profits' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                    >
+                        <Coins size={16} /> Mis Ganancias
+                    </button>
+                </div>
+
+                {activeTab === 'global' && (
+                    <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 w-full sm:w-auto">
+                        <button onClick={() => setTimeRange('month')} className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'month' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Mes</button>
+                        <button onClick={() => setTimeRange('year')} className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'year' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Año</button>
+                        <button onClick={() => setTimeRange('all')} className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'all' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Total</button>
+                    </div>
+                )}
             </div>
 
             {activeTab === 'profits' ? (
                 <ProfitsCalculator 
-                    totalInvested={stats.totalInvested}
-                    totalRecoveredCapital={stats.totalRecoveredCapital}
-                    totalInterestEarned={stats.totalInterestEarned} 
-                    overdueAmount={stats.overdueAmount}
+                    totalInvested={stats.totalInvested} // Always Total for ROI calc
+                    totalRecoveredCapital={allLoans.reduce((acc, l) => acc + (l.totalCapitalPaid || 0), 0)} // Total
+                    totalInterestEarned={allLoans.reduce((acc, l) => acc + (l.totalInterestPaid || 0), 0)} // Total
+                    overdueAmount={stats.overdueAmount} // Current Snapshot
                 />
             ) : (
                 <>
-                    {/* KPI Cards - Responsive Grid */}
+                    {/* KPI Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                         <KPICard 
-                            title="Capital Prestado" 
-                            value={formatCurrency(stats.totalInvested)} 
-                            subtext="Total histórico acumulado"
-                            icon={Wallet} 
-                            color="blue" 
-                        />
-                        <KPICard 
-                            title="Ganancia Neta" 
-                            value={formatCurrency(stats.totalInterestEarned)} 
-                            subtext="Intereses cobrados efectivamente"
+                            title={`Ingreso (${getFilterLabel()})`}
+                            value={formatCurrency(stats.periodInterestEarned)} 
+                            subtext="Ganancia neta cobrada"
                             icon={TrendingUp} 
                             color="emerald" 
                         />
                         <KPICard 
-                            title="Proyección Mes" 
-                            value={formatCurrency(stats.forecastedMonthlyIncome)} 
-                            subtext="Ingreso esperado (8% de deuda)"
-                            icon={BarChart3} 
-                            color="amber" 
+                            title={`Recuperado (${getFilterLabel()})`}
+                            value={formatCurrency(stats.periodRecoveredCapital)} 
+                            subtext="Capital retornado a caja"
+                            icon={Wallet} 
+                            color="blue" 
                         />
                         <KPICard 
-                            title="Cartera Pendiente" 
-                            value={formatCurrency(stats.currentOutstanding)} 
-                            subtext="Deuda activa por cobrar"
-                            icon={DollarSign} 
-                            color="red" 
+                            title="Tasa de Morosidad" 
+                            value={`${stats.defaultRate.toFixed(1)}%`}
+                            subtext={`Vencido: ${formatCurrency(stats.overdueAmount)}`}
+                            icon={AlertTriangle} 
+                            color={stats.defaultRate > 15 ? 'red' : 'amber'} 
+                            isRisk={stats.defaultRate > 15}
+                        />
+                        <KPICard 
+                            title="Proyección Mes" 
+                            value={formatCurrency(stats.forecastedMonthlyIncome)} 
+                            subtext="Si todos pagan (8% s/ deuda)"
+                            icon={BarChart3} 
+                            color="indigo" 
                         />
                     </div>
 
-                    {/* Charts Section - Flexible layout */}
+                    {/* Charts Section */}
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                         
                         {/* Monthly Cash Flow */}
                         <div className="xl:col-span-2 bg-slate-800 p-4 sm:p-6 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
                             <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                                 <TrendingUp size={20} className="text-primary-400" />
-                                Flujo de Caja Mensual (Ingresos)
+                                Flujo de Caja (Histórico 12 Meses)
                             </h3>
                             <div className="h-[250px] sm:h-[300px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -368,7 +433,10 @@ const Accounting: React.FC = () => {
 
                         {/* Distribution Pie */}
                         <div className="bg-slate-800 p-4 sm:p-6 rounded-2xl border border-slate-700 shadow-lg flex flex-col overflow-hidden">
-                            <h3 className="text-lg font-bold text-white mb-6">Distribución de Activos</h3>
+                            <div className="flex justify-between items-start mb-6">
+                                <h3 className="text-lg font-bold text-white">Estado Actual</h3>
+                                <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300">Según Filtro</span>
+                            </div>
                             <div className="flex-1 min-h-[250px] relative">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
@@ -395,24 +463,28 @@ const Accounting: React.FC = () => {
                                 {/* Center Text */}
                                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                                     <div className="text-center">
-                                        <p className="text-xs text-slate-400 font-bold uppercase">Total Movido</p>
-                                        <p className="text-lg sm:text-xl font-bold text-white">{formatCurrency(stats.totalInvested + stats.totalInterestEarned)}</p>
+                                        <p className="text-xs text-slate-400 font-bold uppercase">Entrada Neta</p>
+                                        <p className="text-lg sm:text-xl font-bold text-white">{formatCurrency(stats.periodRecoveredCapital + stats.periodInterestEarned)}</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Detailed Breakdown - Responsive Hybrid View */}
+                    {/* Detailed Breakdown */}
                     <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
-                        <div className="p-6 border-b border-slate-700">
-                            <h3 className="text-lg font-bold text-white">Desglose por Préstamo</h3>
+                        <div className="p-6 border-b border-slate-700 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-white">Desglose de Cartera Activa</h3>
+                            <div className="flex items-center gap-2 text-xs text-slate-400">
+                                <Info size={14} />
+                                <span>Datos en tiempo real</span>
+                            </div>
                         </div>
                         
                         {/* Mobile View: Cards */}
                         <div className="md:hidden">
                             <div className="divide-y divide-slate-700">
-                                {allLoans.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map(loan => (
+                                {allLoans.filter(l => !l.archived).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map(loan => (
                                     <div key={loan.id} className="p-4 flex flex-col gap-3">
                                         <div className="flex justify-between items-start">
                                             <div>
@@ -440,14 +512,6 @@ const Accounting: React.FC = () => {
                                                 <p className="text-[10px] text-red-400 uppercase tracking-wider font-bold">Pendiente</p>
                                                 <p className="font-mono text-red-300 font-bold">{formatCurrency(loan.remainingCapital)}</p>
                                             </div>
-                                            <div className="bg-slate-900/50 p-2 rounded border border-emerald-500/20 bg-emerald-900/10">
-                                                <p className="text-[10px] text-emerald-400 uppercase tracking-wider font-bold">Ganancia</p>
-                                                <p className="font-mono text-emerald-300 font-bold">+{formatCurrency(loan.totalInterestPaid)}</p>
-                                            </div>
-                                            <div className="bg-slate-900/50 p-2 rounded border border-blue-500/20 bg-blue-900/10">
-                                                <p className="text-[10px] text-blue-400 uppercase tracking-wider">Amortizado</p>
-                                                <p className="font-mono text-blue-300">{formatCurrency(loan.totalCapitalPaid)}</p>
-                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -462,14 +526,14 @@ const Accounting: React.FC = () => {
                                         <th className="px-6 py-4">Cliente</th>
                                         <th className="px-6 py-4">Fecha Inicio</th>
                                         <th className="px-6 py-4">Capital Inicial</th>
-                                        <th className="px-6 py-4 text-emerald-400">Interés Ganado</th>
-                                        <th className="px-6 py-4 text-blue-400">Capital Amortizado</th>
+                                        <th className="px-6 py-4 text-emerald-400">Interés Ganado (Total)</th>
+                                        <th className="px-6 py-4 text-blue-400">Capital Amortizado (Total)</th>
                                         <th className="px-6 py-4 text-red-400">Deuda Pendiente</th>
                                         <th className="px-6 py-4 text-right">Estado</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-700">
-                                    {allLoans.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map(loan => (
+                                    {allLoans.filter(l => !l.archived).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map(loan => (
                                         <tr key={loan.id} className="hover:bg-slate-700/30 transition-colors">
                                             <td className="px-6 py-4 font-bold text-white">{loan.clientName}</td>
                                             <td className="px-6 py-4 text-slate-400">{new Date(loan.startDate).toLocaleDateString()}</td>

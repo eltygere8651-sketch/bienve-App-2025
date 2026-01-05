@@ -1,13 +1,14 @@
 
 import React, { useState } from 'react';
-import { DatabaseBackup, Download, Loader2, ShieldCheck } from 'lucide-react';
+import { DatabaseBackup, Download, Loader2, ShieldCheck, Zap, PlusCircle } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
 
 const DataManagement: React.FC = () => {
     const { showToast } = useAppContext();
-    const { clients, loans, requests } = useDataContext();
+    const { clients, loans, requests, handleGenerateTestClient } = useDataContext();
     const [isExporting, setIsExporting] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const handleExportBackup = async () => {
         setIsExporting(true);
@@ -45,6 +46,12 @@ const DataManagement: React.FC = () => {
         }
     };
 
+    const handleGenerateClick = async () => {
+        setIsGenerating(true);
+        await handleGenerateTestClient();
+        setIsGenerating(false);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex items-center">
@@ -73,6 +80,31 @@ const DataManagement: React.FC = () => {
                     >
                         {isExporting ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Download size={18} className="mr-2" />}
                         {isExporting ? 'Exportando...' : 'Descargar Copia Completa'}
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
+                <div className="flex items-start sm:items-center">
+                    <Zap className="h-10 w-10 text-amber-400 mr-4 flex-shrink-0" />
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-100">Zona de Pruebas</h2>
+                        <p className="text-slate-300 mt-1">
+                            Genera datos ficticios para probar la generación de recibos y el flujo de la aplicación.
+                        </p>
+                    </div>
+                </div>
+                <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <p className="text-sm text-slate-400">
+                        Se creará un cliente con un préstamo activo de 1.000€ para que puedas emitir recibos de prueba.
+                    </p>
+                    <button
+                        onClick={handleGenerateClick}
+                        disabled={isGenerating}
+                        className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-600/50 font-bold rounded-lg transition-all hover:scale-105"
+                    >
+                        {isGenerating ? <Loader2 size={18} className="mr-2 animate-spin" /> : <PlusCircle size={18} className="mr-2" />}
+                        Generar Cliente Test
                     </button>
                 </div>
             </div>

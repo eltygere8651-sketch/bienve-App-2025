@@ -13,23 +13,29 @@ export type NewLoanData = { amount: number, term: number };
 
 interface DataContextType {
     clients: Client[];
-    archivedClients: Client[]; // Expose archived clients
-    loans: Loan[]; // Active loans
-    archivedLoans: Loan[]; // Historical loans
+    archivedClients: Client[]; 
+    loans: Loan[]; 
+    archivedLoans: Loan[]; 
     requests: LoanRequest[];
     isLoading: boolean;
     error: string | null;
     clientLoanData: ClientLoanData[];
+    hasMoreArchivedLoans: boolean;
+    allHistoryLoaded: boolean;
+    loadMoreRequests: () => void;
+    loadMoreArchivedLoans: () => void;
+    loadAllHistory: () => void;
     handleLoanRequestSubmit: (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: string, backId: string }) => Promise<void>;
     handleApproveRequest: (request: LoanRequest, loanAmount: number, loanTerm: number) => Promise<void>;
     handleRejectRequest: (request: LoanRequest) => Promise<void>;
     handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
     handleRegisterPayment: (loanId: string, amount: number, date: string, notes: string) => Promise<void>;
     handleUpdatePayment: (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => Promise<void>; 
-    handleBalanceCorrection: (loanId: string, newBalance: number, notes: string) => Promise<void>; // Nuevo método seguro
+    handleBalanceCorrection: (loanId: string, newBalance: number, notes: string) => Promise<void>; 
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
     handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => Promise<void>;
     handleGenerateTestRequest: () => Promise<void>;
+    handleGenerateTestClient: () => Promise<void>;
     handleDeleteTestRequests: () => Promise<void>;
     handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
     handleUpdateClient: (clientId: string, updatedData: Partial<Client>) => Promise<void>;

@@ -44,7 +44,7 @@ const Auth: React.FC = () => {
                 if (code.includes('auth/invalid-email')) msg = 'El formato del correo no es válido.';
                 else if (code.includes('auth/user-not-found')) msg = 'No existe una cuenta con este correo.';
                 else if (code.includes('auth/wrong-password')) msg = 'Contraseña incorrecta.';
-                else if (code.includes('auth/invalid-credential')) msg = 'Credenciales incorrectas.';
+                else if (code.includes('auth/invalid-credential')) msg = 'Credenciales incorrectas. Verifica tu correo y contraseña.';
                 else if (code.includes('auth/too-many-requests')) msg = 'Cuenta bloqueada temporalmente. Intenta más tarde.';
                 else if (code.includes('auth/network-request-failed')) msg = 'Error de conexión. Verifica tu internet.';
                 else msg = `Error: ${code}`;
@@ -74,10 +74,10 @@ const Auth: React.FC = () => {
                 
                 <div className="glass-panel p-8 rounded-2xl shadow-2xl relative overflow-hidden bg-slate-900/50 border border-slate-700">
                     {/* Elemento decorativo */}
-                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 bg-primary-500/10 rounded-full blur-2xl"></div>
+                    <div className="absolute top-0 right-0 -mt-10 -mr-10 w-32 h-32 rounded-full blur-2xl transition-colors duration-500 bg-primary-500/10"></div>
 
                     <div className="mb-8 text-center relative z-10">
-                        <h2 className="text-xl font-bold text-white mb-2">
+                        <h2 className="text-xl font-bold text-white mb-2 transition-all">
                             Iniciar Sesión
                         </h2>
                         <p className="text-sm text-slate-400">
@@ -133,12 +133,15 @@ const Auth: React.FC = () => {
                             <button 
                                 type="submit" 
                                 disabled={isLoading} 
-                                className="w-full flex justify-center py-3.5 px-4 rounded-xl shadow-lg text-sm font-bold text-white bg-primary-600 hover:bg-primary-500 focus:outline-none focus:ring-4 focus:ring-primary-500/20 disabled:bg-primary-900 disabled:text-slate-500 disabled:cursor-not-allowed transition-all transform hover:-translate-y-0.5"
+                                className="w-full flex justify-center py-3.5 px-4 rounded-xl shadow-lg text-sm font-bold text-white focus:outline-none focus:ring-4 focus:ring-primary-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:-translate-y-0.5 bg-primary-600 hover:bg-primary-500"
                             >
                                 {isLoading ? (
                                     <Loader2 className="animate-spin h-5 w-5" />
                                 ) : (
-                                    <><LogIn size={18} className="mr-2"/> Entrar al Panel</>
+                                    <>
+                                        <LogIn size={18} className="mr-2"/> 
+                                        Entrar al Panel
+                                    </>
                                 )}
                             </button>
                         </div>

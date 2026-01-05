@@ -8,10 +8,39 @@ import {
     updateDocument, 
     deleteDocument,
     getCollection,
-    checkClientExists
+    checkClientExists,
+    getPaginatedCollection,
+    where,
+    orderBy,
+    limit
 } from '../services/firebaseService';
-import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER } from '../constants';
+import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER, TABLE_NAMES } from '../constants';
 import { DEFAULT_ANNUAL_INTEREST_RATE, calculateLoanParameters, calculateMonthlyInterest } from '../config';
+
+// UX Helper: Returns a context-aware success message
+const getSuccessMessage = (baseMessage: string) => {
+    if (navigator.onLine) {
+        return baseMessage;
+    }
+    return `${baseMessage} (Guardado localmente. Se sincronizará al conectar)`;
+};
+
+// --- DATA MAPPERS (Centralized Logic) ---
+const mapClientFromDB = (data: any): Client => ({
+    ...data,
+    archived: data.archived ?? false
+});
+
+const mapLoanFromDB = (l: any): Loan => ({
+    ...l,
+    initialCapital: l.initialCapital ?? l.amount,
+    remainingCapital: l.remainingCapital ?? (l.status === 'Pagado' ? 0 : l.amount),
+    lastPaymentDate: l.lastPaymentDate ?? l.startDate, 
+    paymentHistory: l.paymentHistory ?? [],
+    totalInterestPaid: l.totalInterestPaid ?? 0,
+    totalCapitalPaid: l.totalCapitalPaid ?? 0,
+    archived: l.archived ?? false
+});
 
 export const useAppData = (
     showToast: (message: string, type: 'success' | 'error' | 'info') => void,
@@ -19,8 +48,18 @@ export const useAppData = (
     isConfigReady: boolean
 ) => {
     const [clients, setClients] = useState<Client[]>([]);
-    const [loans, setLoans] = useState<Loan[]>([]);
+    
+    // Split Loans State
+    const [activeLoans, setActiveLoans] = useState<Loan[]>([]);
+    const [archivedLoans, setArchivedLoans] = useState<Loan[]>([]);
+    const [lastArchivedLoanCursor, setLastArchivedLoanCursor] = useState<any>(null);
+    const [hasMoreArchivedLoans, setHasMoreArchivedLoans] = useState(true);
+    const [allHistoryLoaded, setAllHistoryLoaded] = useState(false);
+
+    // Requests State
     const [requests, setRequests] = useState<LoanRequest[]>([]);
+    const [requestsLimit, setRequestsLimit] = useState(20);
+
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -33,58 +72,42 @@ export const useAppData = (
 
         setIsLoading(true);
         let clientsLoaded = false;
-        let loansLoaded = false;
+        let activeLoansLoaded = false;
         let requestsLoaded = false;
 
         const checkAllLoaded = () => {
-            if (clientsLoaded && loansLoaded && requestsLoaded) {
+            if (clientsLoaded && activeLoansLoaded && requestsLoaded) {
                 setIsLoading(false);
             }
         };
 
-        const safetyTimeout = setTimeout(() => {
-            if (isLoading) {
-                console.warn("Firebase loading timed out - Forcing app render");
-                setIsLoading(false);
-            }
-        }, 5000); 
-
-        const unsubClients = subscribeToCollection('clients', (data) => {
-            const mappedClients = (data as any[]).map(c => ({
-                ...c,
-                archived: c.archived ?? false
-            }));
-            setClients(mappedClients as Client[]);
+        // 1. Clients: Subscribe to ALL clients (using centralized constant and mapper)
+        const unsubClients = subscribeToCollection(TABLE_NAMES.CLIENTS, (data) => {
+            const mappedClients = (data as any[]).map(mapClientFromDB);
+            setClients(mappedClients);
             clientsLoaded = true;
             checkAllLoaded();
         }, [], (err) => {
             console.error("Error loading clients", err);
-            clientsLoaded = true; 
+            clientsLoaded = true;
             checkAllLoaded();
         });
 
-        const unsubLoans = subscribeToCollection('loans', (data) => {
-            const mappedLoans = (data as any[]).map(l => ({
-                ...l,
-                initialCapital: l.initialCapital ?? l.amount,
-                remainingCapital: l.remainingCapital ?? (l.status === 'Pagado' ? 0 : l.amount),
-                lastPaymentDate: l.lastPaymentDate ?? l.startDate, 
-                paymentHistory: l.paymentHistory ?? [],
-                totalInterestPaid: l.totalInterestPaid ?? 0,
-                totalCapitalPaid: l.totalCapitalPaid ?? 0,
-                archived: l.archived ?? false
-            }));
-            setLoans(mappedLoans as Loan[]);
-            loansLoaded = true;
+        // 2. Active Loans: Real-time subscription ONLY for active loans
+        const unsubActiveLoans = subscribeToCollection(TABLE_NAMES.LOANS, (data) => {
+            const mappedLoans = (data as any[]).map(mapLoanFromDB);
+            setActiveLoans(mappedLoans);
+            activeLoansLoaded = true;
             checkAllLoaded();
-        }, [], (err) => {
-             console.error("Error loading loans", err);
-             loansLoaded = true;
+        }, [where('archived', '==', false)], (err) => { // FILTER: Only active
+             console.error("Error loading active loans", err);
+             activeLoansLoaded = true;
              checkAllLoaded();
         });
 
+        // 3. Requests: Real-time subscription with LIMIT
         const unsubRequests = subscribeToCollection(
-            'requests', 
+            TABLE_NAMES.REQUESTS, 
             (data) => {
                 const reqs = (data || []) as LoanRequest[];
                 setRequests(reqs);
@@ -92,7 +115,7 @@ export const useAppData = (
                 checkAllLoaded();
                 setError(null);
             },
-            [], 
+            [limit(requestsLimit)], // PAGINATION: Limit real-time listener
             (err) => {
                 console.error("Error loading requests:", err);
                 requestsLoaded = true;
@@ -100,19 +123,83 @@ export const useAppData = (
             }
         );
 
+        // 4. Archived Loans: Initial Fetch (One-time, no subscription)
+        const loadInitialArchived = async () => {
+            try {
+                const { data, lastVisible, hasMore } = await getPaginatedCollection(
+                    TABLE_NAMES.LOANS, 
+                    [where('archived', '==', true)], 
+                    null, 
+                    20
+                );
+                
+                const mappedArchived = (data as any[]).map(mapLoanFromDB).map(l => ({ ...l, archived: true })); // Ensure archived true
+
+                setArchivedLoans(mappedArchived);
+                setLastArchivedLoanCursor(lastVisible);
+                setHasMoreArchivedLoans(hasMore);
+            } catch (e) {
+                console.error("Error fetching initial archived loans:", e);
+                // Fallback: don't block app
+            }
+        };
+        loadInitialArchived();
+
         return () => {
-            clearTimeout(safetyTimeout);
             unsubClients();
-            unsubLoans();
+            unsubActiveLoans();
             unsubRequests();
         };
-    }, [isConfigReady, user]);
+    }, [isConfigReady, user, requestsLimit]);
 
-    const activeLoans = useMemo(() => loans.filter(l => !l.archived), [loans]);
-    const archivedLoans = useMemo(() => loans.filter(l => l.archived), [loans]);
-    
+    // Derived Lists
     const activeClients = useMemo(() => clients.filter(c => !c.archived), [clients]);
-    const archivedClients = useMemo(() => clients.filter(c => c.archived), [clients]);
+    const archivedClientsList = useMemo(() => clients.filter(c => c.archived), [clients]);
+    const allLoans = useMemo(() => [...activeLoans, ...archivedLoans], [activeLoans, archivedLoans]);
+
+    // PAGINATION HANDLERS
+
+    const loadMoreRequests = useCallback(() => {
+        setRequestsLimit(prev => prev + 20); // Increase limit for listener
+    }, []);
+
+    const loadMoreArchivedLoans = useCallback(async () => {
+        if (!hasMoreArchivedLoans || isLoading) return;
+        
+        try {
+            const { data, lastVisible, hasMore } = await getPaginatedCollection(
+                TABLE_NAMES.LOANS, 
+                [where('archived', '==', true)], 
+                lastArchivedLoanCursor, 
+                20
+            );
+
+            const mappedNew = (data as any[]).map(mapLoanFromDB).map(l => ({ ...l, archived: true }));
+
+            setArchivedLoans(prev => [...prev, ...mappedNew]);
+            setLastArchivedLoanCursor(lastVisible);
+            setHasMoreArchivedLoans(hasMore);
+        } catch (e: any) {
+            showToast(`Error cargando más historial: ${e.message}`, 'error');
+        }
+    }, [hasMoreArchivedLoans, lastArchivedLoanCursor, isLoading, showToast]);
+
+    const loadAllHistory = useCallback(async () => {
+        if (allHistoryLoaded) return;
+        try {
+            // Warning: Expensive operation
+            const rawData = await getCollection(TABLE_NAMES.LOANS, [where('archived', '==', true)]);
+            const mappedAll = (rawData as any[]).map(mapLoanFromDB).map(l => ({ ...l, archived: true }));
+            
+            setArchivedLoans(mappedAll);
+            setAllHistoryLoaded(true);
+            setHasMoreArchivedLoans(false);
+            showToast(`Historial completo cargado (${mappedAll.length} registros).`, 'success');
+        } catch (e: any) {
+            showToast(`Error cargando historial completo: ${e.message}`, 'error');
+        }
+    }, [allHistoryLoaded, showToast]);
+
 
     useEffect(() => {
         if (isLoading) return;
@@ -135,30 +222,26 @@ export const useAppData = (
     const refreshAllData = useCallback(async () => {
         setIsLoading(true);
         try {
+            // Full manual reload implies resetting pagination
             const [clientsData, loansData, requestsData] = await Promise.all([
-                getCollection('clients'),
-                getCollection('loans'),
-                getCollection('requests')
+                getCollection(TABLE_NAMES.CLIENTS),
+                getCollection(TABLE_NAMES.LOANS), 
+                getCollection(TABLE_NAMES.REQUESTS)
             ]);
 
-            const mappedClients = (clientsData as any[]).map(c => ({
-                ...c,
-                archived: c.archived ?? false
-            }));
-            setClients(mappedClients as Client[]);
+            const mappedClients = (clientsData as any[]).map(mapClientFromDB);
+            setClients(mappedClients);
             
-            const mappedLoans = (loansData as any[]).map(l => ({
-                ...l,
-                initialCapital: l.initialCapital ?? l.amount,
-                remainingCapital: l.remainingCapital ?? (l.status === 'Pagado' ? 0 : l.amount),
-                lastPaymentDate: l.lastPaymentDate ?? l.startDate, 
-                paymentHistory: l.paymentHistory ?? [],
-                totalInterestPaid: l.totalInterestPaid ?? 0,
-                totalCapitalPaid: l.totalCapitalPaid ?? 0,
-                archived: l.archived ?? false
-            }));
-            setLoans(mappedLoans as Loan[]);
+            const allFetchedLoans = (loansData as any[]).map(mapLoanFromDB);
+
+            // Separate manually for state consistency
+            setActiveLoans(allFetchedLoans.filter((l: Loan) => !l.archived));
+            setArchivedLoans(allFetchedLoans.filter((l: Loan) => l.archived));
             setRequests(requestsData as LoanRequest[]);
+            
+            setAllHistoryLoaded(true); // Since we fetched everything via getCollection
+            setHasMoreArchivedLoans(false);
+
             showToast('Datos sincronizados manualmente.', 'success');
         } catch (err: any) {
             console.error("Error en recarga manual completa:", err);
@@ -170,8 +253,9 @@ export const useAppData = (
     }, [showToast]);
 
     const reloadRequests = useCallback(async () => {
-        await refreshAllData();
-    }, [refreshAllData]);
+        setRequestsLimit(20); // Reset limit to default
+        // The effect will trigger re-sub
+    }, []);
 
     const handleLoanRequestSubmit = useCallback(async (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: string, backId: string }) => {
         try {
@@ -183,7 +267,7 @@ export const useAppData = (
                 requestDate: new Date().toISOString()
             };
 
-            await addDocument('requests', newRequest);
+            await addDocument(TABLE_NAMES.REQUESTS, newRequest);
 
         } catch (err: any) {
             console.error("Failed to submit loan request:", err);
@@ -208,7 +292,7 @@ export const useAppData = (
                 joinDate: new Date().toISOString(),
                 archived: false
             };
-            const clientDoc = await addDocument('clients', newClient);
+            const clientDoc = await addDocument(TABLE_NAMES.CLIENTS, newClient);
 
             const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanAmount, loanTerm);
             const startDate = new Date().toISOString();
@@ -235,11 +319,11 @@ export const useAppData = (
                 notes: request.loanReason,
                 archived: false
             };
-            await addDocument('loans', newLoan);
+            await addDocument(TABLE_NAMES.LOANS, newLoan);
 
-            await deleteDocument('requests', request.id);
+            await deleteDocument(TABLE_NAMES.REQUESTS, request.id);
             
-            showToast(`Préstamo Aprobado para ${request.fullName}`, 'success');
+            showToast(getSuccessMessage(`Préstamo Aprobado para ${request.fullName}`), 'success');
             
         } catch (err: any) {
             console.error("Failed to approve request:", err);
@@ -250,8 +334,8 @@ export const useAppData = (
     
     const handleRejectRequest = useCallback(async (request: LoanRequest) => {
         try {
-            await deleteDocument('requests', request.id);
-            showToast('Solicitud rechazada y eliminada.', 'success');
+            await deleteDocument(TABLE_NAMES.REQUESTS, request.id);
+            showToast(getSuccessMessage('Solicitud rechazada y eliminada.'), 'success');
         } catch (err: any) {
             showToast(`Error al rechazar: ${err.message}`, 'error');
             throw err;
@@ -260,8 +344,8 @@ export const useAppData = (
 
     const handleUpdateRequestStatus = useCallback(async (requestId: string, status: RequestStatus) => {
         try {
-            await updateDocument('requests', requestId, { status });
-            showToast(`Solicitud actualizada a "${status}".`, 'info');
+            await updateDocument(TABLE_NAMES.REQUESTS, requestId, { status });
+            showToast(getSuccessMessage(`Solicitud actualizada a "${status}".`), 'info');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;
@@ -269,7 +353,7 @@ export const useAppData = (
     }, [showToast]);
     
     const handleRegisterPayment = useCallback(async (loanId: string, amount: number, date: string, notes: string) => {
-        const loan = loans.find(l => l.id === loanId);
+        const loan = activeLoans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan || loan.status === LoanStatus.PAID) return;
         
         const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
@@ -301,7 +385,7 @@ export const useAppData = (
         const updatedHistory = [...(loan.paymentHistory || []), newPaymentRecord];
 
         try {
-            await updateDocument('loans', loanId, { 
+            await updateDocument(TABLE_NAMES.LOANS, loanId, { 
                 paymentsMade: loan.paymentsMade + 1, 
                 status: isPaidOff ? LoanStatus.PAID : LoanStatus.PENDING,
                 remainingCapital: newRemainingCapital,
@@ -310,17 +394,17 @@ export const useAppData = (
                 paymentHistory: updatedHistory,
                 lastPaymentDate: date
             });
-            showToast(`Pago registrado. Cobrado 8% interés sobre saldo actual.`, 'success');
+            showToast(getSuccessMessage(`Pago registrado. Cobrado 8% interés sobre saldo.`), 'success');
         } catch (err: any) {
             console.error("Error updating loan payment:", err);
             showToast(`Error: ${err.message}`, 'error');
             throw err; 
         }
-    }, [loans, showToast]);
+    }, [activeLoans, archivedLoans, showToast]);
 
     const handleUpdatePayment = useCallback(async (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => {
         try {
-            const loan = loans.find(l => l.id === loanId);
+            const loan = activeLoans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
             if (!loan) throw new Error("Préstamo no encontrado");
         
             const paymentIndex = loan.paymentHistory.findIndex(p => p.id === paymentId);
@@ -352,7 +436,7 @@ export const useAppData = (
             const newHistory = [...loan.paymentHistory];
             newHistory[paymentIndex] = updatedPayment;
         
-            await updateDocument('loans', loanId, {
+            await updateDocument(TABLE_NAMES.LOANS, loanId, {
                 paymentHistory: newHistory,
                 remainingCapital: newLoanRemaining,
                 totalInterestPaid: newTotalInterest,
@@ -360,29 +444,27 @@ export const useAppData = (
                 status: newLoanRemaining < 0.1 ? LoanStatus.PAID : LoanStatus.PENDING
             });
         
-            showToast("Pago corregido exitosamente.", "success");
+            showToast(getSuccessMessage("Pago corregido exitosamente."), "success");
         } catch (err: any) {
             console.error("Error updating payment:", err);
             showToast(`Error al corregir pago: ${err.message}`, 'error');
             throw err;
         }
-    }, [loans, showToast]);
+    }, [activeLoans, archivedLoans, showToast]);
 
     const handleBalanceCorrection = useCallback(async (loanId: string, newBalance: number, notes: string) => {
         try {
-            const loan = loans.find(l => l.id === loanId);
+            const loan = activeLoans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
             if (!loan) throw new Error("Préstamo no encontrado");
 
             const balanceDifference = loan.remainingCapital - newBalance;
-            // Si la diferencia es positiva, se redujo la deuda (como un pago de capital)
-            // Si es negativa, aumentó la deuda (como un cargo extra o corrección)
             
             const newPaymentRecord: PaymentRecord = {
                 id: `ADJ-${Date.now()}`,
                 date: new Date().toISOString(),
-                amount: 0, // No cash exchange usually
+                amount: 0, 
                 interestPaid: 0,
-                capitalPaid: balanceDifference, // Tracking the impact on capital
+                capitalPaid: balanceDifference,
                 remainingCapitalAfter: newBalance,
                 notes: `[SISTEMA] Corrección de saldo: ${notes}`
             };
@@ -390,21 +472,21 @@ export const useAppData = (
             const updatedHistory = [...(loan.paymentHistory || []), newPaymentRecord];
             const newTotalCapitalPaid = (loan.totalCapitalPaid || 0) + balanceDifference;
 
-            await updateDocument('loans', loanId, {
+            await updateDocument(TABLE_NAMES.LOANS, loanId, {
                 remainingCapital: newBalance,
                 totalCapitalPaid: newTotalCapitalPaid,
                 paymentHistory: updatedHistory,
                 status: newBalance <= 0.1 ? LoanStatus.PAID : LoanStatus.PENDING
             });
 
-            showToast("Saldo corregido y registrado en historial.", "success");
+            showToast(getSuccessMessage("Saldo corregido y registrado en historial."), "success");
 
         } catch (err: any) {
             console.error("Error adjusting balance:", err);
             showToast(`Error al ajustar saldo: ${err.message}`, 'error');
             throw err;
         }
-    }, [loans, showToast]);
+    }, [activeLoans, archivedLoans, showToast]);
 
     const handleAddClientAndLoan = useCallback(async (clientData: any, loanData: { amount: number; term: number }) => {
         try {
@@ -419,7 +501,7 @@ export const useAppData = (
                 throw new Error(`El cliente con DNI ${clientData.idNumber} ya está registrado.`);
             }
 
-            const clientDoc = await addDocument('clients', {
+            const clientDoc = await addDocument(TABLE_NAMES.CLIENTS, {
                 ...clientData,
                 joinDate: new Date().toISOString(),
                 archived: false
@@ -428,7 +510,7 @@ export const useAppData = (
              const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanData.amount, loanData.term);
              const startDate = new Date().toISOString();
  
-             await addDocument('loans', {
+             await addDocument(TABLE_NAMES.LOANS, {
                  clientId: clientDoc.id,
                  clientName: clientData.name,
                  amount: loanData.amount,
@@ -449,7 +531,7 @@ export const useAppData = (
                  archived: false
              });
 
-            showToast(`Cliente registrado correctamente.`, 'success');
+            showToast(getSuccessMessage(`Cliente registrado correctamente.`), 'success');
 
         } catch (err: any) {
             console.error(err);
@@ -462,7 +544,7 @@ export const useAppData = (
         try {
             const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanData.amount, loanData.term, loanData.interestRate);
 
-            await addDocument('loans', {
+            await addDocument(TABLE_NAMES.LOANS, {
                 clientId,
                 clientName,
                 amount: loanData.amount,
@@ -482,7 +564,7 @@ export const useAppData = (
                 notes: loanData.notes,
                 archived: false
             });
-            showToast('Préstamo añadido correctamente.', 'success');
+            showToast(getSuccessMessage('Préstamo añadido correctamente.'), 'success');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;
@@ -491,8 +573,8 @@ export const useAppData = (
 
     const handleUpdateLoan = useCallback(async (loanId: string, updatedData: Partial<Loan>) => {
         try {
-            await updateDocument('loans', loanId, updatedData);
-            showToast('Datos del préstamo actualizados.', 'success');
+            await updateDocument(TABLE_NAMES.LOANS, loanId, updatedData);
+            showToast(getSuccessMessage('Datos del préstamo actualizados.'), 'success');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;
@@ -501,8 +583,8 @@ export const useAppData = (
 
     const handleUpdateClient = useCallback(async (clientId: string, updatedData: Partial<Client>) => {
         try {
-            await updateDocument('clients', clientId, updatedData);
-            showToast('Datos del cliente actualizados.', 'success');
+            await updateDocument(TABLE_NAMES.CLIENTS, clientId, updatedData);
+            showToast(getSuccessMessage('Datos del cliente actualizados.'), 'success');
         } catch (err: any) {
             showToast(`Error al actualizar cliente: ${err.message}`, 'error');
             throw err;
@@ -511,8 +593,8 @@ export const useAppData = (
 
     const handleDeleteLoan = useCallback(async (loanId: string, clientName: string) => {
         try {
-            await deleteDocument('loans', loanId);
-            showToast(`Préstamo eliminado.`, 'success');
+            await deleteDocument(TABLE_NAMES.LOANS, loanId);
+            showToast(getSuccessMessage(`Préstamo eliminado.`), 'success');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;
@@ -521,7 +603,7 @@ export const useAppData = (
 
     const handleArchivePaidLoans = useCallback(async () => {
         try {
-            const loansToArchive = loans.filter(l => l.status === LoanStatus.PAID && !l.archived);
+            const loansToArchive = activeLoans.filter(l => l.status === LoanStatus.PAID && !l.archived);
             
             if (loansToArchive.length === 0) {
                 showToast('No hay préstamos pagados para archivar.', 'info');
@@ -529,23 +611,24 @@ export const useAppData = (
             }
 
             const updatePromises = loansToArchive.map(loan => 
-                updateDocument('loans', loan.id, { archived: true })
+                updateDocument(TABLE_NAMES.LOANS, loan.id, { archived: true })
             );
 
             await Promise.all(updatePromises);
-            showToast(`${loansToArchive.length} préstamos archivados correctamente.`, 'success');
+            
+            showToast(getSuccessMessage(`${loansToArchive.length} préstamos archivados correctamente.`), 'success');
             return loansToArchive.length;
         } catch (err: any) {
             console.error("Error archiving loans:", err);
             showToast(`Error al archivar: ${err.message}`, 'error');
             return 0;
         }
-    }, [loans, showToast]);
+    }, [activeLoans, showToast]);
 
     const handleArchiveClient = useCallback(async (clientId: string) => {
         try {
-            await updateDocument('clients', clientId, { archived: true });
-            showToast('Cliente movido al historial.', 'success');
+            await updateDocument(TABLE_NAMES.CLIENTS, clientId, { archived: true });
+            showToast(getSuccessMessage('Cliente movido al historial.'), 'success');
         } catch (err: any) {
             showToast(`Error al archivar cliente: ${err.message}`, 'error');
         }
@@ -553,8 +636,8 @@ export const useAppData = (
 
     const handleRestoreClient = useCallback(async (clientId: string) => {
         try {
-            await updateDocument('clients', clientId, { archived: false });
-            showToast('Cliente restaurado a la lista principal.', 'success');
+            await updateDocument(TABLE_NAMES.CLIENTS, clientId, { archived: false });
+            showToast(getSuccessMessage('Cliente restaurado a la lista principal.'), 'success');
         } catch (err: any) {
             showToast(`Error al restaurar cliente: ${err.message}`, 'error');
         }
@@ -563,9 +646,9 @@ export const useAppData = (
     const handleBatchDeleteClients = useCallback(async (clientIds: string[]) => {
         try {
             if (clientIds.length === 0) return;
-            const deletePromises = clientIds.map(id => deleteDocument('clients', id));
+            const deletePromises = clientIds.map(id => deleteDocument(TABLE_NAMES.CLIENTS, id));
             await Promise.all(deletePromises);
-            showToast(`${clientIds.length} clientes eliminados permanentemente.`, 'success');
+            showToast(getSuccessMessage(`${clientIds.length} clientes eliminados permanentemente.`), 'success');
         } catch (err: any) {
             console.error("Error batch deleting clients:", err);
             showToast(`Error al eliminar clientes: ${err.message}`, 'error');
@@ -591,11 +674,58 @@ export const useAppData = (
                 requestDate: new Date().toISOString()
             };
             
-            await addDocument('requests', testRequest);
-            showToast('Solicitud de prueba generada.', 'success');
+            await addDocument(TABLE_NAMES.REQUESTS, testRequest);
+            showToast(getSuccessMessage('Solicitud de prueba generada.'), 'success');
         } catch (err: any) {
             console.error("Error generating test request:", err);
             showToast(`Error al generar prueba: ${err.message}`, 'error');
+        }
+    }, [showToast]);
+
+    const handleGenerateTestClient = useCallback(async () => {
+        try {
+            const randomId = Math.floor(Math.random() * 10000);
+            const clientData = {
+                name: `Cliente Prueba ${randomId}`,
+                idNumber: `TEST-${randomId}`,
+                address: 'Calle de Prueba 123, Ciudad Test',
+                phone: '600000000',
+                email: `test${randomId}@ejemplo.com`,
+                joinDate: new Date().toISOString(),
+                archived: false
+            };
+
+            const clientDoc = await addDocument(TABLE_NAMES.CLIENTS, clientData);
+
+            const startDate = new Date().toISOString();
+            const { monthlyPayment, totalRepayment } = calculateLoanParameters(1000, 12, DEFAULT_ANNUAL_INTEREST_RATE);
+
+            const loanData = {
+                clientId: clientDoc.id,
+                clientName: clientData.name,
+                amount: 1000,
+                initialCapital: 1000,
+                remainingCapital: 1000,
+                interestRate: DEFAULT_ANNUAL_INTEREST_RATE,
+                term: 12,
+                startDate: startDate,
+                lastPaymentDate: startDate,
+                status: LoanStatus.PENDING,
+                monthlyPayment,
+                totalRepayment,
+                paymentsMade: 0,
+                totalInterestPaid: 0,
+                totalCapitalPaid: 0,
+                paymentHistory: [],
+                notes: 'Préstamo de prueba generado automáticamente.',
+                archived: false
+            };
+
+            await addDocument(TABLE_NAMES.LOANS, loanData);
+            showToast(getSuccessMessage('Cliente de prueba generado. Ve a "Recibos" para probar.'), 'success');
+        } catch (err: any) {
+            console.error("Error generating test client:", err);
+            showToast(`Error: ${err.message}`, 'error');
         }
     }, [showToast]);
 
@@ -608,10 +738,10 @@ export const useAppData = (
                 return;
             }
 
-            const deletePromises = testRequests.map(req => deleteDocument('requests', req.id));
+            const deletePromises = testRequests.map(req => deleteDocument(TABLE_NAMES.REQUESTS, req.id));
             await Promise.all(deletePromises);
 
-            showToast(`${testRequests.length} solicitudes de prueba eliminadas.`, 'success');
+            showToast(getSuccessMessage(`${testRequests.length} solicitudes de prueba eliminadas.`), 'success');
          } catch (err: any) {
              console.error("Error deleting test requests:", err);
              showToast(`Error al eliminar: ${err.message}`, 'error');
@@ -635,14 +765,20 @@ export const useAppData = (
 
     return {
         clients: activeClients, 
-        archivedClients,        
+        archivedClients: archivedClientsList,        
         loans: activeLoans,
         archivedLoans,
-        allLoans: loans,
+        allLoans,
         requests,
         isLoading,
         error,
         clientLoanData,
+        hasMoreArchivedLoans,
+        hasMoreRequests: true, // simplified for now
+        allHistoryLoaded,
+        loadMoreRequests,
+        loadMoreArchivedLoans,
+        loadAllHistory,
         handleLoanRequestSubmit,
         handleApproveRequest,
         handleRejectRequest,
@@ -653,6 +789,7 @@ export const useAppData = (
         handleAddClientAndLoan,
         handleAddLoan,
         handleGenerateTestRequest,
+        handleGenerateTestClient,
         handleDeleteTestRequests,
         handleUpdateLoan,
         handleUpdateClient,

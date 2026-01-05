@@ -1,18 +1,19 @@
 
 import React, { useState, useMemo } from 'react';
 import { useDataContext } from '../contexts/DataContext';
-import { Archive, Sparkles, TrendingUp, CheckCircle, AlertTriangle, FileText, Calendar, Search, History, Users, RefreshCw, Trash2, CheckSquare, Square } from 'lucide-react';
+import { Archive, Sparkles, TrendingUp, CheckCircle, AlertTriangle, FileText, Calendar, Search, History, Users, RefreshCw, Trash2, CheckSquare, Square, ArrowDown } from 'lucide-react';
 import { formatCurrency } from '../services/utils';
 import { Loan, LoanStatus, Client } from '../types';
 import LoanDetailsModal from './LoanDetailsModal';
 import { useAppContext } from '../contexts/AppContext';
 
 const HistoryPanel: React.FC = () => {
-    const { archivedLoans, handleArchivePaidLoans, clients, archivedClients, handleRestoreClient, handleBatchDeleteClients } = useDataContext();
+    const { archivedLoans, handleArchivePaidLoans, clients, archivedClients, handleRestoreClient, handleBatchDeleteClients, loadMoreArchivedLoans, hasMoreArchivedLoans } = useDataContext();
     const { showConfirmModal } = useAppContext();
     const [activeTab, setActiveTab] = useState<'loans' | 'clients'>('loans');
     const [searchTerm, setSearchTerm] = useState('');
     const [isCleaning, setIsCleaning] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
     
     // Selection state for Batch Delete
@@ -59,6 +60,12 @@ const HistoryPanel: React.FC = () => {
         await new Promise(r => setTimeout(r, 800));
         await handleArchivePaidLoans();
         setIsCleaning(false);
+    };
+
+    const handleLoadMore = async () => {
+        setIsLoadingMore(true);
+        await loadMoreArchivedLoans();
+        setIsLoadingMore(false);
     };
 
     const restoreClient = (client: Client) => {
@@ -194,40 +201,52 @@ const HistoryPanel: React.FC = () => {
                                 </div>
 
                                 {filteredLoans.length > 0 ? (
-                                    <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-                                        <table className="w-full text-left text-sm">
-                                            <thead className="bg-slate-900/50 text-slate-400 uppercase font-bold text-xs">
-                                                <tr>
-                                                    <th className="px-6 py-3">Cliente</th>
-                                                    <th className="px-6 py-3">Monto Original</th>
-                                                    <th className="px-6 py-3">Finalizado</th>
-                                                    <th className="px-6 py-3 text-right">Acción</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-700">
-                                                {filteredLoans.map(loan => (
-                                                    <tr key={loan.id} className="hover:bg-slate-700/30 transition-colors group">
-                                                        <td className="px-6 py-4 font-medium text-white">{loan.clientName}</td>
-                                                        <td className="px-6 py-4 text-slate-300 font-mono">{formatCurrency(loan.initialCapital || loan.amount)}</td>
-                                                        <td className="px-6 py-4 text-slate-400">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <Calendar size={14} />
-                                                                {new Date(loan.lastPaymentDate || loan.startDate).toLocaleDateString()}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-right">
-                                                            <button 
-                                                                onClick={() => setSelectedLoan(loan)}
-                                                                className="text-primary-400 hover:text-primary-300 font-medium text-xs bg-primary-500/10 px-3 py-1.5 rounded-lg border border-primary-500/20 hover:bg-primary-500/20 transition-all"
-                                                            >
-                                                                Ver Ficha
-                                                            </button>
-                                                        </td>
+                                    <>
+                                        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                                            <table className="w-full text-left text-sm">
+                                                <thead className="bg-slate-900/50 text-slate-400 uppercase font-bold text-xs">
+                                                    <tr>
+                                                        <th className="px-6 py-3">Cliente</th>
+                                                        <th className="px-6 py-3">Monto Original</th>
+                                                        <th className="px-6 py-3">Finalizado</th>
+                                                        <th className="px-6 py-3 text-right">Acción</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-700">
+                                                    {filteredLoans.map(loan => (
+                                                        <tr key={loan.id} className="hover:bg-slate-700/30 transition-colors group">
+                                                            <td className="px-6 py-4 font-medium text-white">{loan.clientName}</td>
+                                                            <td className="px-6 py-4 text-slate-300 font-mono">{formatCurrency(loan.initialCapital || loan.amount)}</td>
+                                                            <td className="px-6 py-4 text-slate-400">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <Calendar size={14} />
+                                                                    {new Date(loan.lastPaymentDate || loan.startDate).toLocaleDateString()}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <button 
+                                                                    onClick={() => setSelectedLoan(loan)}
+                                                                    className="text-primary-400 hover:text-primary-300 font-medium text-xs bg-primary-500/10 px-3 py-1.5 rounded-lg border border-primary-500/20 hover:bg-primary-500/20 transition-all"
+                                                                >
+                                                                    Ver Ficha
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {hasMoreArchivedLoans && (
+                                            <button 
+                                                onClick={handleLoadMore}
+                                                disabled={isLoadingMore}
+                                                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 rounded-xl transition-all font-medium text-sm flex items-center justify-center gap-2"
+                                            >
+                                                {isLoadingMore ? <RefreshCw size={16} className="animate-spin" /> : <ArrowDown size={16} />}
+                                                Cargar más antiguos
+                                            </button>
+                                        )}
+                                    </>
                                 ) : (
                                     <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-dashed border-slate-700">
                                         <Archive size={40} className="mx-auto text-slate-600 mb-3" />
