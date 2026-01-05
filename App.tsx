@@ -312,13 +312,13 @@ const App: React.FC = () => {
                 {/* Mobile Sidebar (Overlay) */}
                 <div className={`md:hidden fixed inset-0 z-40 transition-transform duration-300 ease-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
-                     <aside className="relative bg-slate-900 w-72 h-full border-r border-white/5 shadow-2xl flex flex-col">
+                     <aside className="relative bg-slate-900 w-80 h-full border-r border-white/5 shadow-2xl flex flex-col">
                         <SidebarContent />
                      </aside>
                 </div>
 
                  {/* Desktop Sidebar */}
-                 <aside className={`hidden md:flex transition-all duration-300 ease-in-out border-r border-white/5 bg-slate-900/40 backdrop-blur-xl flex-col ${isSidebarOpen ? 'w-64' : 'w-20'}`}>
+                 <aside className={`hidden md:flex transition-all duration-300 ease-in-out border-r border-white/5 bg-slate-900/40 backdrop-blur-xl flex-col ${isSidebarOpen ? 'w-72' : 'w-20'}`}>
                     <SidebarContent />
                 </aside>
                 
