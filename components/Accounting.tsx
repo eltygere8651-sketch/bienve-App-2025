@@ -654,18 +654,15 @@ const Accounting: React.FC = () => {
     // Time Filtering
     const [timeRange, setTimeRange] = useState<'all' | 'year' | 'month'>('all');
 
+    // Real-time subscription to Treasury
     useEffect(() => {
-        const loadTreasury = async () => {
-            try {
-                const doc = await getDocument(TABLE_NAMES.TREASURY, 'main');
-                if (doc) {
-                    setTreasurySettings(doc as TreasuryConfig);
-                }
-            } catch (e) {
-                console.error("Error loading treasury settings", e);
+        const unsubscribe = subscribeToCollection(TABLE_NAMES.TREASURY, (data) => {
+            const mainDoc = data.find(d => d.id === 'main');
+            if (mainDoc) {
+                setTreasurySettings(mainDoc as TreasuryConfig);
             }
-        };
-        loadTreasury();
+        });
+        return () => unsubscribe();
     }, []);
 
     const handleUpdateTreasury = async () => {

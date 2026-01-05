@@ -12,7 +12,9 @@ import {
     getPaginatedCollection,
     where,
     orderBy,
-    limit
+    limit,
+    getDocument,
+    setDocument
 } from '../services/firebaseService';
 import { DNI_FRONT_PLACEHOLDER, DNI_BACK_PLACEHOLDER, TABLE_NAMES } from '../constants';
 import { DEFAULT_ANNUAL_INTEREST_RATE, calculateLoanParameters, calculateMonthlyInterest } from '../config';
@@ -380,12 +382,13 @@ export const useAppData = (
             capitalPaid: capitalPaid,
             remainingCapitalAfter: newRemainingCapital,
             notes: notes,
-            paymentMethod: paymentMethod // Guardamos el método de pago
+            paymentMethod: paymentMethod
         };
 
         const updatedHistory = [...(loan.paymentHistory || []), newPaymentRecord];
 
         try {
+            // 1. Actualizar Préstamo
             await updateDocument(TABLE_NAMES.LOANS, loanId, { 
                 paymentsMade: loan.paymentsMade + 1, 
                 status: isPaidOff ? LoanStatus.PAID : LoanStatus.PENDING,
@@ -395,7 +398,38 @@ export const useAppData = (
                 paymentHistory: updatedHistory,
                 lastPaymentDate: date
             });
-            showToast(getSuccessMessage(`Pago (${paymentMethod}) registrado.`), 'success');
+
+            // 2. Actualizar Tesorería (Automáticamente)
+            try {
+                const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+                if (treasuryDoc) {
+                    let { bankBalance, cashBalance } = treasuryDoc as any;
+                    // Asegurar valores numéricos
+                    bankBalance = Number(bankBalance) || 0;
+                    cashBalance = Number(cashBalance) || 0;
+
+                    if (paymentMethod === 'Banco') {
+                        bankBalance += amount;
+                    } else {
+                        cashBalance += amount;
+                    }
+
+                    await updateDocument(TABLE_NAMES.TREASURY, 'main', { bankBalance, cashBalance });
+                } else {
+                    // Si no existe, crear con el primer pago
+                    const initialData = {
+                        bankName: 'Banco',
+                        bankBalance: paymentMethod === 'Banco' ? amount : 0,
+                        cashBalance: paymentMethod === 'Efectivo' ? amount : 0
+                    };
+                    await setDocument(TABLE_NAMES.TREASURY, 'main', initialData);
+                }
+            } catch (treasuryError) {
+                console.error("Error actualizando tesorería automática:", treasuryError);
+                // No lanzamos error para no bloquear la confirmación visual del pago, pero logueamos
+            }
+
+            showToast(getSuccessMessage(`Pago (${paymentMethod}) registrado y tesorería actualizada.`), 'success');
         } catch (err: any) {
             console.error("Error updating loan payment:", err);
             showToast(`Error: ${err.message}`, 'error');
