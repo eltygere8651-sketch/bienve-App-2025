@@ -1,3 +1,4 @@
+
 // constants.ts
 export const LOCAL_STORAGE_KEYS = {
     FINANCIAL_TIP: 'financialTip',
@@ -8,6 +9,8 @@ export const TABLE_NAMES = {
     CLIENTS: 'clients',
     LOANS: 'loans',
     REQUESTS: 'requests',
+    PERSONAL_FUNDS: 'personal_funds', // New collection for isolated personal finance
+    TREASURY: 'treasury', // New collection for company treasury state
 };
 
 // Placeholder images for the loan request form

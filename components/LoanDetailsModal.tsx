@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loan, Client, LoanStatus } from '../types';
-import { X, Banknote, Calendar, Percent, Clock, AlertTriangle, Edit, Trash2, Save, Loader2, TrendingDown, Infinity as InfinityIcon, User, MapPin, Phone, Mail, FileText, Check, Copy, Lock, RotateCcw, FileDown } from 'lucide-react';
+import { X, Banknote, Calendar, Percent, Clock, AlertTriangle, Edit, Trash2, Save, Loader2, TrendingDown, Infinity as InfinityIcon, User, MapPin, Phone, Mail, FileText, Check, Copy, Lock, RotateCcw, FileDown, CreditCard } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import PaymentHistory from './PaymentHistory';
 import { useDataContext } from '../contexts/DataContext';
@@ -66,6 +66,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
     const [paymentNotes, setPaymentNotes] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Banco'>('Efectivo');
 
     useEffect(() => {
         if (loan && client) {
@@ -90,6 +91,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
             setActiveTab(initialTab);
             setPaymentAmount('');
             setPaymentNotes('');
+            setPaymentMethod('Efectivo');
             setShowCorrectionInput(false);
         }
     }, [loan, client, isOpen, initialTab]);
@@ -173,9 +175,10 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         if (!paymentAmount) return;
         setIsSubmitting(true);
         try {
-            await handleRegisterPayment(loan.id, parseFloat(paymentAmount), paymentDate, paymentNotes);
+            await handleRegisterPayment(loan.id, parseFloat(paymentAmount), paymentDate, paymentNotes, paymentMethod);
             setPaymentAmount('');
             setPaymentNotes('');
+            setPaymentMethod('Efectivo');
             showToast('Pago registrado exitosamente', 'success');
         } catch (e) { } finally { setIsSubmitting(false); }
     };
@@ -347,13 +350,33 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                             />
                                             
                                             <div className="grid grid-cols-2 gap-4">
-                                                <InputField label="Fecha" name="date" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
-                                                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
-                                                    <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Nuevo Saldo</p>
-                                                    <p className="text-lg font-bold text-white font-mono">
-                                                        {formatCurrency(paymentPreview?.newBalance || loan.remainingCapital)}
-                                                    </p>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Método de Pago</label>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPaymentMethod('Efectivo')}
+                                                            className={`flex-1 py-2 px-1 rounded-lg text-xs font-bold flex flex-col items-center gap-1 border ${paymentMethod === 'Efectivo' ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
+                                                        >
+                                                            <Banknote size={16} /> Efectivo
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPaymentMethod('Banco')}
+                                                            className={`flex-1 py-2 px-1 rounded-lg text-xs font-bold flex flex-col items-center gap-1 border ${paymentMethod === 'Banco' ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
+                                                        >
+                                                            <CreditCard size={16} /> Banco
+                                                        </button>
+                                                    </div>
                                                 </div>
+                                                <InputField label="Fecha" name="date" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+                                            </div>
+
+                                            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600/50">
+                                                <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Nuevo Saldo</p>
+                                                <p className="text-lg font-bold text-white font-mono">
+                                                    {formatCurrency(paymentPreview?.newBalance || loan.remainingCapital)}
+                                                </p>
                                             </div>
 
                                             {paymentPreview && (

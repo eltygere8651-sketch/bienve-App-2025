@@ -155,6 +155,24 @@ export const deleteDocument = async (collectionName: string, docId: string) => {
     await deleteDoc(docRef);
 };
 
+export const setDocument = async (collectionName: string, docId: string, data: any) => {
+    if (!db) throw new Error("Database not initialized");
+    const docRef = doc(db, collectionName, docId);
+    await setDoc(docRef, data, { merge: true }); // Upsert
+    return { id: docId, ...data };
+};
+
+export const getDocument = async (collectionName: string, docId: string) => {
+    if (!db) throw new Error("Database not initialized");
+    const docRef = doc(db, collectionName, docId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() };
+    } else {
+        return null;
+    }
+};
+
 export const checkClientExists = async (idNumber: string) => {
     if (!db) return false;
     // Simple check, assumes idNumber field exists

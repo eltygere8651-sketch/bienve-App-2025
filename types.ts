@@ -21,6 +21,7 @@ export interface PaymentRecord {
     remainingCapitalAfter: number;
     notes?: string;
     daysElapsed?: number; // Nuevo: Para registro histórico
+    paymentMethod?: 'Efectivo' | 'Banco'; // Nuevo: Desglose de tesorería
 }
 
 export interface Loan {

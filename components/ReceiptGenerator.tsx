@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { ReceiptText, Download, Calculator, AlertCircle, Info, Loader2, ArrowRight } from 'lucide-react';
+import { ReceiptText, Download, Calculator, AlertCircle, Info, Loader2, ArrowRight, Banknote, CreditCard } from 'lucide-react';
 import { generatePaymentReceipt } from '../services/pdfService';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 import { useAppContext } from '../contexts/AppContext';
@@ -19,6 +19,7 @@ const ReceiptGenerator: React.FC = () => {
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
     const [notes, setNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Banco'>('Efectivo');
     
     // Manual overrides
     const [manualClientName, setManualClientName] = useState('');
@@ -82,6 +83,7 @@ const ReceiptGenerator: React.FC = () => {
         setNotes('');
         setManualClientName('');
         setManualPreviousBalance('');
+        setPaymentMethod('Efectivo');
         signaturePadRef.current?.clear();
     };
 
@@ -110,7 +112,8 @@ const ReceiptGenerator: React.FC = () => {
                     selectedLoan.id, 
                     parseFloat(paymentAmount), 
                     paymentDate, 
-                    notes || "Pago generado desde Recibos"
+                    notes || "Pago generado desde Recibos",
+                    paymentMethod // Pass the selected method
                 );
             }
 
@@ -118,7 +121,7 @@ const ReceiptGenerator: React.FC = () => {
                 clientName: clientName,
                 loanId: loanIdRef,
                 paymentAmount: parseFloat(paymentAmount),
-                paymentType: paymentDescription,
+                paymentType: `${paymentDescription} (${paymentMethod})`, // Include method in PDF
                 paymentDate: paymentDate,
                 notes: finalNotes,
                 previousBalance: calculations.previousBalance,
@@ -183,7 +186,7 @@ const ReceiptGenerator: React.FC = () => {
                      </div>
                  )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                         <label className="block text-sm font-medium text-slate-300 mb-1">Monto Recibido (€)</label>
                         <input
@@ -196,6 +199,25 @@ const ReceiptGenerator: React.FC = () => {
                             placeholder="Ej: 80.00"
                             className="w-full px-3 py-2 border border-slate-600 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 bg-slate-700 text-white font-bold text-lg"
                         />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Método de Pago</label>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setPaymentMethod('Efectivo')}
+                                className={`flex-1 py-2 rounded-md text-xs font-bold flex flex-col items-center gap-1 border ${paymentMethod === 'Efectivo' ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600'}`}
+                            >
+                                <Banknote size={16} /> Efectivo
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPaymentMethod('Banco')}
+                                className={`flex-1 py-2 rounded-md text-xs font-bold flex flex-col items-center gap-1 border ${paymentMethod === 'Banco' ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600'}`}
+                            >
+                                <CreditCard size={16} /> Banco
+                            </button>
+                        </div>
                     </div>
                      <div>
                         <label className="block text-sm font-medium text-slate-300 mb-1">Fecha del Pago</label>

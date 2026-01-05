@@ -352,7 +352,7 @@ export const useAppData = (
         }
     }, [showToast]);
     
-    const handleRegisterPayment = useCallback(async (loanId: string, amount: number, date: string, notes: string) => {
+    const handleRegisterPayment = useCallback(async (loanId: string, amount: number, date: string, notes: string, paymentMethod: 'Efectivo' | 'Banco' = 'Efectivo') => {
         const loan = activeLoans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan || loan.status === LoanStatus.PAID) return;
         
@@ -379,7 +379,8 @@ export const useAppData = (
             interestPaid: interestPaid,
             capitalPaid: capitalPaid,
             remainingCapitalAfter: newRemainingCapital,
-            notes: notes
+            notes: notes,
+            paymentMethod: paymentMethod // Guardamos el método de pago
         };
 
         const updatedHistory = [...(loan.paymentHistory || []), newPaymentRecord];
@@ -394,7 +395,7 @@ export const useAppData = (
                 paymentHistory: updatedHistory,
                 lastPaymentDate: date
             });
-            showToast(getSuccessMessage(`Pago registrado. Cobrado 8% interés sobre saldo.`), 'success');
+            showToast(getSuccessMessage(`Pago (${paymentMethod}) registrado.`), 'success');
         } catch (err: any) {
             console.error("Error updating loan payment:", err);
             showToast(`Error: ${err.message}`, 'error');

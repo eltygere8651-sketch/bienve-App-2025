@@ -29,7 +29,7 @@ interface DataContextType {
     handleApproveRequest: (request: LoanRequest, loanAmount: number, loanTerm: number) => Promise<void>;
     handleRejectRequest: (request: LoanRequest) => Promise<void>;
     handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
-    handleRegisterPayment: (loanId: string, amount: number, date: string, notes: string) => Promise<void>;
+    handleRegisterPayment: (loanId: string, amount: number, date: string, notes: string, paymentMethod?: 'Efectivo' | 'Banco') => Promise<void>;
     handleUpdatePayment: (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => Promise<void>; 
     handleBalanceCorrection: (loanId: string, newBalance: number, notes: string) => Promise<void>; 
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;

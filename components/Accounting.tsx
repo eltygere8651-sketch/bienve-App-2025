@@ -1,12 +1,17 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useDataContext } from '../contexts/DataContext';
+import { useAppContext } from '../contexts/AppContext';
 import { formatCurrency } from '../services/utils';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, DollarSign, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, PiggyBank, Landmark, AlertTriangle, CheckCircle, XCircle, Info, Lock, ShieldCheck, Scale, Calendar, Database, Filter } from 'lucide-react';
+import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, ChevronRight, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3 } from 'lucide-react';
+import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument, getDocument } from '../services/firebaseService';
+import { TABLE_NAMES } from '../constants';
+
+// --- COMPONENTS ---
 
 const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: any, color: string, isRisk?: boolean }> = ({ title, value, subtext, icon: Icon, color, isRisk }) => (
     <div className={`bg-slate-800/60 border ${isRisk ? 'border-red-500/30 bg-red-900/10' : 'border-slate-700'} p-6 rounded-2xl flex flex-col justify-between backdrop-blur-md relative overflow-hidden group hover:-translate-y-1 transition-transform`}>
@@ -23,6 +28,448 @@ const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: 
         </div>
     </div>
 );
+
+// --- PERSONAL FINANCE MANAGER (ISOLATED LOGIC VIA FIRESTORE) ---
+
+interface PersonalFund {
+    id: string;
+    name: string;
+    icon: string; // key for icon mapping
+    color: 'cyan' | 'purple' | 'emerald' | 'orange' | 'rose' | 'blue';
+    currentAmount: number;
+    goal: number;
+    bankName: string;
+    monthlyContribution: number;
+    lastUpdated: string;
+}
+
+interface TreasuryConfig {
+    bankName: string;
+    bankBalance: number;
+    cashBalance: number;
+}
+
+const DEFAULT_FUNDS: PersonalFund[] = [];
+
+// Icon Mapping
+const ICON_MAP: Record<string, any> = {
+    'plane': Plane,
+    'palmtree': Palmtree,
+    'car': Car,
+    'home': Home,
+    'laptop': Laptop,
+    'gift': Gift,
+    'heart': Heart,
+    'target': Target,
+    'wallet': Wallet,
+    'umbrella': Umbrella
+};
+
+const COLOR_STYLES = {
+    cyan: { bg: 'from-cyan-900/40 to-blue-900/40', border: 'border-cyan-500/30', text: 'text-cyan-400', bar: 'from-cyan-500 to-blue-500', btn: 'bg-cyan-600 hover:bg-cyan-500' },
+    purple: { bg: 'from-purple-900/40 to-indigo-900/40', border: 'border-purple-500/30', text: 'text-purple-400', bar: 'from-purple-500 to-indigo-500', btn: 'bg-purple-600 hover:bg-purple-500' },
+    emerald: { bg: 'from-emerald-900/40 to-teal-900/40', border: 'border-emerald-500/30', text: 'text-emerald-400', bar: 'from-emerald-500 to-teal-500', btn: 'bg-emerald-600 hover:bg-emerald-500' },
+    orange: { bg: 'from-orange-900/40 to-amber-900/40', border: 'border-orange-500/30', text: 'text-orange-400', bar: 'from-orange-500 to-amber-500', btn: 'bg-orange-600 hover:bg-orange-500' },
+    rose: { bg: 'from-rose-900/40 to-pink-900/40', border: 'border-rose-500/30', text: 'text-rose-400', bar: 'from-rose-500 to-pink-500', btn: 'bg-rose-600 hover:bg-rose-500' },
+    blue: { bg: 'from-blue-900/40 to-indigo-900/40', border: 'border-blue-500/30', text: 'text-blue-400', bar: 'from-blue-500 to-indigo-500', btn: 'bg-blue-600 hover:bg-blue-500' },
+};
+
+const PersonalFinanceManager: React.FC = () => {
+    const [funds, setFunds] = useState<PersonalFund[]>(DEFAULT_FUNDS);
+    const [selectedFundId, setSelectedFundId] = useState<string | null>(null);
+    const [isCreating, setIsCreating] = useState(false);
+    const [isEditingFund, setIsEditingFund] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const { showToast } = useAppContext();
+
+    // Form State for Create/Edit
+    const [formData, setFormData] = useState<PersonalFund>({
+        id: '',
+        name: '',
+        icon: 'target',
+        color: 'blue',
+        currentAmount: 0,
+        goal: 1000,
+        bankName: 'Banco Principal',
+        monthlyContribution: 100,
+        lastUpdated: new Date().toISOString()
+    });
+
+    // LOAD DATA & MIGRATE FROM LOCALSTORAGE TO FIRESTORE
+    useEffect(() => {
+        // 1. Subscribe to Firestore (Real-time sync)
+        const unsubscribe = subscribeToCollection(TABLE_NAMES.PERSONAL_FUNDS, (data) => {
+            setFunds(data as PersonalFund[]);
+        });
+
+        // 2. Migration Logic: Check for old local storage data
+        const checkMigration = async () => {
+            // Check for new format in local storage
+            const localFunds = localStorage.getItem('bm_personal_funds');
+            const legacyVacation = localStorage.getItem('bm_personal_vacation');
+
+            if (localFunds) {
+                try {
+                    const parsed = JSON.parse(localFunds);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        showToast('Sincronizando datos locales con la nube...', 'info');
+                        // Upload each fund to firestore
+                        for (const fund of parsed) {
+                            const { id, ...rest } = fund; // Remove local ID, let Firestore generate new one
+                            await addDocument(TABLE_NAMES.PERSONAL_FUNDS, rest);
+                        }
+                        showToast('Migración completada. Datos asegurados en la nube.', 'success');
+                    }
+                    localStorage.removeItem('bm_personal_funds'); // Clear local
+                } catch (e) { console.error(e); }
+            } else if (legacyVacation) {
+                // Check for very old single vacation legacy
+                try {
+                    const oldData = JSON.parse(legacyVacation);
+                    showToast('Migrando fondo de vacaciones a la nube...', 'info');
+                    await addDocument(TABLE_NAMES.PERSONAL_FUNDS, {
+                        name: 'Mis Vacaciones',
+                        icon: 'plane',
+                        color: 'cyan',
+                        currentAmount: oldData.currentAmount || 0,
+                        goal: oldData.goal || 3000,
+                        bankName: oldData.bankName || 'Banco Principal',
+                        monthlyContribution: oldData.monthlyContribution || 100,
+                        lastUpdated: new Date().toISOString()
+                    });
+                    localStorage.removeItem('bm_personal_vacation');
+                    showToast('Fondo de vacaciones migrado exitosamente.', 'success');
+                } catch (e) { console.error(e); }
+            }
+        };
+
+        checkMigration();
+
+        return () => unsubscribe();
+    }, []);
+
+    const handleSaveFund = async () => {
+        if (!formData.name) return;
+        setIsSaving(true);
+        try {
+            const { id, ...dataToSave } = formData;
+            if (isEditingFund && id) {
+                await updateDocument(TABLE_NAMES.PERSONAL_FUNDS, id, { 
+                    ...dataToSave,
+                    lastUpdated: new Date().toISOString()
+                });
+                showToast('Apartado actualizado en la nube.', 'success');
+            } else {
+                await addDocument(TABLE_NAMES.PERSONAL_FUNDS, {
+                    ...dataToSave,
+                    lastUpdated: new Date().toISOString()
+                });
+                showToast('Nuevo apartado creado en la nube.', 'success');
+            }
+            
+            setIsCreating(false);
+            setIsEditingFund(false);
+            setFormData({ ...formData, id: '' }); // Reset ID
+        } catch (e: any) {
+            showToast('Error al guardar: ' + e.message, 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDeleteFund = async (id: string) => {
+        if (confirm('¿Estás seguro de eliminar este apartado? Se borrará permanentemente de la base de datos.')) {
+            try {
+                await deleteDocument(TABLE_NAMES.PERSONAL_FUNDS, id);
+                setSelectedFundId(null);
+                setIsEditingFund(false);
+                showToast('Apartado eliminado.', 'info');
+            } catch (e: any) {
+                showToast('Error al eliminar: ' + e.message, 'error');
+            }
+        }
+    };
+
+    const handleQuickAdd = async (fundId: string) => {
+        const fund = funds.find(f => f.id === fundId);
+        if (!fund) return;
+
+        try {
+            await updateDocument(TABLE_NAMES.PERSONAL_FUNDS, fundId, {
+                currentAmount: fund.currentAmount + fund.monthlyContribution,
+                lastUpdated: new Date().toISOString()
+            });
+            showToast(`Añadidos ${formatCurrency(fund.monthlyContribution)} a ${fund.name}`, 'success');
+        } catch (e: any) {
+            showToast('Error de conexión: ' + e.message, 'error');
+        }
+    };
+
+    const activeFund = funds.find(f => f.id === selectedFundId);
+    const styles = activeFund ? COLOR_STYLES[activeFund.color] : COLOR_STYLES.blue;
+    const ActiveIcon = activeFund ? (ICON_MAP[activeFund.icon] || Target) : Target;
+
+    // --- VIEW: DASHBOARD (List of Funds) ---
+    if (!selectedFundId && !isCreating) {
+        return (
+            <div className="space-y-6 animate-fade-in">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
+                    <div>
+                        <h2 className="text-xl font-heading font-bold text-white flex items-center gap-2">
+                            <Umbrella className="text-cyan-400" /> Finanzas Personales
+                        </h2>
+                        <div className="flex items-center gap-2 mt-1">
+                            <p className="text-slate-400 text-sm">Tus metas y ahorros privados.</p>
+                            <span className="text-[10px] bg-slate-700 px-2 py-0.5 rounded-full text-green-400 flex items-center gap-1 border border-slate-600">
+                                <Cloud size={10} /> Sincronizado en Nube
+                            </span>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => {
+                            setFormData({
+                                id: '', name: '', icon: 'target', color: 'blue',
+                                currentAmount: 0, goal: 1000, bankName: 'Banco Principal',
+                                monthlyContribution: 100, lastUpdated: new Date().toISOString()
+                            });
+                            setIsCreating(true);
+                        }}
+                        className="flex items-center gap-2 bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary-900/20"
+                    >
+                        <Plus size={18} /> Crear Apartado
+                    </button>
+                </div>
+
+                {funds.length === 0 ? (
+                    <div className="text-center py-16 bg-slate-800/30 rounded-2xl border border-dashed border-slate-700">
+                        <div className="bg-slate-800 p-4 rounded-full inline-block mb-4">
+                            <Target size={32} className="text-slate-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-300">No tienes apartados creados</h3>
+                        <p className="text-slate-500 text-sm mb-4">Crea tu primer fondo para vacaciones, emergencias o compras. Se guardará de forma segura en la nube.</p>
+                        <button onClick={() => setIsCreating(true)} className="text-primary-400 font-bold text-sm hover:underline">Crear ahora</button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {funds.map(fund => {
+                            const FundIcon = ICON_MAP[fund.icon] || Target;
+                            const fStyle = COLOR_STYLES[fund.color] || COLOR_STYLES.blue;
+                            const percent = Math.min(100, (fund.currentAmount / fund.goal) * 100);
+                            
+                            return (
+                                <div 
+                                    key={fund.id}
+                                    onClick={() => setSelectedFundId(fund.id)}
+                                    className={`bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-${fund.color}-500/50 cursor-pointer transition-all hover:-translate-y-1 group relative overflow-hidden`}
+                                >
+                                    <div className={`absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform duration-500 ${fStyle.text}`}>
+                                        <FundIcon size={80} />
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-start mb-4 relative z-10">
+                                        <div className={`p-3 rounded-lg bg-slate-900 ${fStyle.text}`}>
+                                            <FundIcon size={24} />
+                                        </div>
+                                        {percent >= 100 && <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-1 rounded-full border border-emerald-500/30">COMPLETADO</span>}
+                                    </div>
+                                    
+                                    <div className="relative z-10">
+                                        <h3 className="font-bold text-slate-200 text-lg mb-0.5 truncate">{fund.name}</h3>
+                                        <p className="text-slate-500 text-xs mb-3">{fund.bankName}</p>
+                                        
+                                        <div className="flex items-baseline gap-1 mb-2">
+                                            <span className="text-2xl font-bold text-white">{formatCurrency(fund.currentAmount)}</span>
+                                            <span className="text-xs text-slate-500">/ {formatCurrency(fund.goal)}</span>
+                                        </div>
+
+                                        <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                                            <div className={`h-full bg-gradient-to-r ${fStyle.bar}`} style={{ width: `${percent}%` }}></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // --- VIEW: CREATE / EDIT FORM ---
+    if (isCreating || isEditingFund) {
+        return (
+            <div className="max-w-2xl mx-auto bg-slate-800 rounded-2xl border border-slate-700 p-6 sm:p-8 animate-fade-in">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                        {isEditingFund ? <Edit2 size={20} className="text-primary-400"/> : <Plus size={20} className="text-primary-400"/>}
+                        {isEditingFund ? 'Editar Apartado' : 'Nuevo Apartado'}
+                    </h2>
+                    <button onClick={() => { setIsCreating(false); setIsEditingFund(false); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400"><X size={20}/></button>
+                </div>
+
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="sm:col-span-2">
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Nombre del Objetivo</label>
+                            <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" placeholder="Ej: Coche Nuevo" />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Monto Actual (€)</label>
+                            <input type="number" value={formData.currentAmount} onChange={e => setFormData({...formData, currentAmount: parseFloat(e.target.value) || 0})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Meta Final (€)</label>
+                            <input type="number" value={formData.goal} onChange={e => setFormData({...formData, goal: parseFloat(e.target.value) || 0})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" />
+                        </div>
+                        
+                        <div className="sm:col-span-2">
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Banco / Ubicación</label>
+                            <input type="text" value={formData.bankName} onChange={e => setFormData({...formData, bankName: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" placeholder="Ej: Cuenta Naranja, Efectivo..." />
+                        </div>
+                        
+                        <div className="sm:col-span-2">
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Aporte Mensual Planeado (€)</label>
+                            <input type="number" value={formData.monthlyContribution} onChange={e => setFormData({...formData, monthlyContribution: parseFloat(e.target.value) || 0})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Icono y Tema</label>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                            {Object.keys(ICON_MAP).map(iconKey => {
+                                const Ico = ICON_MAP[iconKey];
+                                return (
+                                    <button 
+                                        key={iconKey}
+                                        onClick={() => setFormData({...formData, icon: iconKey})}
+                                        className={`p-2 rounded-lg border ${formData.icon === iconKey ? 'bg-primary-600 text-white border-primary-500' : 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600'}`}
+                                    >
+                                        <Ico size={18} />
+                                    </button>
+                                )
+                            })}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {Object.keys(COLOR_STYLES).map(colorKey => (
+                                <button 
+                                    key={colorKey}
+                                    onClick={() => setFormData({...formData, color: colorKey as any})}
+                                    className={`w-8 h-8 rounded-full border-2 ${formData.color === colorKey ? 'border-white scale-110' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                                    style={{ backgroundColor: colorKey === 'cyan' ? '#06b6d4' : colorKey === 'purple' ? '#a855f7' : colorKey === 'emerald' ? '#10b981' : colorKey === 'orange' ? '#f97316' : colorKey === 'rose' ? '#f43f5e' : '#3b82f6' }}
+                                />
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between pt-4 border-t border-slate-700">
+                        {isEditingFund && (
+                            <button onClick={() => handleDeleteFund(formData.id)} className="text-red-400 hover:text-red-300 text-sm font-bold flex items-center gap-2">
+                                <Trash2 size={16} /> Eliminar
+                            </button>
+                        )}
+                        <div className="flex gap-2 ml-auto">
+                            <button onClick={() => { setIsCreating(false); setIsEditingFund(false); }} className="px-4 py-2 text-slate-400 hover:text-white font-bold text-sm">Cancelar</button>
+                            <button onClick={handleSaveFund} disabled={isSaving} className="px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-sm shadow-lg flex items-center gap-2">
+                                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // --- VIEW: DETAIL (Active Fund) ---
+    if (activeFund) {
+        const percent = Math.min(100, (activeFund.currentAmount / activeFund.goal) * 100);
+        
+        return (
+            <div className={`bg-gradient-to-br ${styles.bg} border ${styles.border} rounded-3xl p-1 relative overflow-hidden shadow-2xl animate-fade-in`}>
+                <div className={`absolute top-0 right-0 p-8 opacity-10 pointer-events-none ${styles.text}`}>
+                    <ActiveIcon size={180} />
+                </div>
+
+                <div className="bg-slate-900/60 backdrop-blur-sm rounded-[20px] p-6 sm:p-8 h-full relative z-10">
+                    <button onClick={() => setSelectedFundId(null)} className="absolute top-6 left-6 text-slate-400 hover:text-white flex items-center gap-1 text-sm font-bold transition-colors">
+                        <ArrowLeft size={16} /> Volver
+                    </button>
+
+                    <div className="mt-8 flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
+                        <div className="flex items-center gap-4">
+                            <div className={`p-3 bg-slate-800 rounded-xl ${styles.text} border border-white/5`}>
+                                <ActiveIcon size={32} />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-heading font-bold text-white">{activeFund.name}</h2>
+                                <p className="text-sm text-slate-400 flex items-center gap-1">
+                                    <Landmark size={12} />
+                                    {activeFund.bankName}
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <button 
+                            onClick={() => {
+                                setFormData(activeFund);
+                                setIsEditingFund(true);
+                            }}
+                            className="p-2 hover:bg-white/10 rounded-lg text-slate-300 transition-colors self-end sm:self-start"
+                            title="Editar configuración"
+                        >
+                            <Edit2 size={18} />
+                        </button>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-end gap-3 mb-4">
+                        <span className="text-5xl sm:text-6xl font-heading font-bold text-white tracking-tight">
+                            {formatCurrency(activeFund.currentAmount)}
+                        </span>
+                        <span className={`text-base mb-2 font-medium opacity-80 ${styles.text}`}>
+                            de {formatCurrency(activeFund.goal)}
+                        </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="relative h-6 bg-slate-900/50 rounded-full overflow-hidden mb-8 border border-white/5 shadow-inner">
+                        <div 
+                            className={`absolute top-0 left-0 h-full bg-gradient-to-r ${styles.bar} transition-all duration-1000 ease-out flex items-center justify-end px-2`}
+                            style={{ width: `${percent}%` }}
+                        >
+                            {percent > 10 && <span className="text-[10px] font-bold text-white drop-shadow-md">{percent.toFixed(0)}%</span>}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5 flex flex-col justify-center">
+                            <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Aporte Mensual Configurado</p>
+                            <p className={`text-2xl font-bold ${styles.text}`}>+{formatCurrency(activeFund.monthlyContribution)}</p>
+                            <p className="text-xs text-slate-500 mt-1">Sugerido para alcanzar la meta</p>
+                        </div>
+                        
+                        <button 
+                            onClick={() => handleQuickAdd(activeFund.id)}
+                            className={`${styles.btn} text-white p-4 rounded-xl border-t border-white/10 transition-all active:scale-95 flex flex-col items-center justify-center group shadow-lg`}
+                        >
+                            <div className="flex items-center gap-2 font-bold text-lg mb-1">
+                                <Plus size={20} className="group-hover:rotate-90 transition-transform" /> 
+                                Ingresar Mes
+                            </div>
+                            <span className="text-xs opacity-90 font-medium bg-black/20 px-2 py-0.5 rounded">
+                                Sumar {formatCurrency(activeFund.monthlyContribution)} ahora
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return null;
+};
+
+// --- PROFITS CALCULATOR (Existing) ---
 
 interface ProfitsProps {
     totalInvested: number;
@@ -192,11 +639,44 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
 
 const Accounting: React.FC = () => {
     const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded } = useDataContext();
-    const [activeTab, setActiveTab] = useState<'global' | 'profits'>('global');
+    const { showToast } = useAppContext();
+    const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal'>('global');
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    
+    // Treasury Config State
+    const [treasurySettings, setTreasurySettings] = useState<TreasuryConfig>({
+        bankName: 'Banco',
+        bankBalance: 0,
+        cashBalance: 0
+    });
+    const [isEditingTreasury, setIsEditingTreasury] = useState(false);
     
     // Time Filtering
     const [timeRange, setTimeRange] = useState<'all' | 'year' | 'month'>('all');
+
+    useEffect(() => {
+        const loadTreasury = async () => {
+            try {
+                const doc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+                if (doc) {
+                    setTreasurySettings(doc as TreasuryConfig);
+                }
+            } catch (e) {
+                console.error("Error loading treasury settings", e);
+            }
+        };
+        loadTreasury();
+    }, []);
+
+    const handleUpdateTreasury = async () => {
+        try {
+            await setDocument(TABLE_NAMES.TREASURY, 'main', treasurySettings);
+            setIsEditingTreasury(false);
+            showToast('Tesorería actualizada correctamente.', 'success');
+        } catch (e: any) {
+            showToast('Error al actualizar tesorería: ' + e.message, 'error');
+        }
+    };
 
     const allLoans = useMemo(() => [...loans, ...archivedLoans], [loans, archivedLoans]);
 
@@ -270,8 +750,6 @@ const Accounting: React.FC = () => {
                 loan.paymentHistory.forEach(payment => {
                     const date = new Date(payment.date);
                     // Filter logic for chart
-                    // If 'month' is selected, show daily breakdown? No, stick to monthly for simplicity but highlight current
-                    // For now, charts always show history to provide context, filter affects the KPI numbers mainly.
                     
                     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
                     const label = date.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
@@ -338,18 +816,24 @@ const Accounting: React.FC = () => {
 
             {/* Navigation Tabs */}
             <div className="flex flex-col sm:flex-row border-b border-slate-700 mb-6 gap-4 sm:gap-0 justify-between items-end sm:items-center">
-                <div className="flex space-x-4 w-full sm:w-auto">
+                <div className="flex space-x-4 w-full sm:w-auto overflow-x-auto">
                     <button
                         onClick={() => setActiveTab('global')}
-                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'global' ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'global' ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-400 hover:text-white'}`}
                     >
                         <BarChart3 size={16} /> Visión Global
                     </button>
                     <button
                         onClick={() => setActiveTab('profits')}
-                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'profits' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'profits' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'}`}
                     >
                         <Coins size={16} /> Mis Ganancias
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('personal')}
+                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'personal' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                    >
+                        <Umbrella size={16} /> Finanzas Personales
                     </button>
                 </div>
 
@@ -362,14 +846,22 @@ const Accounting: React.FC = () => {
                 )}
             </div>
 
-            {activeTab === 'profits' ? (
+            {activeTab === 'personal' && (
+                <div className="max-w-6xl mx-auto">
+                    <PersonalFinanceManager />
+                </div>
+            )}
+
+            {activeTab === 'profits' && (
                 <ProfitsCalculator 
                     totalInvested={stats.totalInvested} // Always Total for ROI calc
                     totalRecoveredCapital={allLoans.reduce((acc, l) => acc + (l.totalCapitalPaid || 0), 0)} // Total
                     totalInterestEarned={allLoans.reduce((acc, l) => acc + (l.totalInterestPaid || 0), 0)} // Total
                     overdueAmount={stats.overdueAmount} // Current Snapshot
                 />
-            ) : (
+            )}
+
+            {activeTab === 'global' && (
                 <>
                     {/* KPI Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -402,6 +894,69 @@ const Accounting: React.FC = () => {
                             icon={BarChart3} 
                             color="indigo" 
                         />
+                    </div>
+
+                    {/* Treasury Breakdown */}
+                    <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                        <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Wallet size={20} className="text-primary-400" />
+                                Tesorería y Flujo de Caja
+                            </h3>
+                            <button 
+                                onClick={() => setIsEditingTreasury(!isEditingTreasury)}
+                                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-600 transition-colors"
+                            >
+                                <Edit3 size={14} /> Configurar
+                            </button>
+                        </div>
+
+                        {isEditingTreasury && (
+                            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-600 mb-6 animate-fade-in-down">
+                                <h4 className="text-sm font-bold text-slate-300 mb-3 uppercase">Arqueo de Caja / Ajuste Manual</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">Nombre Banco</label>
+                                        <input type="text" value={treasurySettings.bankName} onChange={e => setTreasurySettings({...treasurySettings, bankName: e.target.value})} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">Saldo en Banco (€)</label>
+                                        <input type="number" value={treasurySettings.bankBalance} onChange={e => setTreasurySettings({...treasurySettings, bankBalance: parseFloat(e.target.value) || 0})} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1">Saldo en Efectivo (€)</label>
+                                        <input type="number" value={treasurySettings.cashBalance} onChange={e => setTreasurySettings({...treasurySettings, cashBalance: parseFloat(e.target.value) || 0})} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setIsEditingTreasury(false)} className="px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-white">Cancelar</button>
+                                    <button onClick={handleUpdateTreasury} className="px-4 py-1.5 bg-primary-600 text-white text-xs font-bold rounded-lg hover:bg-primary-500">Guardar Cambios</button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-xl flex items-center gap-4">
+                                <div className="p-3 bg-emerald-500/20 rounded-full text-emerald-400">
+                                    <Banknote size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-400 uppercase font-bold">Disponible en Efectivo</p>
+                                    <p className="text-xl font-bold text-emerald-400">{formatCurrency(treasurySettings.cashBalance)}</p>
+                                    <p className="text-xs text-slate-500">En Caja</p>
+                                </div>
+                            </div>
+                            <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl flex items-center gap-4">
+                                <div className="p-3 bg-blue-500/20 rounded-full text-blue-400">
+                                    <CreditCard size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-400 uppercase font-bold">Disponible en {treasurySettings.bankName || 'Banco'}</p>
+                                    <p className="text-xl font-bold text-blue-400">{formatCurrency(treasurySettings.bankBalance)}</p>
+                                    <p className="text-xs text-slate-500">En Cuenta</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Charts Section */}
