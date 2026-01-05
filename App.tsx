@@ -179,22 +179,22 @@ const App: React.FC = () => {
     const SidebarContent = () => (
         <div className="flex flex-col h-full">
             <div 
-                className="flex items-center justify-center h-20 cursor-pointer mb-2 flex-shrink-0"
+                className="flex items-center justify-center h-24 cursor-pointer mb-2 flex-shrink-0"
                 onClick={handleLogoClick}
                 title="Ir al inicio"
             >
                 <div className="relative flex items-center">
-                    <div className="absolute -inset-2 bg-primary-500/20 blur-lg rounded-full opacity-50"></div>
-                    <Handshake className="text-primary-400 h-8 w-8 relative z-10" />
+                    <div className="absolute -inset-4 bg-primary-500/20 blur-xl rounded-full opacity-40"></div>
+                    <Handshake className="text-primary-400 h-9 w-9 relative z-10" />
                     {(isSidebarOpen || isMobileMenuOpen) && (
-                        <h1 className="text-xl font-heading font-bold ml-3 text-white tracking-tight relative z-10">
+                        <h1 className="text-2xl font-heading font-bold ml-3 text-white tracking-tight relative z-10">
                             B.M Contigo
                         </h1>
                     )}
                 </div>
             </div>
 
-            <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto scrollbar-hide">
+            <nav className="flex-1 px-4 py-2 space-y-1.5 overflow-y-auto scrollbar-hide">
                 {isAuthenticated ? (
                     <>
                         <NavItem icon={<LayoutDashboard />} label="Panel" view="dashboard" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
@@ -212,8 +212,8 @@ const App: React.FC = () => {
 
                  {isAuthenticated && (isSidebarOpen || isMobileMenuOpen) && (
                     <>
-                        <div className="mt-8 mb-2 px-3">
-                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Herramientas</h3>
+                        <div className="mt-8 mb-3 px-3">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Herramientas</h3>
                         </div>
                         <NavItem icon={<ReceiptText />} label="Recibos" view="receiptGenerator" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<DatabaseBackup />} label="Base de Datos" view="dataManagement" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
@@ -222,13 +222,13 @@ const App: React.FC = () => {
                 )}
             </nav>
 
-             <div className="p-4 border-t border-white/5 bg-black/10 flex-shrink-0 safe-area-bottom">
+             <div className="p-5 border-t border-white/5 bg-black/10 flex-shrink-0 safe-area-bottom">
                 {/* BOTONES DE UTILIDAD (PC) */}
-                <div className={`grid ${isSidebarOpen || isMobileMenuOpen ? 'grid-cols-2' : 'grid-cols-1'} gap-2 mb-4`}>
+                <div className={`grid ${isSidebarOpen || isMobileMenuOpen ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-4`}>
                      {!isInStandaloneMode && (
                         <button 
                             onClick={handleInstallApp}
-                            className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-white/5 group"
+                            className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-white/5 group shadow-sm hover:shadow-md"
                             title="Instalar App"
                         >
                             <Download size={20} className="group-hover:text-emerald-400 transition-colors" />
@@ -237,7 +237,7 @@ const App: React.FC = () => {
                     )}
                     <button 
                         onClick={() => setIsShareModalOpen(true)}
-                        className={`flex flex-col items-center justify-center p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-white/5 group ${isInStandaloneMode ? 'col-span-2' : ''}`}
+                        className={`flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-white/5 group shadow-sm hover:shadow-md ${isInStandaloneMode ? 'col-span-2' : ''}`}
                         title="Compartir App"
                     >
                         <Share2 size={20} className="group-hover:text-primary-400 transition-colors" />
@@ -248,10 +248,10 @@ const App: React.FC = () => {
                 {isAuthenticated ? (
                      <button
                         onClick={logout}
-                        className="w-full flex items-center justify-center p-3 rounded-xl cursor-pointer text-slate-400 hover:bg-white/5 hover:text-white transition-all group"
+                        className="w-full flex items-center justify-center p-3 rounded-xl cursor-pointer text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all group border border-transparent hover:border-red-500/20"
                         aria-label="Cerrar sesión"
                     >
-                        <LogOut size={20} className="group-hover:text-red-400 transition-colors" />
+                        <LogOut size={20} />
                         <span className={`ml-3 font-medium transition-all duration-300 ${(isSidebarOpen || isMobileMenuOpen) ? 'opacity-100' : 'opacity-0 h-0 w-0 overflow-hidden'}`}>
                             Cerrar Sesión
                         </span>
@@ -259,7 +259,7 @@ const App: React.FC = () => {
                 ) : (
                     <button
                         onClick={() => { setCurrentView('auth'); setIsMobileMenuOpen(false); }}
-                        className="w-full flex items-center justify-center p-3 rounded-xl cursor-pointer text-slate-400 hover:bg-white/5 hover:text-white transition-all"
+                        className="w-full flex items-center justify-center p-3 rounded-xl cursor-pointer text-slate-400 hover:bg-white/5 hover:text-white transition-all border border-transparent hover:border-white/10"
                         aria-label="Acceder"
                     >
                         <LogIn size={20} />
@@ -310,9 +310,9 @@ const App: React.FC = () => {
                 </header>
 
                 {/* Mobile Sidebar (Overlay) */}
-                <div className={`md:hidden fixed inset-0 z-40 transition-transform duration-300 ease-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className={`md:hidden fixed inset-0 z-50 transition-transform duration-300 ease-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
-                     <aside className="relative bg-slate-900 w-80 h-full border-r border-white/5 shadow-2xl flex flex-col">
+                     <aside className="relative bg-slate-900 w-[85vw] max-w-sm h-full border-r border-white/5 shadow-2xl flex flex-col">
                         <SidebarContent />
                      </aside>
                 </div>
