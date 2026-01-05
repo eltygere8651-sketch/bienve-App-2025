@@ -659,7 +659,12 @@ const Accounting: React.FC = () => {
         const unsubscribe = subscribeToCollection(TABLE_NAMES.TREASURY, (data) => {
             const mainDoc = data.find(d => d.id === 'main');
             if (mainDoc) {
-                setTreasurySettings(mainDoc as TreasuryConfig);
+                // Ensure values are numbers to prevent NaN in UI
+                setTreasurySettings({
+                    bankName: mainDoc.bankName || 'Banco',
+                    bankBalance: Number(mainDoc.bankBalance) || 0,
+                    cashBalance: Number(mainDoc.cashBalance) || 0
+                });
             }
         });
         return () => unsubscribe();

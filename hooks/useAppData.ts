@@ -363,12 +363,15 @@ export const useAppData = (
         let interestPaid = 0;
         let capitalPaid = 0;
 
-        if (amount <= interest) {
-            interestPaid = amount;
+        // Aseguramos que amount sea número para evitar concatenaciones de strings
+        const numericAmount = Number(amount);
+
+        if (numericAmount <= interest) {
+            interestPaid = numericAmount;
             capitalPaid = 0;
         } else {
             interestPaid = interest;
-            capitalPaid = amount - interest;
+            capitalPaid = numericAmount - interest;
         }
 
         const newRemainingCapital = Math.max(0, loan.remainingCapital - capitalPaid);
@@ -377,7 +380,7 @@ export const useAppData = (
         const newPaymentRecord: PaymentRecord = {
             id: Date.now().toString(),
             date: date,
-            amount: amount,
+            amount: numericAmount,
             interestPaid: interestPaid,
             capitalPaid: capitalPaid,
             remainingCapitalAfter: newRemainingCapital,
@@ -402,34 +405,35 @@ export const useAppData = (
             // 2. Actualizar Tesorería (Automáticamente)
             try {
                 const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+                let currentBank = 0;
+                let currentCash = 0;
+                let currentBankName = 'Banco';
+
                 if (treasuryDoc) {
-                    let { bankBalance, cashBalance } = treasuryDoc as any;
-                    // Asegurar valores numéricos
-                    bankBalance = Number(bankBalance) || 0;
-                    cashBalance = Number(cashBalance) || 0;
-
-                    if (paymentMethod === 'Banco') {
-                        bankBalance += amount;
-                    } else {
-                        cashBalance += amount;
-                    }
-
-                    await updateDocument(TABLE_NAMES.TREASURY, 'main', { bankBalance, cashBalance });
-                } else {
-                    // Si no existe, crear con el primer pago
-                    const initialData = {
-                        bankName: 'Banco',
-                        bankBalance: paymentMethod === 'Banco' ? amount : 0,
-                        cashBalance: paymentMethod === 'Efectivo' ? amount : 0
-                    };
-                    await setDocument(TABLE_NAMES.TREASURY, 'main', initialData);
+                    const data = treasuryDoc as any;
+                    currentBank = Number(data.bankBalance) || 0;
+                    currentCash = Number(data.cashBalance) || 0;
+                    currentBankName = data.bankName || 'Banco';
                 }
+
+                if (paymentMethod === 'Banco') {
+                    currentBank += numericAmount;
+                } else {
+                    currentCash += numericAmount; // Por defecto a efectivo si no es Banco
+                }
+
+                // Usamos setDocument con merge: true para asegurar que se guarde correctamente
+                await setDocument(TABLE_NAMES.TREASURY, 'main', { 
+                    bankName: currentBankName,
+                    bankBalance: currentBank, 
+                    cashBalance: currentCash 
+                });
             } catch (treasuryError) {
                 console.error("Error actualizando tesorería automática:", treasuryError);
-                // No lanzamos error para no bloquear la confirmación visual del pago, pero logueamos
+                showToast("El pago se registró, pero hubo un error actualizando el saldo de la caja.", "error");
             }
 
-            showToast(getSuccessMessage(`Pago (${paymentMethod}) registrado y tesorería actualizada.`), 'success');
+            showToast(getSuccessMessage(`Pago de ${numericAmount.toFixed(2)}€ (${paymentMethod}) registrado exitosamente.`), 'success');
         } catch (err: any) {
             console.error("Error updating loan payment:", err);
             showToast(`Error: ${err.message}`, 'error');
