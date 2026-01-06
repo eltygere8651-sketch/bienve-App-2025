@@ -34,11 +34,11 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, view, currentView, onCli
                         {React.cloneElement(icon as React.ReactElement, { size: 22 })} 
                     </span>
                     
-                    {/* Allow wrapping by removing whitespace-nowrap when open. Added leading-tight for multi-line aesthetics. */}
+                    {/* Ensure full visibility with wrapping */}
                     <span 
-                        className={`ml-3 font-medium text-sm transition-all duration-300 origin-left leading-tight
+                        className={`ml-3 font-medium text-sm transition-all duration-300 origin-left leading-tight break-words
                         ${isSidebarOpen 
-                            ? 'opacity-100 w-auto translate-x-0' 
+                            ? 'opacity-100 w-auto translate-x-0 whitespace-normal' 
                             : 'opacity-0 w-0 -translate-x-4 overflow-hidden absolute whitespace-nowrap' 
                         }`}
                     >

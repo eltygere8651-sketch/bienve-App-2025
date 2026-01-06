@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { ReceiptText, Download, Calculator, AlertCircle, Info, Loader2, ArrowRight, Banknote, CreditCard } from 'lucide-react';
+import { ReceiptText, Download, Calculator, AlertCircle, Info, Loader2, ArrowRight, Banknote, CreditCard, Eye, EyeOff } from 'lucide-react';
 import { generatePaymentReceipt } from '../services/pdfService';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 import { useAppContext } from '../contexts/AppContext';
@@ -20,6 +20,7 @@ const ReceiptGenerator: React.FC = () => {
     const [notes, setNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Banco'>('Efectivo');
+    const [showBreakdown, setShowBreakdown] = useState(true); // Control de visibilidad del desglose
     
     // Manual overrides
     const [manualClientName, setManualClientName] = useState('');
@@ -84,6 +85,7 @@ const ReceiptGenerator: React.FC = () => {
         setManualClientName('');
         setManualPreviousBalance('');
         setPaymentMethod('Efectivo');
+        setShowBreakdown(true);
         signaturePadRef.current?.clear();
     };
 
@@ -117,17 +119,19 @@ const ReceiptGenerator: React.FC = () => {
                 );
             }
 
+            // Aquí se aplica la lógica del switch:
+            // Si showBreakdown es FALSE, enviamos undefined para que pdfService NO pinte las filas de interés/capital.
             generatePaymentReceipt({
                 clientName: clientName,
                 loanId: loanIdRef,
                 paymentAmount: parseFloat(paymentAmount),
-                paymentType: `${paymentDescription} (${paymentMethod})`, // Include method in PDF
+                paymentType: `${paymentDescription} (${paymentMethod})`, 
                 paymentDate: paymentDate,
                 notes: finalNotes,
                 previousBalance: calculations.previousBalance,
                 newBalance: calculations.newBalance,
-                interestPaid: calculations.interestPart,
-                capitalPaid: calculations.capitalPart
+                interestPaid: showBreakdown ? calculations.interestPart : undefined,
+                capitalPaid: showBreakdown ? calculations.capitalPart : undefined
             }, signatureImage);
 
             showToast('Recibo generado y pago registrado correctamente.', 'success');
@@ -233,21 +237,38 @@ const ReceiptGenerator: React.FC = () => {
 
                 {(selectedLoan || (selectedLoanId === 'manual' && manualPreviousBalance)) && paymentAmount && (
                     <div className={`p-4 rounded-xl border space-y-3 animate-fade-in ${calculations.capitalPart > 0 ? 'bg-green-900/20 border-green-500/30' : 'bg-red-900/20 border-red-500/30'}`}>
-                        <div className="flex items-center gap-2 mb-2">
-                            <Calculator size={18} className="text-primary-400" />
-                            <h3 className="font-bold text-slate-200">Distribución del Pago (8% Mensual Fijo)</h3>
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-2">
+                            <div className="flex items-center gap-2">
+                                <Calculator size={18} className="text-primary-400" />
+                                <h3 className="font-bold text-slate-200">Distribución del Pago (8% Mensual)</h3>
+                            </div>
+                            
+                            {/* Switch Mostrar/Ocultar Desglose */}
+                            <button
+                                type="button"
+                                onClick={() => setShowBreakdown(!showBreakdown)}
+                                className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${
+                                    showBreakdown 
+                                        ? 'bg-primary-600/20 text-primary-300 border-primary-500/50 hover:bg-primary-600/30' 
+                                        : 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600'
+                                }`}
+                                title={showBreakdown ? 'Se mostrará el desglose detallado en el recibo PDF' : 'Solo se mostrará el total en el recibo PDF'}
+                            >
+                                {showBreakdown ? <Eye size={14} /> : <EyeOff size={14} />}
+                                {showBreakdown ? 'Desglose Visible en Recibo' : 'Desglose Oculto en Recibo'}
+                            </button>
                         </div>
 
                         <div className="flex flex-col sm:flex-row gap-4 items-center justify-between text-sm">
                              <div className="text-center w-full">
                                  <p className="text-slate-400 text-xs uppercase mb-1">Interés Mensual</p>
                                  <p className="text-amber-400 font-bold text-xl">{formatCurrency(calculations.interestDue)}</p>
-                                 <div className="text-xs text-slate-500 mt-1">Obligatorio</div>
+                                 <div className="text-xs text-slate-500 mt-1">Devengado</div>
                              </div>
                              
                              <ArrowRight className="hidden sm:block text-slate-600" />
 
-                             <div className="text-center w-full bg-slate-800/50 p-2 rounded-lg">
+                             <div className={`text-center w-full p-2 rounded-lg transition-all ${showBreakdown ? 'bg-slate-800/50' : 'bg-slate-800/20 opacity-60'}`}>
                                  {calculations.capitalPart > 0 ? (
                                      <>
                                          <p className="text-green-400 font-bold text-sm flex items-center justify-center gap-1">
@@ -258,9 +279,9 @@ const ReceiptGenerator: React.FC = () => {
                                  ) : (
                                      <>
                                          <p className="text-red-400 font-bold text-sm flex items-center justify-center gap-1">
-                                             <AlertCircle size={12}/> No Amortiza
+                                             <AlertCircle size={12}/> Solo Interés
                                          </p>
-                                         <p className="text-slate-400 text-xs">Pago insuficiente para cubrir interés.</p>
+                                         <p className="text-slate-400 text-xs">No cubre cuota total.</p>
                                      </>
                                  )}
                              </div>
@@ -274,6 +295,13 @@ const ReceiptGenerator: React.FC = () => {
                                  </p>
                              </div>
                         </div>
+                        
+                        {!showBreakdown && (
+                            <div className="text-xs text-center text-slate-500 italic bg-slate-900/30 p-2 rounded border border-slate-700/50 flex items-center justify-center gap-2">
+                                <EyeOff size={12} />
+                                <span>El PDF generado ocultará el desglose de cuánto va a capital vs interés.</span>
+                            </div>
+                        )}
                     </div>
                 )}
 

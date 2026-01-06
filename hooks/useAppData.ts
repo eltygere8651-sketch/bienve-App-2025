@@ -358,6 +358,9 @@ export const useAppData = (
         const loan = activeLoans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan || loan.status === LoanStatus.PAID) return;
         
+        // CHECK FOR TEST CLIENT TO AVOID TREASURY UPDATE
+        const isTestClient = loan.clientName.toLowerCase().includes('prueba') || loan.clientName.toLowerCase().includes('test');
+
         const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
 
         let interestPaid = 0;
@@ -402,38 +405,42 @@ export const useAppData = (
                 lastPaymentDate: date
             });
 
-            // 2. Actualizar Tesorería (Automáticamente)
-            try {
-                const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
-                let currentBank = 0;
-                let currentCash = 0;
-                let currentBankName = 'Banco';
+            // 2. Actualizar Tesorería (Automáticamente) - EXCLUYENDO CLIENTES DE PRUEBA
+            if (!isTestClient) {
+                try {
+                    const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+                    let currentBank = 0;
+                    let currentCash = 0;
+                    let currentBankName = 'Banco';
 
-                if (treasuryDoc) {
-                    const data = treasuryDoc as any;
-                    currentBank = Number(data.bankBalance) || 0;
-                    currentCash = Number(data.cashBalance) || 0;
-                    currentBankName = data.bankName || 'Banco';
+                    if (treasuryDoc) {
+                        const data = treasuryDoc as any;
+                        currentBank = Number(data.bankBalance) || 0;
+                        currentCash = Number(data.cashBalance) || 0;
+                        currentBankName = data.bankName || 'Banco';
+                    }
+
+                    if (paymentMethod === 'Banco') {
+                        currentBank += numericAmount;
+                    } else {
+                        currentCash += numericAmount; // Por defecto a efectivo si no es Banco
+                    }
+
+                    // Usamos setDocument con merge: true para asegurar que se guarde correctamente
+                    await setDocument(TABLE_NAMES.TREASURY, 'main', { 
+                        bankName: currentBankName,
+                        bankBalance: currentBank, 
+                        cashBalance: currentCash 
+                    });
+                } catch (treasuryError) {
+                    console.error("Error actualizando tesorería automática:", treasuryError);
+                    showToast("El pago se registró, pero hubo un error actualizando el saldo de la caja.", "error");
                 }
-
-                if (paymentMethod === 'Banco') {
-                    currentBank += numericAmount;
-                } else {
-                    currentCash += numericAmount; // Por defecto a efectivo si no es Banco
-                }
-
-                // Usamos setDocument con merge: true para asegurar que se guarde correctamente
-                await setDocument(TABLE_NAMES.TREASURY, 'main', { 
-                    bankName: currentBankName,
-                    bankBalance: currentBank, 
-                    cashBalance: currentCash 
-                });
-            } catch (treasuryError) {
-                console.error("Error actualizando tesorería automática:", treasuryError);
-                showToast("El pago se registró, pero hubo un error actualizando el saldo de la caja.", "error");
+                showToast(getSuccessMessage(`Pago de ${numericAmount.toFixed(2)}€ (${paymentMethod}) registrado exitosamente.`), 'success');
+            } else {
+                showToast(getSuccessMessage(`Pago registrado (Modo Prueba: No afecta caja).`), 'info');
             }
 
-            showToast(getSuccessMessage(`Pago de ${numericAmount.toFixed(2)}€ (${paymentMethod}) registrado exitosamente.`), 'success');
         } catch (err: any) {
             console.error("Error updating loan payment:", err);
             showToast(`Error: ${err.message}`, 'error');
@@ -633,7 +640,7 @@ export const useAppData = (
     const handleDeleteLoan = useCallback(async (loanId: string, clientName: string) => {
         try {
             await deleteDocument(TABLE_NAMES.LOANS, loanId);
-            showToast(getSuccessMessage(`Préstamo eliminado.`), 'success');
+            showToast(getSuccessMessage(`Préstamo eliminado permanentemente.`), 'success');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;

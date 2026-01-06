@@ -680,7 +680,14 @@ const Accounting: React.FC = () => {
         }
     };
 
-    const allLoans = useMemo(() => [...loans, ...archivedLoans], [loans, archivedLoans]);
+    // Filter ALL LOANS to EXCLUDE test clients from accounting stats
+    const allLoans = useMemo(() => {
+        const raw = [...loans, ...archivedLoans];
+        return raw.filter(l => {
+            const name = l.clientName.toLowerCase();
+            return !name.includes('prueba') && !name.includes('test');
+        });
+    }, [loans, archivedLoans]);
 
     const stats = useMemo(() => {
         const now = new Date();
@@ -799,7 +806,12 @@ const Accounting: React.FC = () => {
                         <PieIcon className="text-primary-400" size={32} />
                         Contabilidad
                     </h1>
-                    <p className="text-slate-400 mt-1">Análisis financiero y gestión de utilidades.</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
+                        <p className="text-slate-400">Análisis financiero y gestión de utilidades.</p>
+                        <span className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20 font-bold self-start sm:self-auto">
+                            Excluye Clientes de Prueba
+                        </span>
+                    </div>
                 </div>
                 
                 <div className="flex gap-2">
@@ -1034,7 +1046,7 @@ const Accounting: React.FC = () => {
                             <h3 className="text-lg font-bold text-white">Desglose de Cartera Activa</h3>
                             <div className="flex items-center gap-2 text-xs text-slate-400">
                                 <Info size={14} />
-                                <span>Datos en tiempo real</span>
+                                <span>Datos en tiempo real (Filtrados)</span>
                             </div>
                         </div>
                         
