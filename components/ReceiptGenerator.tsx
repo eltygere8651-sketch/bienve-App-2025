@@ -101,9 +101,15 @@ const ReceiptGenerator: React.FC = () => {
 
             // Determinar tipo de pago
             let paymentDescription = 'Abono General';
+            
             if (calculations.capitalPart > 0 && calculations.interestPart > 0) paymentDescription = 'Interés + Abono a Capital';
             else if (calculations.capitalPart > 0 && calculations.interestPart === 0) paymentDescription = 'Abono Directo a Capital';
             else paymentDescription = 'Pago Parcial de Intereses';
+
+            // OVERRIDE: Si el desglose está oculto, forzamos el texto "Abono a Capital"
+            if (!showBreakdown) {
+                paymentDescription = 'Abono a Capital';
+            }
 
             const finalNotes = selectedLoanId === 'manual' 
                 ? `${notes ? notes + '. ' : ''}Cálculo manual (8%): Interés ${formatCurrency(calculations.interestPart)}, Capital ${formatCurrency(calculations.capitalPart)}.`
@@ -297,9 +303,12 @@ const ReceiptGenerator: React.FC = () => {
                         </div>
                         
                         {!showBreakdown && (
-                            <div className="text-xs text-center text-slate-500 italic bg-slate-900/30 p-2 rounded border border-slate-700/50 flex items-center justify-center gap-2">
-                                <EyeOff size={12} />
-                                <span>El PDF generado ocultará el desglose de cuánto va a capital vs interés.</span>
+                            <div className="text-xs text-center text-slate-500 italic bg-slate-900/30 p-2 rounded border border-slate-700/50 flex flex-col items-center justify-center gap-1">
+                                <div className="flex items-center gap-2">
+                                    <EyeOff size={12} />
+                                    <span>El recibo PDF ocultará el interés y dirá "Abono a Capital".</span>
+                                </div>
+                                <span className="text-[10px] opacity-70">(La contabilidad interna se mantiene correcta)</span>
                             </div>
                         )}
                     </div>
