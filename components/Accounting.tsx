@@ -7,8 +7,8 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, ChevronRight, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3 } from 'lucide-react';
-import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument, getDocument } from '../services/firebaseService';
+import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 
 // --- COMPONENTS ---
@@ -638,7 +638,7 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
 };
 
 const Accounting: React.FC = () => {
-    const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded } = useDataContext();
+    const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded, recalculateTreasury } = useDataContext(); // Added recalculateTreasury
     const { showToast } = useAppContext();
     const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal'>('global');
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -680,6 +680,13 @@ const Accounting: React.FC = () => {
         }
     };
 
+    const handleRecalculate = async () => {
+        if(confirm("Esta acción escaneará todo el historial de préstamos (excluyendo clientes de prueba) y reescribirá el saldo actual con la suma exacta. ¿Continuar?")) {
+            await recalculateTreasury();
+            setIsEditingTreasury(false);
+        }
+    };
+
     // Filter ALL LOANS to EXCLUDE test clients from accounting stats
     const allLoans = useMemo(() => {
         const raw = [...loans, ...archivedLoans];
@@ -702,6 +709,10 @@ const Accounting: React.FC = () => {
         let periodInterestEarned = 0; // Flow (Filtered)
         let forecastedMonthlyIncome = 0;
 
+        // Cumulative Historical Totals (For Ratio Calculation)
+        let historicalTotalCapitalRecovered = 0;
+        let historicalTotalInterestEarned = 0;
+
         // 1. Snapshot Metrics (Always Total Active)
         allLoans.forEach(loan => {
             if (!loan.archived) {
@@ -716,6 +727,14 @@ const Accounting: React.FC = () => {
             }
             // Invested is always total historical for context
             totalInvested += (loan.initialCapital || loan.amount);
+            
+            // Calculate Historical Totals for Ratio
+            if (loan.paymentHistory) {
+                loan.paymentHistory.forEach(payment => {
+                    historicalTotalCapitalRecovered += payment.capitalPaid;
+                    historicalTotalInterestEarned += payment.interestPaid;
+                });
+            }
         });
 
         // 2. Flow Metrics (Filtered by Date)
@@ -739,6 +758,12 @@ const Accounting: React.FC = () => {
 
         const defaultRate = currentOutstanding > 0 ? (overdueAmount / currentOutstanding) * 100 : 0;
 
+        // Calculate Ratio based on filtered (or historical if filter is all)
+        // Using historical totals gives a better "average behavior" of the portfolio
+        const totalInflow = historicalTotalCapitalRecovered + historicalTotalInterestEarned;
+        const profitRatio = totalInflow > 0 ? (historicalTotalInterestEarned / totalInflow) : 0;
+        const capitalRatio = totalInflow > 0 ? (historicalTotalCapitalRecovered / totalInflow) : 1;
+
         return {
             totalInvested,
             periodRecoveredCapital,
@@ -746,7 +771,9 @@ const Accounting: React.FC = () => {
             currentOutstanding,
             forecastedMonthlyIncome,
             overdueAmount,
-            defaultRate
+            defaultRate,
+            profitRatio,
+            capitalRatio
         };
     }, [allLoans, timeRange]);
 
@@ -781,9 +808,9 @@ const Accounting: React.FC = () => {
 
     // Data for Pie Chart
     const distributionData = [
-        { name: 'Recuperado (Periodo)', value: stats.periodRecoveredCapital, color: '#3b82f6' }, 
-        { name: 'Ganancia (Periodo)', value: stats.periodInterestEarned, color: '#10b981' }, 
-        { name: 'Pendiente (Total)', value: stats.currentOutstanding, color: '#ef4444' }, 
+        { name: 'Capital Retornado', value: stats.periodRecoveredCapital, color: '#3b82f6' }, 
+        { name: 'Interés Ganado', value: stats.periodInterestEarned, color: '#10b981' }, 
+        { name: 'Pendiente (Deuda)', value: stats.currentOutstanding, color: '#ef4444' }, 
     ];
 
     const handleLoadFullHistory = async () => {
@@ -797,6 +824,10 @@ const Accounting: React.FC = () => {
         if (timeRange === 'year') return 'Este Año';
         return 'Histórico Total';
     }
+
+    const currentTotalTreasury = treasurySettings.bankBalance + treasurySettings.cashBalance;
+    const estimatedProfitInTreasury = currentTotalTreasury * stats.profitRatio;
+    const estimatedCapitalInTreasury = currentTotalTreasury * stats.capitalRatio;
 
     return (
         <div className="space-y-8 animate-fade-in pb-10">
@@ -880,16 +911,16 @@ const Accounting: React.FC = () => {
                     {/* KPI Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                         <KPICard 
-                            title={`Ingreso (${getFilterLabel()})`}
+                            title={`Interés Ganado (${getFilterLabel()})`}
                             value={formatCurrency(stats.periodInterestEarned)} 
-                            subtext="Ganancia neta cobrada"
+                            subtext="Beneficio Bruto (Real)"
                             icon={TrendingUp} 
                             color="emerald" 
                         />
                         <KPICard 
-                            title={`Recuperado (${getFilterLabel()})`}
+                            title={`Capital Retornado (${getFilterLabel()})`}
                             value={formatCurrency(stats.periodRecoveredCapital)} 
-                            subtext="Capital retornado a caja"
+                            subtext="Dinero Recuperado (No Gastar)"
                             icon={Wallet} 
                             color="blue" 
                         />
@@ -942,34 +973,79 @@ const Accounting: React.FC = () => {
                                         <input type="number" value={treasurySettings.cashBalance} onChange={e => setTreasurySettings({...treasurySettings, cashBalance: parseFloat(e.target.value) || 0})} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
                                     </div>
                                 </div>
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => setIsEditingTreasury(false)} className="px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-white">Cancelar</button>
-                                    <button onClick={handleUpdateTreasury} className="px-4 py-1.5 bg-primary-600 text-white text-xs font-bold rounded-lg hover:bg-primary-500">Guardar Cambios</button>
+                                <div className="flex flex-col sm:flex-row justify-between gap-4 border-t border-slate-700 pt-3">
+                                    <button 
+                                        onClick={handleRecalculate}
+                                        className="px-4 py-1.5 bg-blue-600/20 text-blue-300 border border-blue-500/30 text-xs font-bold rounded-lg hover:bg-blue-600/30 flex items-center gap-2"
+                                    >
+                                        <RefreshCw size={14} /> Auditar y Recalcular Saldos
+                                    </button>
+                                    <div className="flex gap-2 justify-end">
+                                        <button onClick={() => setIsEditingTreasury(false)} className="px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-white">Cancelar</button>
+                                        <button onClick={handleUpdateTreasury} className="px-4 py-1.5 bg-primary-600 text-white text-xs font-bold rounded-lg hover:bg-primary-500">Guardar Cambios</button>
+                                    </div>
                                 </div>
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-xl flex items-center gap-4">
-                                <div className="p-3 bg-emerald-500/20 rounded-full text-emerald-400">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                            <div className="bg-slate-900/30 border border-slate-700 p-4 rounded-xl flex items-center gap-4">
+                                <div className="p-3 bg-slate-800 rounded-full text-slate-400">
                                     <Banknote size={24} />
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-400 uppercase font-bold">Disponible en Efectivo</p>
-                                    <p className="text-xl font-bold text-emerald-400">{formatCurrency(treasurySettings.cashBalance)}</p>
-                                    <p className="text-xs text-slate-500">En Caja</p>
+                                    <p className="text-xl font-bold text-white">{formatCurrency(treasurySettings.cashBalance)}</p>
                                 </div>
                             </div>
-                            <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl flex items-center gap-4">
-                                <div className="p-3 bg-blue-500/20 rounded-full text-blue-400">
+                            <div className="bg-slate-900/30 border border-slate-700 p-4 rounded-xl flex items-center gap-4">
+                                <div className="p-3 bg-slate-800 rounded-full text-slate-400">
                                     <CreditCard size={24} />
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-400 uppercase font-bold">Disponible en {treasurySettings.bankName || 'Banco'}</p>
-                                    <p className="text-xl font-bold text-blue-400">{formatCurrency(treasurySettings.bankBalance)}</p>
-                                    <p className="text-xs text-slate-500">En Cuenta</p>
+                                    <p className="text-xl font-bold text-white">{formatCurrency(treasurySettings.bankBalance)}</p>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Treasury Breakdown Logic */}
+                        <div className="bg-black/20 rounded-xl p-4 border border-slate-700/50">
+                            <div className="flex justify-between items-end mb-2">
+                                <h4 className="text-sm font-bold text-slate-300">Composición Estimada del Flujo de Caja</h4>
+                                <div className="text-right">
+                                    <p className="text-[10px] text-slate-500 uppercase">Liquidez Total</p>
+                                    <p className="text-lg font-bold text-white">{formatCurrency(currentTotalTreasury)}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex h-3 w-full rounded-full overflow-hidden mb-3">
+                                <div style={{ width: `${stats.capitalRatio * 100}%` }} className="bg-blue-500" title="Capital"></div>
+                                <div style={{ width: `${stats.profitRatio * 100}%` }} className="bg-emerald-500" title="Ganancia"></div>
+                            </div>
+
+                            <div className="flex justify-between gap-4">
+                                <div className="flex-1 bg-blue-900/20 p-3 rounded-lg border border-blue-500/20">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                        <p className="text-xs text-blue-300 font-bold uppercase">Capital Operativo</p>
+                                    </div>
+                                    <p className="text-lg font-bold text-white">{formatCurrency(estimatedCapitalInTreasury)}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">Dinero para prestar (No gastar)</p>
+                                </div>
+                                
+                                <div className="flex-1 bg-emerald-900/20 p-3 rounded-lg border border-emerald-500/20">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                        <p className="text-xs text-emerald-300 font-bold uppercase">Beneficio Neto</p>
+                                    </div>
+                                    <p className="text-lg font-bold text-white">{formatCurrency(estimatedProfitInTreasury)}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">Disponible para retiro</p>
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-3 text-center italic">
+                                * Estimación basada en el ratio histórico de tu cartera ({stats.capitalRatio.toFixed(2) * 100}% capital / {stats.profitRatio.toFixed(2) * 100}% interés).
+                            </p>
                         </div>
                     </div>
 
@@ -993,7 +1069,7 @@ const Accounting: React.FC = () => {
                                             formatter={(value: number) => formatCurrency(value)}
                                         />
                                         <Legend wrapperStyle={{fontSize: '12px', paddingTop: '10px'}}/>
-                                        <Bar dataKey="capital" name="Capital Amortizado" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
+                                        <Bar dataKey="capital" name="Capital Retornado" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
                                         <Bar dataKey="interes" name="Interés (Ganancia)" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
                                     </BarChart>
                                 </ResponsiveContainer>
@@ -1064,8 +1140,8 @@ const Accounting: React.FC = () => {
                                                 </div>
                                             </div>
                                             <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
-                                                loan.status === 'Pagado' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
-                                                loan.status === 'Vencido' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                                loan.status === 'Pagado' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                                                loan.status === 'Vencido' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
                                                 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
                                             }`}>
                                                 {loan.status}

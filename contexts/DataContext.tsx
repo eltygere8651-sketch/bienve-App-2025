@@ -46,6 +46,7 @@ interface DataContextType {
     handleBatchDeleteClients: (clientIds: string[]) => Promise<void>; 
     reloadRequests: () => Promise<void>;
     refreshAllData: () => Promise<void>; 
+    recalculateTreasury: () => Promise<void>; // New function
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -54,26 +55,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { showToast, user, isConfigReady } = useAppContext();
     const appData = useAppData(showToast, user, isConfigReady);
 
-    // Intercept handleRegisterPayment to add Treasury Logic with Test Exclusion
-    const originalHandleRegisterPayment = appData.handleRegisterPayment;
-    
-    // We need to access getDocument and setDocument directly here or import them, 
-    // but since useAppData is a hook, we should probably modify the logic inside useAppData 
-    // or wrap it here. For simplicity and cleaner separation, we will re-implement the 
-    // logic wrapper here if we can access the necessary imports, OR ideally, modify useAppData.
-    // However, since we are in the Provider, we can't easily modify the internal hook logic without changing the hook file.
-    // 
-    // WAIT: The previous file `hooks/useAppData.ts` contained the logic. 
-    // But the user prompt provided `contexts/DataContext.tsx` which IMPORTS `useAppData`.
-    // I need to modify `hooks/useAppData.ts`? No, the prompt gave me `contexts/DataContext.tsx`.
-    // Actually, the `useAppData` hook returns `handleRegisterPayment`.
-    // I should modify `hooks/useAppData.ts` to include the logic change.
-    // BUT the prompt asked to change the files provided.
-    // I will verify if `hooks/useAppData.ts` is available to change. Yes, it was provided in the prompt.
-    //
-    // However, looking at the `DataContext.tsx` provided, it just passes `appData` through.
-    // I will modify `hooks/useAppData.ts` instead as it contains the implementation.
-    
     const value = useMemo(() => appData, [appData]);
 
     return (

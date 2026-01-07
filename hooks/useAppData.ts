@@ -259,6 +259,61 @@ export const useAppData = (
         // The effect will trigger re-sub
     }, []);
 
+    // --- RECALCULATE TREASURY FEATURE ---
+    const recalculateTreasury = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            showToast('Auditando todas las transacciones...', 'info');
+            
+            // 1. Fetch ALL loans (bypass pagination to get accurate sum)
+            const allLoansRaw = await getCollection(TABLE_NAMES.LOANS);
+            const allLoansParsed = allLoansRaw.map(mapLoanFromDB);
+
+            let calculatedBank = 0;
+            let calculatedCash = 0;
+            let excludedCount = 0;
+
+            // 2. Iterate and Sum
+            allLoansParsed.forEach(loan => {
+                // EXCLUDE TEST CLIENTS
+                const name = loan.clientName.toLowerCase();
+                if (name.includes('prueba') || name.includes('test')) {
+                    excludedCount++;
+                    return;
+                }
+
+                if (loan.paymentHistory && Array.isArray(loan.paymentHistory)) {
+                    loan.paymentHistory.forEach(payment => {
+                        const amount = Number(payment.amount) || 0;
+                        // Correction records (id starts with ADJ) usually have amount 0, but check just in case
+                        if (payment.paymentMethod === 'Banco') {
+                            calculatedBank += amount;
+                        } else {
+                            // Default to cash if undefined
+                            calculatedCash += amount;
+                        }
+                    });
+                }
+            });
+
+            // 3. Update Treasury Doc
+            await setDocument(TABLE_NAMES.TREASURY, 'main', {
+                bankBalance: calculatedBank,
+                cashBalance: calculatedCash,
+                lastAudit: new Date().toISOString()
+            });
+
+            showToast(`Tesorería Recalculada. Banco: ${calculatedBank.toFixed(2)}€, Efectivo: ${calculatedCash.toFixed(2)}€. (Se excluyeron ${excludedCount} préstamos de prueba)`, 'success');
+
+        } catch (err: any) {
+            console.error("Error recalculating treasury:", err);
+            showToast(`Error al recalcular: ${err.message}`, 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [showToast]);
+
+
     const handleLoanRequestSubmit = useCallback(async (requestData: Omit<LoanRequest, 'id' | 'requestDate' | 'status' | 'frontIdUrl' | 'backIdUrl'>, files: { frontId: string, backId: string }) => {
         try {
             const newRequest = {
@@ -420,17 +475,18 @@ export const useAppData = (
                         currentBankName = data.bankName || 'Banco';
                     }
 
+                    // Force number typing to avoid concatenation issues
                     if (paymentMethod === 'Banco') {
                         currentBank += numericAmount;
                     } else {
-                        currentCash += numericAmount; // Por defecto a efectivo si no es Banco
+                        currentCash += numericAmount; 
                     }
 
                     // Usamos setDocument con merge: true para asegurar que se guarde correctamente
                     await setDocument(TABLE_NAMES.TREASURY, 'main', { 
                         bankName: currentBankName,
-                        bankBalance: currentBank, 
-                        cashBalance: currentCash 
+                        bankBalance: Number(currentBank), 
+                        cashBalance: Number(currentCash) 
                     });
                 } catch (treasuryError) {
                     console.error("Error actualizando tesorería automática:", treasuryError);
@@ -845,6 +901,7 @@ export const useAppData = (
         handleRestoreClient,
         handleBatchDeleteClients,
         reloadRequests,
-        refreshAllData 
+        refreshAllData,
+        recalculateTreasury 
     };
 };
