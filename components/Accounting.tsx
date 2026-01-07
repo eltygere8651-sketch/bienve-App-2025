@@ -7,7 +7,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 
@@ -731,8 +731,8 @@ const Accounting: React.FC = () => {
             // Calculate Historical Totals for Ratio
             if (loan.paymentHistory) {
                 loan.paymentHistory.forEach(payment => {
-                    historicalTotalCapitalRecovered += payment.capitalPaid;
-                    historicalTotalInterestEarned += payment.interestPaid;
+                    historicalTotalCapitalRecovered += Number(payment.capitalPaid || 0);
+                    historicalTotalInterestEarned += Number(payment.interestPaid || 0);
                 });
             }
         });
@@ -749,8 +749,8 @@ const Accounting: React.FC = () => {
                     else if (timeRange === 'month') include = payDate.getMonth() === currentMonth && payDate.getFullYear() === currentYear;
 
                     if (include) {
-                        periodRecoveredCapital += payment.capitalPaid;
-                        periodInterestEarned += payment.interestPaid;
+                        periodRecoveredCapital += Number(payment.capitalPaid || 0);
+                        periodInterestEarned += Number(payment.interestPaid || 0);
                     }
                 });
             }
@@ -764,6 +764,10 @@ const Accounting: React.FC = () => {
         const profitRatio = totalInflow > 0 ? (historicalTotalInterestEarned / totalInflow) : 0;
         const capitalRatio = totalInflow > 0 ? (historicalTotalCapitalRecovered / totalInflow) : 1;
 
+        // ROI Check for visual feedback in Treasury
+        const netPosition = totalInflow - totalInvested;
+        const isBreakEvenReached = netPosition >= 0;
+
         return {
             totalInvested,
             periodRecoveredCapital,
@@ -773,7 +777,8 @@ const Accounting: React.FC = () => {
             overdueAmount,
             defaultRate,
             profitRatio,
-            capitalRatio
+            capitalRatio,
+            isBreakEvenReached
         };
     }, [allLoans, timeRange]);
 
@@ -793,9 +798,9 @@ const Accounting: React.FC = () => {
                     if (!data[key]) {
                         data[key] = { name: label, capital: 0, interes: 0, total: 0 };
                     }
-                    data[key].capital += payment.capitalPaid;
-                    data[key].interes += payment.interestPaid;
-                    data[key].total += payment.amount;
+                    data[key].capital += Number(payment.capitalPaid || 0);
+                    data[key].interes += Number(payment.interestPaid || 0);
+                    data[key].total += Number(payment.amount || 0);
                 });
             }
         });
@@ -828,6 +833,9 @@ const Accounting: React.FC = () => {
     const currentTotalTreasury = treasurySettings.bankBalance + treasurySettings.cashBalance;
     const estimatedProfitInTreasury = currentTotalTreasury * stats.profitRatio;
     const estimatedCapitalInTreasury = currentTotalTreasury * stats.capitalRatio;
+    
+    // NEW: Calculate Total Collected for Hero Card
+    const totalCollected = stats.periodRecoveredCapital + stats.periodInterestEarned;
 
     return (
         <div className="space-y-8 animate-fade-in pb-10">
@@ -900,14 +908,37 @@ const Accounting: React.FC = () => {
             {activeTab === 'profits' && (
                 <ProfitsCalculator 
                     totalInvested={stats.totalInvested} // Always Total for ROI calc
-                    totalRecoveredCapital={allLoans.reduce((acc, l) => acc + (l.totalCapitalPaid || 0), 0)} // Total
-                    totalInterestEarned={allLoans.reduce((acc, l) => acc + (l.totalInterestPaid || 0), 0)} // Total
+                    totalRecoveredCapital={allLoans.reduce((acc, l) => acc + Number(l.totalCapitalPaid || 0), 0)} // Total
+                    totalInterestEarned={allLoans.reduce((acc, l) => acc + Number(l.totalInterestPaid || 0), 0)} // Total
                     overdueAmount={stats.overdueAmount} // Current Snapshot
                 />
             )}
 
             {activeTab === 'global' && (
                 <>
+                    {/* NEW: Summary Hero Card */}
+                    <div className="bg-gradient-to-r from-blue-900/20 to-indigo-900/20 border border-blue-500/30 p-6 rounded-2xl mb-6 relative overflow-hidden flex items-center justify-between shadow-xl">
+                        <div className="relative z-10">
+                            <p className="text-blue-200 font-bold uppercase text-xs tracking-wider mb-2 flex items-center gap-2">
+                                <Sparkles size={14} className="text-blue-400"/>
+                                Ingreso Total ({getFilterLabel()})
+                            </p>
+                            <p className="text-4xl sm:text-5xl font-heading font-bold text-white tracking-tight">
+                                {formatCurrency(totalCollected)}
+                            </p>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-sm text-slate-400 mt-2">
+                                <div><span className="text-blue-400 font-bold">{formatCurrency(stats.periodInterestEarned)}</span> Interés</div>
+                                <span className="hidden sm:inline">+</span>
+                                <div><span className="text-indigo-400 font-bold">{formatCurrency(stats.periodRecoveredCapital)}</span> Capital</div>
+                            </div>
+                        </div>
+                        <div className="hidden sm:block p-4 bg-blue-600/10 rounded-full text-blue-400 border border-blue-500/20 relative z-10">
+                            <Banknote size={40} />
+                        </div>
+                        {/* Subtle background element */}
+                        <div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-blue-500/5 to-transparent pointer-events-none"></div>
+                    </div>
+
                     {/* KPI Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                         <KPICard 
@@ -1021,7 +1052,7 @@ const Accounting: React.FC = () => {
                             
                             <div className="flex h-3 w-full rounded-full overflow-hidden mb-3">
                                 <div style={{ width: `${stats.capitalRatio * 100}%` }} className="bg-blue-500" title="Capital"></div>
-                                <div style={{ width: `${stats.profitRatio * 100}%` }} className="bg-emerald-500" title="Ganancia"></div>
+                                <div style={{ width: `${stats.profitRatio * 100}%` }} className={stats.isBreakEvenReached ? "bg-emerald-500" : "bg-amber-500"} title="Ganancia"></div>
                             </div>
 
                             <div className="flex justify-between gap-4">
@@ -1034,13 +1065,17 @@ const Accounting: React.FC = () => {
                                     <p className="text-[10px] text-slate-400 mt-1">Dinero para prestar (No gastar)</p>
                                 </div>
                                 
-                                <div className="flex-1 bg-emerald-900/20 p-3 rounded-lg border border-emerald-500/20">
+                                <div className={`flex-1 p-3 rounded-lg border ${stats.isBreakEvenReached ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-amber-900/20 border-amber-500/20'}`}>
                                     <div className="flex items-center gap-2 mb-1">
-                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                                        <p className="text-xs text-emerald-300 font-bold uppercase">Beneficio Neto</p>
+                                        <div className={`w-2 h-2 rounded-full ${stats.isBreakEvenReached ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
+                                        <p className={`text-xs font-bold uppercase ${stats.isBreakEvenReached ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                            {stats.isBreakEvenReached ? 'Beneficio Neto' : 'Interés Generado'}
+                                        </p>
                                     </div>
                                     <p className="text-lg font-bold text-white">{formatCurrency(estimatedProfitInTreasury)}</p>
-                                    <p className="text-[10px] text-slate-400 mt-1">Disponible para retiro</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                        {stats.isBreakEvenReached ? 'Disponible para retiro' : 'Reinvertir (Recuperando Capital)'}
+                                    </p>
                                 </div>
                             </div>
                             <p className="text-[10px] text-slate-500 mt-3 text-center italic">
