@@ -42,7 +42,7 @@ interface DataContextType {
     handleArchiveClient: (clientId: string) => Promise<void>; 
     handleRestoreClient: (clientId: string) => Promise<void>; 
     handleBatchDeleteClients: (clientIds: string[]) => Promise<void>; 
-    handleRegisterReinvestment: (amount: number, source: 'Banco' | 'Efectivo', notes: string, date: string) => Promise<void>; // New
+    handleRegisterReinvestment: (amount: number, source: 'Banco' | 'Efectivo', notes: string, date: string, deductFromTreasury: boolean) => Promise<void>; // Updated
     handleDeleteReinvestment: (id: string) => Promise<void>; // New
     reloadRequests: () => Promise<void>;
     refreshAllData: () => Promise<void>; 

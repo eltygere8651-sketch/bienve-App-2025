@@ -7,7 +7,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History } from 'lucide-react';
+import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 import { ReinvestmentRecord } from '../types';
@@ -38,6 +38,7 @@ const ReinvestmentManager: React.FC = () => {
     const [source, setSource] = useState<'Banco' | 'Efectivo'>('Banco');
     const [notes, setNotes] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [deductFromTreasury, setDeductFromTreasury] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -47,10 +48,11 @@ const ReinvestmentManager: React.FC = () => {
 
         setIsSubmitting(true);
         try {
-            await handleRegisterReinvestment(val, source, notes, date);
+            await handleRegisterReinvestment(val, source, notes, date, deductFromTreasury);
             setAmount('');
             setNotes('');
             setSource('Banco');
+            setDeductFromTreasury(true);
         } finally {
             setIsSubmitting(false);
         }
@@ -65,7 +67,7 @@ const ReinvestmentManager: React.FC = () => {
                     Registrar Reinversión
                 </h3>
                 <p className="text-sm text-slate-400 mb-6">
-                    Registra el capital que has sacado de tus beneficios (intereses) para volver a prestarlo. Esto ajustará tu cálculo de "Dividendos Seguros".
+                    Registra el capital que has sacado de tus beneficios (intereses) para volver a prestarlo.
                 </p>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
@@ -109,6 +111,23 @@ const ReinvestmentManager: React.FC = () => {
                             required
                         />
                     </div>
+                    
+                    {/* Treasury Deduction Checkbox */}
+                    <div 
+                        onClick={() => setDeductFromTreasury(!deductFromTreasury)}
+                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-colors ${deductFromTreasury ? 'bg-blue-900/20 border-blue-500/30' : 'bg-slate-900 border-slate-600'}`}
+                    >
+                        <div className={`mt-0.5 rounded text-white ${deductFromTreasury ? 'text-blue-400' : 'text-slate-500'}`}>
+                            {deductFromTreasury ? <CheckSquare size={18} /> : <Square size={18} />}
+                        </div>
+                        <div>
+                            <p className={`text-sm font-bold ${deductFromTreasury ? 'text-blue-200' : 'text-slate-400'}`}>Descontar del Saldo Actual</p>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Marca esto si el dinero sale de la caja en este momento. Desmárcalo si ya lo descontaste al crear el préstamo.
+                            </p>
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notas (Opcional)</label>
                         <textarea 
@@ -929,6 +948,10 @@ const Accounting: React.FC = () => {
         const netPosition = totalInflow - totalInvested;
         const isBreakEvenReached = netPosition >= 0;
 
+        // Net Available Profit (Liquid Profit)
+        // This is purely for display: Interest Earned - Reinvested
+        const netAvailableProfit = Math.max(0, stats ? (stats.periodInterestEarned - totalReinvested) : 0);
+
         return {
             totalInvested,
             periodRecoveredCapital,
@@ -940,7 +963,8 @@ const Accounting: React.FC = () => {
             profitRatio,
             capitalRatio,
             isBreakEvenReached,
-            totalReinvested
+            totalReinvested,
+            netAvailableProfit
         };
     }, [allLoans, timeRange, reinvestments]);
 
@@ -993,6 +1017,8 @@ const Accounting: React.FC = () => {
     }
 
     const currentTotalTreasury = treasurySettings.bankBalance + treasurySettings.cashBalance;
+    // Calculate simple ratios for visual representation
+    // If reinvested is high, it eats into profit availability
     const estimatedProfitInTreasury = currentTotalTreasury * stats.profitRatio;
     const estimatedCapitalInTreasury = currentTotalTreasury * stats.capitalRatio;
     
@@ -1117,18 +1143,18 @@ const Accounting: React.FC = () => {
                     {/* KPI Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                         <KPICard 
-                            title={`Interés Ganado (${getFilterLabel()})`}
+                            title={`Interés Ganado`}
                             value={formatCurrency(stats.periodInterestEarned)} 
-                            subtext="Beneficio Bruto (Real)"
+                            subtext="Total Bruto Histórico"
                             icon={TrendingUp} 
                             color="emerald" 
                         />
                         <KPICard 
-                            title={`Capital Retornado (${getFilterLabel()})`}
-                            value={formatCurrency(stats.periodRecoveredCapital)} 
-                            subtext="Dinero Recuperado (No Gastar)"
-                            icon={Wallet} 
-                            color="blue" 
+                            title={`Beneficio Disponible`}
+                            value={formatCurrency(stats.periodInterestEarned - stats.totalReinvested)} 
+                            subtext="Ganancia Real (Líquida)"
+                            icon={Coins} 
+                            color="teal" 
                         />
                         <KPICard 
                             title="Tasa de Morosidad" 
