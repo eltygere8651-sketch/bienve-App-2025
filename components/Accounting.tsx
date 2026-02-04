@@ -950,7 +950,7 @@ const Accounting: React.FC = () => {
 
         // Net Available Profit (Liquid Profit)
         // This is purely for display: Interest Earned - Reinvested
-        const netAvailableProfit = Math.max(0, stats ? (stats.periodInterestEarned - totalReinvested) : 0);
+        const netAvailableProfit = Math.max(0, periodInterestEarned - totalReinvested);
 
         return {
             totalInvested,

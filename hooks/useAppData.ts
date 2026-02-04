@@ -95,9 +95,11 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             const currentLastDoc = reset ? null : lastArchivedLoanDoc;
             const pageSize = 20;
             
+            // NOTE: Removed orderBy('startDate', 'desc') to avoid "Requires Index" error.
+            // We only filter by 'archived' status. Pagination will follow default document order.
             const result = await getPaginatedCollection(
                 TABLE_NAMES.LOANS,
-                [where('archived', '==', true), orderBy('startDate', 'desc')],
+                [where('archived', '==', true)],
                 currentLastDoc,
                 pageSize
             );
@@ -118,15 +120,17 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
     const loadAllHistory = useCallback(async () => {
         if (!user) return;
         try {
-            // Warning: fetching all might be heavy
-            const allArchived = await getCollection(TABLE_NAMES.LOANS, [where('archived', '==', true), orderBy('startDate', 'desc')]);
-            setArchivedLoans(allArchived as Loan[]);
+            // Removed orderBy to avoid index error. Sorting client-side.
+            const allArchivedRaw = await getCollection(TABLE_NAMES.LOANS, [where('archived', '==', true)]);
+            const allArchived = (allArchivedRaw as Loan[]).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+            
+            setArchivedLoans(allArchived);
             setAllHistoryLoaded(true);
             setHasMoreArchivedLoans(false);
             showToast(`Historial completo cargado (${allArchived.length} registros).`, 'success');
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            showToast('Error cargando historial completo.', 'error');
+            showToast('Error cargando historial completo: ' + err.message, 'error');
         }
     }, [user, showToast]);
 
