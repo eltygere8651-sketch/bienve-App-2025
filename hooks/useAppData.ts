@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Client, Loan, LoanRequest, LoanStatus, RequestStatus, PaymentRecord } from '../types';
+import { Client, Loan, LoanRequest, LoanStatus, RequestStatus, PaymentRecord, NewClientData, NewLoanData } from '../types';
 import { User } from 'firebase/auth';
 import { 
     subscribeToCollection, 
@@ -41,7 +41,8 @@ const mapLoanFromDB = (l: any): Loan => ({
     paymentHistory: l.paymentHistory ?? [],
     totalInterestPaid: l.totalInterestPaid ?? 0,
     totalCapitalPaid: l.totalCapitalPaid ?? 0,
-    archived: l.archived ?? false
+    archived: l.archived ?? false,
+    fundingSource: l.fundingSource ?? 'Capital'
 });
 
 export const useAppData = (
@@ -273,9 +274,8 @@ export const useAppData = (
             let calculatedCash = 0;
             let excludedCount = 0;
 
-            // 2. Iterate and Sum
+            // 2. Iterate and Sum (Payments IN)
             allLoansParsed.forEach(loan => {
-                // EXCLUDE TEST CLIENTS
                 const name = loan.clientName.toLowerCase();
                 if (name.includes('prueba') || name.includes('test')) {
                     excludedCount++;
@@ -285,15 +285,24 @@ export const useAppData = (
                 if (loan.paymentHistory && Array.isArray(loan.paymentHistory)) {
                     loan.paymentHistory.forEach(payment => {
                         const amount = Number(payment.amount) || 0;
-                        // Correction records (id starts with ADJ) usually have amount 0, but check just in case
                         if (payment.paymentMethod === 'Banco') {
                             calculatedBank += amount;
                         } else {
-                            // Default to cash if undefined
                             calculatedCash += amount;
                         }
                     });
                 }
+            });
+
+            // 3. DEDUCT Loans OUT (When I lend money, it leaves the treasury)
+            // Assumption: Loans are always given in Cash unless we add a "Payout Method" field later.
+            // For now, let's assume loans reduce Cash balance primarily.
+            allLoansParsed.forEach(loan => {
+                const name = loan.clientName.toLowerCase();
+                if (name.includes('prueba') || name.includes('test')) return;
+
+                const loanPrincipal = Number(loan.initialCapital || loan.amount);
+                calculatedCash -= loanPrincipal;
             });
 
             // 3. Update Treasury Doc
@@ -374,9 +383,18 @@ export const useAppData = (
                 signature: request.signature,
                 contractPdfUrl: '',
                 notes: request.loanReason,
-                archived: false
+                archived: false,
+                fundingSource: 'Capital' // Default to Capital for approved requests
             };
             await addDocument(TABLE_NAMES.LOANS, newLoan);
+
+            // DEDUCT FROM TREASURY (Assume Cash for approvals for now)
+            try {
+                const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+                const data = treasuryDoc as any;
+                const currentCash = Number(data?.cashBalance || 0);
+                await setDocument(TABLE_NAMES.TREASURY, 'main', { cashBalance: currentCash - loanAmount });
+            } catch(e) { console.error("Treasury update failed", e); }
 
             await deleteDocument(TABLE_NAMES.REQUESTS, request.id);
             
@@ -421,7 +439,6 @@ export const useAppData = (
         let interestPaid = 0;
         let capitalPaid = 0;
 
-        // Aseguramos que amount sea número para evitar concatenaciones de strings
         const numericAmount = Number(amount);
 
         if (numericAmount <= interest) {
@@ -460,7 +477,7 @@ export const useAppData = (
                 lastPaymentDate: date
             });
 
-            // 2. Actualizar Tesorería (Automáticamente) - EXCLUYENDO CLIENTES DE PRUEBA
+            // 2. Actualizar Tesorería
             if (!isTestClient) {
                 try {
                     const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
@@ -475,14 +492,12 @@ export const useAppData = (
                         currentBankName = data.bankName || 'Banco';
                     }
 
-                    // Force number typing to avoid concatenation issues
                     if (paymentMethod === 'Banco') {
                         currentBank += numericAmount;
                     } else {
                         currentCash += numericAmount; 
                     }
 
-                    // Usamos setDocument con merge: true para asegurar que se guarde correctamente
                     await setDocument(TABLE_NAMES.TREASURY, 'main', { 
                         bankName: currentBankName,
                         bankBalance: Number(currentBank), 
@@ -590,7 +605,7 @@ export const useAppData = (
         }
     }, [activeLoans, archivedLoans, showToast]);
 
-    const handleAddClientAndLoan = useCallback(async (clientData: any, loanData: { amount: number; term: number }) => {
+    const handleAddClientAndLoan = useCallback(async (clientData: NewClientData, loanData: NewLoanData & { fundingSource?: 'Capital' | 'Reinvested' }) => {
         try {
             if (isNaN(loanData.amount) || loanData.amount <= 0) throw new Error("El monto del préstamo debe ser válido.");
             if (isNaN(loanData.term) || loanData.term < 0) throw new Error("El plazo del préstamo debe ser válido.");
@@ -630,10 +645,19 @@ export const useAppData = (
                  totalCapitalPaid: 0,
                  paymentHistory: [],
                  notes: 'Préstamo inicial',
-                 archived: false
+                 archived: false,
+                 fundingSource: loanData.fundingSource || 'Capital'
              });
 
-            showToast(getSuccessMessage(`Cliente registrado correctamente.`), 'success');
+             // DEDUCT FROM TREASURY (Automatic)
+             try {
+                const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+                const data = treasuryDoc as any;
+                const currentCash = Number(data?.cashBalance || 0);
+                await setDocument(TABLE_NAMES.TREASURY, 'main', { cashBalance: currentCash - loanData.amount });
+            } catch(e) { console.error("Treasury deduction failed", e); }
+
+            showToast(getSuccessMessage(`Cliente registrado y préstamo creado.`), 'success');
 
         } catch (err: any) {
             console.error(err);
@@ -642,7 +666,7 @@ export const useAppData = (
         }
     }, [showToast]);
 
-    const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => {
+    const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; fundingSource?: 'Capital' | 'Reinvested' }) => {
         try {
             const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanData.amount, loanData.term, loanData.interestRate);
 
@@ -664,9 +688,19 @@ export const useAppData = (
                 totalCapitalPaid: 0,
                 paymentHistory: [],
                 notes: loanData.notes,
-                archived: false
+                archived: false,
+                fundingSource: loanData.fundingSource || 'Capital'
             });
-            showToast(getSuccessMessage('Préstamo añadido correctamente.'), 'success');
+
+            // DEDUCT FROM TREASURY (Automatic)
+            try {
+                const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+                const data = treasuryDoc as any;
+                const currentCash = Number(data?.cashBalance || 0);
+                await setDocument(TABLE_NAMES.TREASURY, 'main', { cashBalance: currentCash - loanData.amount });
+            } catch(e) { console.error("Treasury deduction failed", e); }
+
+            showToast(getSuccessMessage('Préstamo añadido y fondos descontados de caja.'), 'success');
         } catch (err: any) {
             showToast(`Error: ${err.message}`, 'error');
             throw err;

@@ -46,6 +46,7 @@ export interface Loan {
     contractPdfUrl?: string;
     notes?: string;
     archived?: boolean; // Nuevo: Flag para historial
+    fundingSource?: 'Capital' | 'Reinvested'; // Nuevo: Origen del dinero (Bolsillo vs Ganancias)
 }
 
 export interface Client {
@@ -80,3 +81,6 @@ export interface LoanRequest {
 export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient' | 'history' | 'accounting';
 
 export type FilterStatus = LoanStatus | 'Todos';
+
+export type NewClientData = Omit<Client, 'id' | 'joinDate'>;
+export type NewLoanData = { amount: number; term: number };

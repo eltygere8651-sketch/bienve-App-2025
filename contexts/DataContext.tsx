@@ -2,14 +2,11 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { useAppContext } from './AppContext';
-import { Client, Loan, LoanRequest, RequestStatus } from '../types';
+import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData } from '../types';
 
 interface ClientLoanData extends Client {
     loans: Loan[];
 }
-
-export type NewClientData = Omit<Client, 'id' | 'joinDate'>;
-export type NewLoanData = { amount: number, term: number };
 
 interface DataContextType {
     clients: Client[];

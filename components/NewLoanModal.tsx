@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { X, Save, Loader2, Lock, Infinity as InfinityIcon } from 'lucide-react';
+import { X, Save, Loader2, Lock, Infinity as InfinityIcon, Wallet, RefreshCw } from 'lucide-react';
 import { Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { InputField } from './FormFields';
@@ -17,6 +17,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
     const { handleAddLoan } = useDataContext();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isIndefinite, setIsIndefinite] = useState(false);
+    const [fundingSource, setFundingSource] = useState<'Capital' | 'Reinvested'>('Capital');
     
     // Default values - Interest locked to 96 (8% monthly)
     const [loanData, setLoanData] = useState({
@@ -52,7 +53,8 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                 term: isIndefinite ? 0 : parseInt(loanData.term),
                 interestRate: parseFloat(loanData.interestRate),
                 startDate: loanData.startDate,
-                notes: loanData.notes
+                notes: loanData.notes,
+                fundingSource: fundingSource
             });
             onClose();
             // Reset form for next time
@@ -64,6 +66,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                 notes: ''
             });
             setIsIndefinite(false);
+            setFundingSource('Capital');
         } catch (error) {
             console.error(error);
         } finally {
@@ -86,6 +89,35 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+                    {/* FUNDING SOURCE SELECTOR */}
+                    <div className="bg-slate-900/30 p-3 rounded-xl border border-slate-700/50 flex flex-col gap-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Origen de Fondos</label>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setFundingSource('Capital')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
+                                    fundingSource === 'Capital' 
+                                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 shadow-sm' 
+                                        : 'bg-slate-800 text-slate-500 border-slate-700 hover:bg-slate-700'
+                                }`}
+                            >
+                                <Wallet size={14} /> Aportación Capital
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFundingSource('Reinvested')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
+                                    fundingSource === 'Reinvested' 
+                                        ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50 shadow-sm' 
+                                        : 'bg-slate-800 text-slate-500 border-slate-700 hover:bg-slate-700'
+                                }`}
+                            >
+                                <RefreshCw size={14} /> Reinvertir Ganancias
+                            </button>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <InputField label="Monto (€)" name="amount" type="number" value={loanData.amount} onChange={handleInputChange as any} required min="1" step="0.01" />
                         
@@ -155,6 +187,12 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                             <span className="text-primary-400 font-bold">
                                 {isIndefinite ? 'Capital + Intereses' : formatCurrency(calculations.totalRepayment)}
                             </span>
+                         </div>
+                         <div className="mt-2 text-xs text-center text-slate-500 bg-slate-800/50 p-2 rounded">
+                             El dinero ({formatCurrency(parseFloat(loanData.amount) || 0)}) se descontará de 
+                             <strong className={fundingSource === 'Capital' ? 'text-blue-400 ml-1' : 'text-emerald-400 ml-1'}>
+                                 {fundingSource === 'Capital' ? 'CAJA / APORTACIÓN' : 'GANANCIAS ACUMULADAS'}
+                             </strong>
                          </div>
                     </div>
 

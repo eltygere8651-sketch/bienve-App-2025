@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { UserPlus, ArrowLeft, Loader2, BarChart, Banknote, Percent, AlertCircle, Lock, Infinity as InfinityIcon, User, ChevronRight, Check } from 'lucide-react';
+import { UserPlus, ArrowLeft, Loader2, BarChart, Banknote, Percent, AlertCircle, Lock, Infinity as InfinityIcon, User, ChevronRight, Check, Wallet, RefreshCw } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField } from './FormFields';
@@ -14,6 +14,7 @@ const NewClientForm: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [isIndefinite, setIsIndefinite] = useState(false);
+    const [fundingSource, setFundingSource] = useState<'Capital' | 'Reinvested'>('Capital');
 
     const [clientData, setClientData] = useState({
         name: '',
@@ -93,6 +94,7 @@ const NewClientForm: React.FC = () => {
                 {
                     amount: parseFloat(loanData.amount),
                     term: isIndefinite ? 0 : parseInt(loanData.term, 10),
+                    fundingSource: fundingSource
                 }
             );
             
@@ -182,6 +184,35 @@ const NewClientForm: React.FC = () => {
                              </div>
                         </div>
 
+                        {/* Funding Source Selector */}
+                        <div className="bg-slate-900/30 p-3 rounded-xl border border-slate-700/50 flex flex-col gap-2">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Origen de Fondos</label>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setFundingSource('Capital')}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
+                                        fundingSource === 'Capital' 
+                                            ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 shadow-sm' 
+                                            : 'bg-slate-800 text-slate-500 border-slate-700 hover:bg-slate-700'
+                                    }`}
+                                >
+                                    <Wallet size={14} /> Aportación Capital
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setFundingSource('Reinvested')}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 border transition-all ${
+                                        fundingSource === 'Reinvested' 
+                                            ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50 shadow-sm' 
+                                            : 'bg-slate-800 text-slate-500 border-slate-700 hover:bg-slate-700'
+                                    }`}
+                                >
+                                    <RefreshCw size={14} /> Reinvertir Ganancias
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                             {/* Inputs */}
                             <div className="space-y-4">
@@ -229,6 +260,9 @@ const NewClientForm: React.FC = () => {
                                     <div className="flex justify-between items-center text-sm">
                                         <span className="text-slate-400">Interés Aplicado</span>
                                         <span className="font-mono text-xs bg-slate-800 px-2 py-0.5 rounded text-slate-300">8% / mes</span>
+                                    </div>
+                                    <div className="mt-2 text-xs text-center text-slate-500 border-t border-slate-700 pt-2">
+                                        Origen: <strong className={fundingSource === 'Capital' ? 'text-blue-400' : 'text-emerald-400'}>{fundingSource === 'Capital' ? 'Capital Propio' : 'Intereses Reinvertidos'}</strong>
                                     </div>
                                 </div>
                             </div>

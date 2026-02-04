@@ -469,26 +469,28 @@ const PersonalFinanceManager: React.FC = () => {
     return null;
 };
 
-// --- PROFITS CALCULATOR (Existing) ---
+// --- PROFITS CALCULATOR (Updated to subtract reinvested profits) ---
 
 interface ProfitsProps {
     totalInvested: number;
     totalRecoveredCapital: number;
     totalInterestEarned: number;
     overdueAmount: number;
+    totalReinvested: number; // New prop
 }
 
-const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecoveredCapital, totalInterestEarned, overdueAmount }) => {
+const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecoveredCapital, totalInterestEarned, overdueAmount, totalReinvested }) => {
     // REGLA DE ORO: Total Dinero Entrado (Capital + Interés) vs Total Dinero Salido (Capital Prestado)
     const totalCashIn = totalRecoveredCapital + totalInterestEarned;
     const netPosition = totalCashIn - totalInvested;
     const isBreakEvenReached = netPosition > 0;
     
     // Cálculo de "Ganancia Real Segura"
-    const safeDistributableProfit = Math.max(0, netPosition - overdueAmount);
+    // Restamos las ganancias reinvertidas porque ese dinero ya no está en la caja (está prestado de nuevo)
+    const availableForWithdrawal = Math.max(0, netPosition - overdueAmount - totalReinvested);
     
     const [withdrawalPercentage, setWithdrawalPercentage] = useState(0); 
-    const withdrawAmount = safeDistributableProfit * (withdrawalPercentage / 100);
+    const withdrawAmount = availableForWithdrawal * (withdrawalPercentage / 100);
 
     const progressPercent = totalInvested > 0 ? Math.min(100, (totalCashIn / totalInvested) * 100) : 0;
 
@@ -566,11 +568,11 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
                             <h3 className="text-lg font-bold text-white">Calculadora de Dividendos Seguros</h3>
                         </div>
 
-                        {safeDistributableProfit <= 0 ? (
+                        {availableForWithdrawal <= 0 ? (
                              <div className="p-4 bg-amber-900/20 border border-amber-500/30 rounded-xl text-amber-200 text-sm flex items-start gap-3">
                                 <AlertTriangle className="shrink-0 mt-0.5" />
                                 <div>
-                                    <strong>Precaución:</strong> Aunque has recuperado tu capital, tienes deudas vencidas ({formatCurrency(overdueAmount)}) que superan tu ganancia libre. Se recomienda usar el excedente para cubrir estas posibles pérdidas antes de retirar.
+                                    <strong>Precaución:</strong> Has recuperado tu capital, pero tus ganancias líquidas actuales están comprometidas en nuevos préstamos (reinversión) o deudas vencidas.
                                 </div>
                              </div>
                         ) : (
@@ -601,7 +603,7 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
                                     </div>
                                     <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl">
                                         <p className="text-xs text-blue-400 font-bold uppercase mb-1">Reinvertir en Negocio</p>
-                                        <p className="text-2xl font-bold text-white">{formatCurrency(safeDistributableProfit - withdrawAmount)}</p>
+                                        <p className="text-2xl font-bold text-white">{formatCurrency(availableForWithdrawal - withdrawAmount)}</p>
                                     </div>
                                 </div>
                             </>
@@ -626,9 +628,13 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
                             <span className="flex items-center gap-1"><AlertTriangle size={12}/> Reserva Riesgo (Vencido):</span>
                             <span>-{formatCurrency(overdueAmount)}</span>
                         </div>
+                        <div className="flex justify-between text-blue-300">
+                            <span className="flex items-center gap-1"><RefreshCw size={12}/> Ganancia Reinvertida:</span>
+                            <span>-{formatCurrency(totalReinvested)}</span>
+                        </div>
                         <div className="bg-slate-900 p-3 rounded-lg flex justify-between items-center mt-2">
-                            <span className="text-emerald-400 font-bold uppercase text-xs">Disponible Real:</span>
-                            <span className="text-xl font-bold text-white">{formatCurrency(Math.max(0, netPosition - overdueAmount))}</span>
+                            <span className="text-emerald-400 font-bold uppercase text-xs">Disponible Líquido:</span>
+                            <span className="text-xl font-bold text-white">{formatCurrency(availableForWithdrawal)}</span>
                         </div>
                     </div>
                 </div>
@@ -704,6 +710,7 @@ const Accounting: React.FC = () => {
         let totalInvested = 0; // Cumulative (Snapshot)
         let currentOutstanding = 0; // Snapshot
         let overdueAmount = 0; // Snapshot
+        let totalReinvested = 0; // Ganancias usadas para nuevos préstamos
         
         let periodRecoveredCapital = 0; // Flow (Filtered)
         let periodInterestEarned = 0; // Flow (Filtered)
@@ -727,6 +734,11 @@ const Accounting: React.FC = () => {
             }
             // Invested is always total historical for context
             totalInvested += (loan.initialCapital || loan.amount);
+            
+            // Check if loan was funded by profits
+            if (loan.fundingSource === 'Reinvested') {
+                totalReinvested += (loan.initialCapital || loan.amount);
+            }
             
             // Calculate Historical Totals for Ratio
             if (loan.paymentHistory) {
@@ -778,7 +790,8 @@ const Accounting: React.FC = () => {
             defaultRate,
             profitRatio,
             capitalRatio,
-            isBreakEvenReached
+            isBreakEvenReached,
+            totalReinvested
         };
     }, [allLoans, timeRange]);
 
@@ -911,6 +924,7 @@ const Accounting: React.FC = () => {
                     totalRecoveredCapital={allLoans.reduce((acc, l) => acc + Number(l.totalCapitalPaid || 0), 0)} // Total
                     totalInterestEarned={allLoans.reduce((acc, l) => acc + Number(l.totalInterestPaid || 0), 0)} // Total
                     overdueAmount={stats.overdueAmount} // Current Snapshot
+                    totalReinvested={stats.totalReinvested}
                 />
             )}
 
