@@ -605,7 +605,7 @@ export const useAppData = (
         }
     }, [activeLoans, archivedLoans, showToast]);
 
-    const handleAddClientAndLoan = useCallback(async (clientData: NewClientData, loanData: NewLoanData & { fundingSource?: 'Capital' | 'Reinvested' }) => {
+    const handleAddClientAndLoan = useCallback(async (clientData: NewClientData, loanData: NewLoanData) => {
         try {
             if (isNaN(loanData.amount) || loanData.amount <= 0) throw new Error("El monto del préstamo debe ser válido.");
             if (isNaN(loanData.term) || loanData.term < 0) throw new Error("El plazo del préstamo debe ser válido.");

@@ -30,7 +30,7 @@ interface DataContextType {
     handleUpdatePayment: (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => Promise<void>; 
     handleBalanceCorrection: (loanId: string, newBalance: number, notes: string) => Promise<void>; 
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
-    handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => Promise<void>;
+    handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; fundingSource?: 'Capital' | 'Reinvested' }) => Promise<void>;
     handleGenerateTestRequest: () => Promise<void>;
     handleGenerateTestClient: () => Promise<void>;
     handleDeleteTestRequests: () => Promise<void>;

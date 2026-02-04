@@ -83,4 +83,4 @@ export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'req
 export type FilterStatus = LoanStatus | 'Todos';
 
 export type NewClientData = Omit<Client, 'id' | 'joinDate'>;
-export type NewLoanData = { amount: number; term: number };
+export type NewLoanData = { amount: number; term: number; fundingSource?: 'Capital' | 'Reinvested' };
