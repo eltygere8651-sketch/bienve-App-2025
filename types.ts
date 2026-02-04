@@ -24,6 +24,15 @@ export interface PaymentRecord {
     paymentMethod?: 'Efectivo' | 'Banco'; // Nuevo: Desglose de tesorería
 }
 
+export interface ReinvestmentRecord {
+    id: string;
+    date: string;
+    amount: number;
+    source: 'Banco' | 'Efectivo';
+    notes?: string;
+    createdAt: string;
+}
+
 export interface Loan {
     id: string;
     clientId: string;
@@ -46,7 +55,6 @@ export interface Loan {
     contractPdfUrl?: string;
     notes?: string;
     archived?: boolean; // Nuevo: Flag para historial
-    fundingSource?: 'Capital' | 'Reinvested'; // Nuevo: Origen del dinero (Bolsillo vs Ganancias)
 }
 
 export interface Client {
@@ -83,4 +91,4 @@ export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'req
 export type FilterStatus = LoanStatus | 'Todos';
 
 export type NewClientData = Omit<Client, 'id' | 'joinDate'>;
-export type NewLoanData = { amount: number; term: number; fundingSource?: 'Capital' | 'Reinvested' };
+export type NewLoanData = { amount: number; term: number };

@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { useAppContext } from './AppContext';
-import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData } from '../types';
+import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData, ReinvestmentRecord } from '../types';
 
 interface ClientLoanData extends Client {
     loans: Loan[];
@@ -14,6 +14,7 @@ interface DataContextType {
     loans: Loan[]; 
     archivedLoans: Loan[]; 
     requests: LoanRequest[];
+    reinvestments: ReinvestmentRecord[]; // New
     isLoading: boolean;
     error: string | null;
     clientLoanData: ClientLoanData[];
@@ -30,7 +31,7 @@ interface DataContextType {
     handleUpdatePayment: (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => Promise<void>; 
     handleBalanceCorrection: (loanId: string, newBalance: number, notes: string) => Promise<void>; 
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
-    handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; fundingSource?: 'Capital' | 'Reinvested' }) => Promise<void>;
+    handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => Promise<void>;
     handleGenerateTestRequest: () => Promise<void>;
     handleGenerateTestClient: () => Promise<void>;
     handleDeleteTestRequests: () => Promise<void>;
@@ -41,9 +42,11 @@ interface DataContextType {
     handleArchiveClient: (clientId: string) => Promise<void>; 
     handleRestoreClient: (clientId: string) => Promise<void>; 
     handleBatchDeleteClients: (clientIds: string[]) => Promise<void>; 
+    handleRegisterReinvestment: (amount: number, source: 'Banco' | 'Efectivo', notes: string, date: string) => Promise<void>; // New
+    handleDeleteReinvestment: (id: string) => Promise<void>; // New
     reloadRequests: () => Promise<void>;
     refreshAllData: () => Promise<void>; 
-    recalculateTreasury: () => Promise<void>; // New function
+    recalculateTreasury: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);

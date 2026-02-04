@@ -7,9 +7,10 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles } from 'lucide-react';
+import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
+import { ReinvestmentRecord } from '../types';
 
 // --- COMPONENTS ---
 
@@ -28,6 +29,157 @@ const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: 
         </div>
     </div>
 );
+
+// --- REINVESTMENT MANAGER COMPONENT ---
+
+const ReinvestmentManager: React.FC = () => {
+    const { reinvestments, handleRegisterReinvestment, handleDeleteReinvestment } = useDataContext();
+    const [amount, setAmount] = useState('');
+    const [source, setSource] = useState<'Banco' | 'Efectivo'>('Banco');
+    const [notes, setNotes] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const val = parseFloat(amount);
+        if (isNaN(val) || val <= 0) return;
+
+        setIsSubmitting(true);
+        try {
+            await handleRegisterReinvestment(val, source, notes, date);
+            setAmount('');
+            setNotes('');
+            setSource('Banco');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+            {/* Form */}
+            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <Plus size={20} className="text-primary-400" />
+                    Registrar Reinversión
+                </h3>
+                <p className="text-sm text-slate-400 mb-6">
+                    Registra el capital que has sacado de tus beneficios (intereses) para volver a prestarlo. Esto ajustará tu cálculo de "Dividendos Seguros".
+                </p>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Reinvertido (€)</label>
+                        <input 
+                            type="number" 
+                            value={amount} 
+                            onChange={e => setAmount(e.target.value)} 
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold text-lg focus:border-primary-500 outline-none" 
+                            placeholder="Ej: 500.00"
+                            step="0.01"
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Origen del Dinero</label>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setSource('Banco')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Banco' ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
+                            >
+                                Banco
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSource('Efectivo')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Efectivo' ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
+                            >
+                                Efectivo
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha</label>
+                        <input 
+                            type="date" 
+                            value={date} 
+                            onChange={e => setDate(e.target.value)} 
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none" 
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notas (Opcional)</label>
+                        <textarea 
+                            value={notes} 
+                            onChange={e => setNotes(e.target.value)} 
+                            rows={2}
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none resize-none" 
+                            placeholder="Detalles..."
+                        />
+                    </div>
+                    <button 
+                        type="submit" 
+                        disabled={isSubmitting}
+                        className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                    >
+                        {isSubmitting ? <Loader2 className="animate-spin" /> : <Save size={18} />}
+                        Guardar Registro
+                    </button>
+                </form>
+            </div>
+
+            {/* List */}
+            <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <History size={20} className="text-slate-400" />
+                        Historial de Reinversiones
+                    </h3>
+                    <div className="bg-slate-900 px-3 py-1 rounded-lg border border-slate-600 text-xs font-mono text-emerald-400 font-bold">
+                        Total: {formatCurrency(reinvestments.reduce((acc, r) => acc + r.amount, 0))}
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto max-h-[500px] pr-2">
+                    {reinvestments.length === 0 ? (
+                        <div className="text-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-xl">
+                            <RefreshCw size={32} className="mx-auto mb-2 opacity-50" />
+                            <p>No hay reinversiones registradas.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {[...reinvestments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(record => (
+                                <div key={record.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center group hover:bg-slate-900 transition-colors">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-bold text-white text-lg">{formatCurrency(record.amount)}</span>
+                                            <span className={`text-[10px] uppercase px-2 py-0.5 rounded border ${record.source === 'Banco' ? 'border-blue-500/30 text-blue-400 bg-blue-500/10' : 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'}`}>
+                                                {record.source}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                                            <Calendar size={12} /> {new Date(record.date).toLocaleDateString()}
+                                            {record.notes && <span className="text-slate-400">• {record.notes}</span>}
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleDeleteReinvestment(record.id)}
+                                        className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                        title="Eliminar registro"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // --- PERSONAL FINANCE MANAGER (ISOLATED LOGIC VIA FIRESTORE) ---
 
@@ -644,9 +796,9 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
 };
 
 const Accounting: React.FC = () => {
-    const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded, recalculateTreasury } = useDataContext(); // Added recalculateTreasury
+    const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded, recalculateTreasury, reinvestments } = useDataContext(); // Added reinvestments
     const { showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal'>('global');
+    const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal' | 'reinvestments'>('global');
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     
     // Treasury Config State
@@ -710,7 +862,6 @@ const Accounting: React.FC = () => {
         let totalInvested = 0; // Cumulative (Snapshot)
         let currentOutstanding = 0; // Snapshot
         let overdueAmount = 0; // Snapshot
-        let totalReinvested = 0; // Ganancias usadas para nuevos préstamos
         
         let periodRecoveredCapital = 0; // Flow (Filtered)
         let periodInterestEarned = 0; // Flow (Filtered)
@@ -719,6 +870,9 @@ const Accounting: React.FC = () => {
         // Cumulative Historical Totals (For Ratio Calculation)
         let historicalTotalCapitalRecovered = 0;
         let historicalTotalInterestEarned = 0;
+
+        // Sum reinvestments
+        const totalReinvested = reinvestments.reduce((acc, r) => acc + r.amount, 0);
 
         // 1. Snapshot Metrics (Always Total Active)
         allLoans.forEach(loan => {
@@ -734,11 +888,6 @@ const Accounting: React.FC = () => {
             }
             // Invested is always total historical for context
             totalInvested += (loan.initialCapital || loan.amount);
-            
-            // Check if loan was funded by profits
-            if (loan.fundingSource === 'Reinvested') {
-                totalReinvested += (loan.initialCapital || loan.amount);
-            }
             
             // Calculate Historical Totals for Ratio
             if (loan.paymentHistory) {
@@ -793,7 +942,7 @@ const Accounting: React.FC = () => {
             isBreakEvenReached,
             totalReinvested
         };
-    }, [allLoans, timeRange]);
+    }, [allLoans, timeRange, reinvestments]);
 
     // Data for Monthly Cash Flow Chart
     const monthlyData = useMemo(() => {
@@ -896,6 +1045,12 @@ const Accounting: React.FC = () => {
                         <Coins size={16} /> Mis Ganancias
                     </button>
                     <button
+                        onClick={() => setActiveTab('reinvestments')}
+                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'reinvestments' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                    >
+                        <RefreshCw size={16} /> Reinversiones
+                    </button>
+                    <button
                         onClick={() => setActiveTab('personal')}
                         className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'personal' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-white'}`}
                     >
@@ -915,6 +1070,12 @@ const Accounting: React.FC = () => {
             {activeTab === 'personal' && (
                 <div className="max-w-6xl mx-auto">
                     <PersonalFinanceManager />
+                </div>
+            )}
+
+            {activeTab === 'reinvestments' && (
+                <div className="max-w-6xl mx-auto">
+                    <ReinvestmentManager />
                 </div>
             )}
 

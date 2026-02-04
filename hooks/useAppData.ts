@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Client, Loan, LoanRequest, LoanStatus, RequestStatus, PaymentRecord, NewClientData, NewLoanData } from '../types';
+import { Client, Loan, LoanRequest, LoanStatus, RequestStatus, PaymentRecord, NewClientData, NewLoanData, ReinvestmentRecord } from '../types';
 import { User } from 'firebase/auth';
 import { 
     subscribeToCollection, 
@@ -41,8 +41,7 @@ const mapLoanFromDB = (l: any): Loan => ({
     paymentHistory: l.paymentHistory ?? [],
     totalInterestPaid: l.totalInterestPaid ?? 0,
     totalCapitalPaid: l.totalCapitalPaid ?? 0,
-    archived: l.archived ?? false,
-    fundingSource: l.fundingSource ?? 'Capital'
+    archived: l.archived ?? false
 });
 
 export const useAppData = (
@@ -63,6 +62,9 @@ export const useAppData = (
     const [requests, setRequests] = useState<LoanRequest[]>([]);
     const [requestsLimit, setRequestsLimit] = useState(20);
 
+    // Reinvestments State
+    const [reinvestments, setReinvestments] = useState<ReinvestmentRecord[]>([]);
+
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -77,9 +79,10 @@ export const useAppData = (
         let clientsLoaded = false;
         let activeLoansLoaded = false;
         let requestsLoaded = false;
+        let reinvestmentsLoaded = false;
 
         const checkAllLoaded = () => {
-            if (clientsLoaded && activeLoansLoaded && requestsLoaded) {
+            if (clientsLoaded && activeLoansLoaded && requestsLoaded && reinvestmentsLoaded) {
                 setIsLoading(false);
             }
         };
@@ -126,7 +129,23 @@ export const useAppData = (
             }
         );
 
-        // 4. Archived Loans: Initial Fetch (One-time, no subscription)
+        // 4. Reinvestments: Subscribe
+        const unsubReinvestments = subscribeToCollection(
+            TABLE_NAMES.REINVESTMENTS,
+            (data) => {
+                setReinvestments(data as ReinvestmentRecord[]);
+                reinvestmentsLoaded = true;
+                checkAllLoaded();
+            },
+            [],
+            (err) => {
+                console.error("Error loading reinvestments:", err);
+                reinvestmentsLoaded = true;
+                checkAllLoaded();
+            }
+        );
+
+        // 5. Archived Loans: Initial Fetch (One-time, no subscription)
         const loadInitialArchived = async () => {
             try {
                 const { data, lastVisible, hasMore } = await getPaginatedCollection(
@@ -152,6 +171,7 @@ export const useAppData = (
             unsubClients();
             unsubActiveLoans();
             unsubRequests();
+            unsubReinvestments();
         };
     }, [isConfigReady, user, requestsLimit]);
 
@@ -383,8 +403,7 @@ export const useAppData = (
                 signature: request.signature,
                 contractPdfUrl: '',
                 notes: request.loanReason,
-                archived: false,
-                fundingSource: 'Capital' // Default to Capital for approved requests
+                archived: false
             };
             await addDocument(TABLE_NAMES.LOANS, newLoan);
 
@@ -645,8 +664,7 @@ export const useAppData = (
                  totalCapitalPaid: 0,
                  paymentHistory: [],
                  notes: 'Préstamo inicial',
-                 archived: false,
-                 fundingSource: loanData.fundingSource || 'Capital'
+                 archived: false
              });
 
              // DEDUCT FROM TREASURY (Automatic)
@@ -666,7 +684,7 @@ export const useAppData = (
         }
     }, [showToast]);
 
-    const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; fundingSource?: 'Capital' | 'Reinvested' }) => {
+    const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => {
         try {
             const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanData.amount, loanData.term, loanData.interestRate);
 
@@ -688,8 +706,7 @@ export const useAppData = (
                 totalCapitalPaid: 0,
                 paymentHistory: [],
                 notes: loanData.notes,
-                archived: false,
-                fundingSource: loanData.fundingSource || 'Capital'
+                archived: false
             });
 
             // DEDUCT FROM TREASURY (Automatic)
@@ -884,6 +901,33 @@ export const useAppData = (
          }
     }, [requests, showToast]);
 
+    // --- REINVESTMENT LOGIC ---
+    const handleRegisterReinvestment = useCallback(async (amount: number, source: 'Banco' | 'Efectivo', notes: string, date: string) => {
+        try {
+            await addDocument(TABLE_NAMES.REINVESTMENTS, {
+                amount,
+                source,
+                notes,
+                date,
+                createdAt: new Date().toISOString()
+            });
+            showToast('Reinversión registrada exitosamente.', 'success');
+        } catch (err: any) {
+            console.error(err);
+            showToast('Error registrando reinversión.', 'error');
+        }
+    }, [showToast]);
+
+    const handleDeleteReinvestment = useCallback(async (id: string) => {
+        try {
+            await deleteDocument(TABLE_NAMES.REINVESTMENTS, id);
+            showToast('Registro de reinversión eliminado.', 'success');
+        } catch(err: any) {
+            console.error(err);
+            showToast('Error eliminando registro.', 'error');
+        }
+    }, [showToast]);
+
     const clientLoanData = useMemo(() => {
         const loansByClientId = new Map<string, Loan[]>();
         for (const loan of activeLoans) {
@@ -906,6 +950,7 @@ export const useAppData = (
         archivedLoans,
         allLoans,
         requests,
+        reinvestments, // Exposed
         isLoading,
         error,
         clientLoanData,
@@ -934,6 +979,8 @@ export const useAppData = (
         handleArchiveClient,
         handleRestoreClient,
         handleBatchDeleteClients,
+        handleRegisterReinvestment, // Exposed
+        handleDeleteReinvestment, // Exposed
         reloadRequests,
         refreshAllData,
         recalculateTreasury 
