@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive } from 'lucide-react';
+import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
 import NewLoanModal from './NewLoanModal';
@@ -52,6 +52,30 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
         return (Date.now() - new Date(client.joinDate).getTime()) < 86400000;
     }, [client.joinDate]);
 
+    // LOGIC: Check payment status for current month
+    const monthlyStatus = useMemo(() => {
+        if (!activeLoan) return null;
+        
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const currentMonthName = now.toLocaleDateString('es-ES', { month: 'long' });
+
+        // Check if any payment exists in history for this month/year
+        const hasPaidThisMonth = activeLoan.paymentHistory?.some(payment => {
+            const pDate = new Date(payment.date);
+            return pDate.getMonth() === currentMonth && pDate.getFullYear() === currentYear;
+        });
+
+        // Special case: If loan started this month and has no payments, it's pending.
+        // If loan started previous months, it's definitely pending.
+        
+        return {
+            hasPaid: hasPaidThisMonth,
+            monthName: currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)
+        };
+    }, [activeLoan]);
+
     const handleDownloadReport = (e: React.MouseEvent) => {
         e.stopPropagation();
         generateClientReport(client, loans);
@@ -78,7 +102,11 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
     return (
         <div 
             onClick={handleCardClick}
-            className="relative flex flex-col bg-slate-800 rounded-2xl border border-slate-700/60 shadow-xl overflow-hidden group transition-all duration-300 hover:border-primary-500/30 hover:shadow-2xl hover:shadow-primary-900/10 hover:-translate-y-1 cursor-pointer"
+            className={`relative flex flex-col bg-slate-800 rounded-2xl border shadow-xl overflow-hidden group transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 cursor-pointer ${
+                hasActiveLoan && monthlyStatus && !monthlyStatus.hasPaid 
+                ? 'border-red-500/40 shadow-red-900/10' // Highlight unpaid clients subtly
+                : 'border-slate-700/60 hover:border-primary-500/30 hover:shadow-primary-900/10'
+            }`}
         >
              {/* Header */}
             <div className="p-5 flex justify-between items-start relative z-10">
@@ -117,9 +145,36 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
             <div className="px-5 pb-5 flex-1 flex flex-col">
                 {hasActiveLoan ? (
                     <div className="flex-1 flex flex-col">
+                        {/* Status Bar Monthly */}
+                        {monthlyStatus && (
+                            <div className={`mb-3 px-3 py-1.5 rounded-lg flex items-center justify-between text-xs font-bold border ${
+                                monthlyStatus.hasPaid 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                : 'bg-red-500/10 text-red-400 border-red-500/20 animate-pulse'
+                            }`}>
+                                <div className="flex items-center gap-1.5">
+                                    <Calendar size={12} />
+                                    <span>{monthlyStatus.monthName}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    {monthlyStatus.hasPaid ? (
+                                        <>
+                                            <span>ABONADO</span>
+                                            <CheckCircle2 size={14} />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span>PENDIENTE</span>
+                                            <AlertCircle size={14} />
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="bg-slate-900/50 rounded-xl p-4 border border-slate-700/50 mb-4 relative overflow-hidden group-hover:border-slate-600 transition-colors">
                              <div className="flex justify-between items-end mb-1 relative z-10">
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Pendiente</span>
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Pendiente Total</span>
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${activeLoan.status === LoanStatus.OVERDUE ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'}`}>
                                     {activeLoan.status}
                                 </span>
@@ -139,9 +194,14 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
                         <div className="mt-auto pt-2">
                             <button 
                                 onClick={(e) => handleActionClick(e, () => onQuickPay(activeLoan))}
-                                className="w-full group/btn relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-900/20 border-t border-white/10 active:scale-95"
+                                className={`w-full group/btn relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-white font-bold text-sm transition-all shadow-lg border-t border-white/10 active:scale-95 ${
+                                    monthlyStatus?.hasPaid 
+                                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-900/20'
+                                    : 'bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 shadow-red-900/20 animate-pulse-slow'
+                                }`}
                             >
-                                <Wallet size={16} /> Registrar Pago
+                                <Wallet size={16} /> 
+                                {monthlyStatus?.hasPaid ? 'Registrar Otro Pago' : 'Registrar Cobro Mes'}
                             </button>
                         </div>
                     </div>
@@ -197,11 +257,36 @@ const ClientList: React.FC = () => {
     }, [searchTerm]);
 
     const filteredClients = useMemo(() => {
+        // Sort logic: 
+        // 1. Clients with UNPAID current month come first
+        // 2. Then clients with active loans
+        // 3. Then alphabetical/date
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        const isUnpaidThisMonth = (c: ClientWithData) => {
+            const activeLoan = c.loans.find(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
+            if (!activeLoan) return false;
+            const hasPaid = activeLoan.paymentHistory?.some(p => {
+                const d = new Date(p.date);
+                return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+            });
+            return !hasPaid;
+        };
+
         const sorted = [...clientLoanData].sort((a, b) => {
+            const aUnpaid = isUnpaidThisMonth(a);
+            const bUnpaid = isUnpaidThisMonth(b);
+            
+            if (aUnpaid && !bUnpaid) return -1;
+            if (!aUnpaid && bUnpaid) return 1;
+
             const aActive = a.loans.some(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
             const bActive = b.loans.some(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
             if (aActive && !bActive) return -1;
             if (!aActive && bActive) return 1;
+            
             return new Date(b.joinDate).getTime() - new Date(a.joinDate).getTime();
         });
 
