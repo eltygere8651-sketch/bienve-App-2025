@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
 import NewLoanModal from './NewLoanModal';
@@ -60,6 +60,11 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         const currentMonthName = now.toLocaleDateString('es-ES', { month: 'long' });
+        
+        // Calculate next month name for display
+        const nextMonthDate = new Date(now);
+        nextMonthDate.setMonth(now.getMonth() + 1);
+        const nextMonthName = nextMonthDate.toLocaleDateString('es-ES', { month: 'long' });
 
         // Check if any payment exists in history for this month/year
         const hasPaidThisMonth = activeLoan.paymentHistory?.some(payment => {
@@ -67,12 +72,15 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
             return pDate.getMonth() === currentMonth && pDate.getFullYear() === currentYear;
         });
 
-        // Special case: If loan started this month and has no payments, it's pending.
-        // If loan started previous months, it's definitely pending.
+        // Check if loan STARTED this month
+        const loanStartDate = new Date(activeLoan.startDate);
+        const isLoanNewThisMonth = loanStartDate.getMonth() === currentMonth && loanStartDate.getFullYear() === currentYear;
         
         return {
             hasPaid: hasPaidThisMonth,
-            monthName: currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1)
+            monthName: currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1),
+            isLoanNewThisMonth,
+            nextMonthName: nextMonthName.charAt(0).toUpperCase() + nextMonthName.slice(1)
         };
     }, [activeLoan]);
 
@@ -103,7 +111,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
         <div 
             onClick={handleCardClick}
             className={`relative flex flex-col bg-slate-800 rounded-2xl border shadow-xl overflow-hidden group transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 cursor-pointer ${
-                hasActiveLoan && monthlyStatus && !monthlyStatus.hasPaid 
+                hasActiveLoan && monthlyStatus && !monthlyStatus.hasPaid && !monthlyStatus.isLoanNewThisMonth
                 ? 'border-red-500/40 shadow-red-900/10' // Highlight unpaid clients subtly
                 : 'border-slate-700/60 hover:border-primary-500/30 hover:shadow-primary-900/10'
             }`}
@@ -148,16 +156,23 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
                         {/* Status Bar Monthly */}
                         {monthlyStatus && (
                             <div className={`mb-3 px-3 py-1.5 rounded-lg flex items-center justify-between text-xs font-bold border ${
-                                monthlyStatus.hasPaid 
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                                : 'bg-red-500/10 text-red-400 border-red-500/20 animate-pulse'
+                                monthlyStatus.isLoanNewThisMonth
+                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                : monthlyStatus.hasPaid 
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                    : 'bg-red-500/10 text-red-400 border-red-500/20 animate-pulse'
                             }`}>
                                 <div className="flex items-center gap-1.5">
                                     <Calendar size={12} />
-                                    <span>{monthlyStatus.monthName}</span>
+                                    <span>{monthlyStatus.isLoanNewThisMonth ? 'INICIO' : monthlyStatus.monthName}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    {monthlyStatus.hasPaid ? (
+                                    {monthlyStatus.isLoanNewThisMonth ? (
+                                        <>
+                                            <span className="text-[10px]">1º PAGO: {monthlyStatus.nextMonthName.toUpperCase()}</span>
+                                            <Clock size={14} />
+                                        </>
+                                    ) : monthlyStatus.hasPaid ? (
                                         <>
                                             <span>ABONADO</span>
                                             <CheckCircle2 size={14} />
@@ -195,13 +210,13 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
                             <button 
                                 onClick={(e) => handleActionClick(e, () => onQuickPay(activeLoan))}
                                 className={`w-full group/btn relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-white font-bold text-sm transition-all shadow-lg border-t border-white/10 active:scale-95 ${
-                                    monthlyStatus?.hasPaid 
+                                    monthlyStatus?.hasPaid || monthlyStatus?.isLoanNewThisMonth
                                     ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-900/20'
                                     : 'bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 shadow-red-900/20 animate-pulse-slow'
                                 }`}
                             >
                                 <Wallet size={16} /> 
-                                {monthlyStatus?.hasPaid ? 'Registrar Otro Pago' : 'Registrar Cobro Mes'}
+                                {monthlyStatus?.hasPaid || monthlyStatus?.isLoanNewThisMonth ? 'Registrar Adelanto / Pago' : 'Registrar Cobro Mes'}
                             </button>
                         </div>
                     </div>
@@ -258,16 +273,23 @@ const ClientList: React.FC = () => {
 
     const filteredClients = useMemo(() => {
         // Sort logic: 
-        // 1. Clients with UNPAID current month come first
-        // 2. Then clients with active loans
+        // 1. Clients with UNPAID current month come first (BUT excluding those who started this month)
+        // 2. Then clients with active loans (including new ones)
         // 3. Then alphabetical/date
         const now = new Date();
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
 
-        const isUnpaidThisMonth = (c: ClientWithData) => {
+        const isUnpaidAndDueThisMonth = (c: ClientWithData) => {
             const activeLoan = c.loans.find(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
             if (!activeLoan) return false;
+            
+            // If loan started this month, it's NOT due yet
+            const startDate = new Date(activeLoan.startDate);
+            if (startDate.getMonth() === currentMonth && startDate.getFullYear() === currentYear) {
+                return false;
+            }
+
             const hasPaid = activeLoan.paymentHistory?.some(p => {
                 const d = new Date(p.date);
                 return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
@@ -276,11 +298,11 @@ const ClientList: React.FC = () => {
         };
 
         const sorted = [...clientLoanData].sort((a, b) => {
-            const aUnpaid = isUnpaidThisMonth(a);
-            const bUnpaid = isUnpaidThisMonth(b);
+            const aDue = isUnpaidAndDueThisMonth(a);
+            const bDue = isUnpaidAndDueThisMonth(b);
             
-            if (aUnpaid && !bUnpaid) return -1;
-            if (!aUnpaid && bUnpaid) return 1;
+            if (aDue && !bDue) return -1;
+            if (!aDue && bDue) return 1;
 
             const aActive = a.loans.some(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
             const bActive = b.loans.some(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
