@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import { useAppData } from '../hooks/useAppData';
 import { useAppContext } from './AppContext';
-import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData, ReinvestmentRecord } from '../types';
+import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData, ReinvestmentRecord, PersonalFund, WithdrawalRecord } from '../types';
 
 interface ClientLoanData extends Client {
     loans: Loan[];
@@ -15,6 +15,8 @@ interface DataContextType {
     archivedLoans: Loan[]; 
     requests: LoanRequest[];
     reinvestments: ReinvestmentRecord[]; // New
+    funds: PersonalFund[];
+    withdrawals: WithdrawalRecord[];
     isLoading: boolean;
     error: string | null;
     clientLoanData: ClientLoanData[];
@@ -44,6 +46,9 @@ interface DataContextType {
     handleBatchDeleteClients: (clientIds: string[]) => Promise<void>; 
     handleRegisterReinvestment: (amount: number, source: 'Banco' | 'Efectivo', notes: string, date: string, deductFromTreasury: boolean) => Promise<void>; // Updated
     handleDeleteReinvestment: (id: string) => Promise<void>; // New
+    handleSaveFund: (fundData: PersonalFund) => Promise<void>;
+    handleDeleteFund: (id: string) => Promise<void>;
+    handleRegisterWithdrawal: (amount: number, source: 'Banco' | 'Efectivo', notes: string, date: string, peñaPercentage: number) => Promise<void>;
     reloadRequests: () => Promise<void>;
     refreshAllData: () => Promise<void>; 
     recalculateTreasury: () => Promise<void>;

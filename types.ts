@@ -31,6 +31,30 @@ export interface ReinvestmentRecord {
     source: 'Banco' | 'Efectivo';
     notes?: string;
     createdAt: string;
+    deducted?: boolean; // Added deducted field
+}
+
+export interface WithdrawalRecord {
+    id: string;
+    date: string;
+    amount: number;
+    source: 'Banco' | 'Efectivo';
+    notes?: string;
+    peñaPercentage?: number;
+    peñaAmount?: number;
+    createdAt: string;
+}
+
+export interface PersonalFund {
+    id: string;
+    name: string;
+    icon: string; // key for icon mapping
+    color: 'cyan' | 'purple' | 'emerald' | 'orange' | 'rose' | 'blue';
+    currentAmount: number;
+    goal: number;
+    bankName: string;
+    monthlyContribution: number;
+    lastUpdated: string;
 }
 
 export interface Loan {

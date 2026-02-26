@@ -10,7 +10,7 @@ import {
 import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
-import { ReinvestmentRecord } from '../types';
+import { ReinvestmentRecord, PersonalFund } from '../types';
 
 // --- COMPONENTS ---
 
@@ -31,6 +31,199 @@ const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: 
 );
 
 // --- REINVESTMENT MANAGER COMPONENT ---
+
+const WithdrawalManager: React.FC = () => {
+    const { handleRegisterWithdrawal, withdrawals } = useDataContext();
+    const [amount, setAmount] = useState('');
+    const [source, setSource] = useState<'Banco' | 'Efectivo'>('Banco');
+    const [notes, setNotes] = useState('');
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [peñaPercentage, setPeñaPercentage] = useState(() => {
+        return parseFloat(localStorage.getItem('bm_peña_percentage') || '0');
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handlePercentageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = parseFloat(e.target.value);
+        setPeñaPercentage(val);
+        localStorage.setItem('bm_peña_percentage', val.toString());
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const val = parseFloat(amount);
+        if (isNaN(val) || val <= 0) return;
+
+        setIsSubmitting(true);
+        try {
+            await handleRegisterWithdrawal(val, source, notes, date, peñaPercentage);
+            setAmount('');
+            setNotes('');
+            setSource('Banco');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const peñaAmount = (parseFloat(amount) || 0) * (peñaPercentage / 100);
+    const netWithdrawal = (parseFloat(amount) || 0) - peñaAmount;
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in mb-8">
+            {/* Form */}
+            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                    <LogOut size={20} className="text-rose-400" />
+                    Registrar Retiro Personal
+                </h3>
+                
+                {/* Peña Configuration */}
+                <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-600 mb-6">
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs font-bold text-purple-400 uppercase flex items-center gap-1">
+                            <Wallet size={12} /> Configuración Peña
+                        </label>
+                        <span className="text-xs font-bold text-white bg-purple-600 px-2 py-0.5 rounded-full">{peñaPercentage}%</span>
+                    </div>
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max="50" 
+                        step="1"
+                        value={peñaPercentage}
+                        onChange={handlePercentageChange}
+                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-2">
+                        El {peñaPercentage}% de cada retiro se enviará automáticamente a tu fondo "Peña".
+                    </p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Total a Retirar (€)</label>
+                        <input 
+                            type="number" 
+                            value={amount} 
+                            onChange={e => setAmount(e.target.value)} 
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold text-lg focus:border-rose-500 outline-none" 
+                            placeholder="Ej: 1000.00"
+                            step="0.01"
+                            required
+                        />
+                    </div>
+                    
+                    {parseFloat(amount) > 0 && peñaPercentage > 0 && (
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="bg-slate-900 p-2 rounded border border-slate-600">
+                                <span className="block text-slate-500">A tu Bolsillo</span>
+                                <span className="font-bold text-white">{formatCurrency(netWithdrawal)}</span>
+                            </div>
+                            <div className="bg-purple-900/20 p-2 rounded border border-purple-500/30">
+                                <span className="block text-purple-400">A la Peña</span>
+                                <span className="font-bold text-white">{formatCurrency(peñaAmount)}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Origen del Dinero</label>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setSource('Banco')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Banco' ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
+                            >
+                                Banco
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSource('Efectivo')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Efectivo' ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
+                            >
+                                Efectivo
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha</label>
+                        <input 
+                            type="date" 
+                            value={date} 
+                            onChange={e => setDate(e.target.value)} 
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-rose-500 outline-none" 
+                            required
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notas (Opcional)</label>
+                        <textarea 
+                            value={notes} 
+                            onChange={e => setNotes(e.target.value)} 
+                            rows={2}
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-rose-500 outline-none resize-none" 
+                            placeholder="Detalles..."
+                        />
+                    </div>
+                    <button 
+                        type="submit" 
+                        disabled={isSubmitting}
+                        className="w-full py-3 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                    >
+                        {isSubmitting ? <Loader2 className="animate-spin" /> : <LogOut size={18} />}
+                        Registrar Retiro
+                    </button>
+                </form>
+            </div>
+
+            {/* List */}
+            <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <History size={20} className="text-slate-400" />
+                        Historial de Retiros
+                    </h3>
+                    <div className="bg-slate-900 px-3 py-1 rounded-lg border border-slate-600 text-xs font-mono text-rose-400 font-bold">
+                        Total: {formatCurrency(withdrawals.reduce((acc, r) => acc + r.amount, 0))}
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto max-h-[500px] pr-2">
+                    {withdrawals.length === 0 ? (
+                        <div className="text-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-xl">
+                            <RefreshCw size={32} className="mx-auto mb-2 opacity-50" />
+                            <p>No hay retiros registrados.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {[...withdrawals].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(record => (
+                                <div key={record.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center group hover:bg-slate-900 transition-colors">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-bold text-white text-lg">{formatCurrency(record.amount)}</span>
+                                            <span className={`text-[10px] uppercase px-2 py-0.5 rounded border ${record.source === 'Banco' ? 'border-blue-500/30 text-blue-400 bg-blue-500/10' : 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'}`}>
+                                                {record.source}
+                                            </span>
+                                            {record.peñaAmount && record.peñaAmount > 0 && (
+                                                <span className="text-[10px] uppercase px-2 py-0.5 rounded border border-purple-500/30 text-purple-400 bg-purple-500/10 flex items-center gap-1">
+                                                    <Wallet size={10} /> Peña: {formatCurrency(record.peñaAmount)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                                            <Calendar size={12} /> {new Date(record.date).toLocaleDateString()}
+                                            {record.notes && <span className="text-slate-400">• {record.notes}</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const ReinvestmentManager: React.FC = () => {
     const { reinvestments, handleRegisterReinvestment, handleDeleteReinvestment } = useDataContext();
@@ -200,27 +393,15 @@ const ReinvestmentManager: React.FC = () => {
     );
 };
 
-// --- PERSONAL FINANCE MANAGER (ISOLATED LOGIC VIA FIRESTORE) ---
 
-interface PersonalFund {
-    id: string;
-    name: string;
-    icon: string; // key for icon mapping
-    color: 'cyan' | 'purple' | 'emerald' | 'orange' | 'rose' | 'blue';
-    currentAmount: number;
-    goal: number;
-    bankName: string;
-    monthlyContribution: number;
-    lastUpdated: string;
-}
+
+// --- PERSONAL FINANCE MANAGER (ISOLATED LOGIC VIA FIRESTORE) ---
 
 interface TreasuryConfig {
     bankName: string;
     bankBalance: number;
     cashBalance: number;
 }
-
-const DEFAULT_FUNDS: PersonalFund[] = [];
 
 // Icon Mapping
 const ICON_MAP: Record<string, any> = {
@@ -246,15 +427,14 @@ const COLOR_STYLES = {
 };
 
 const PersonalFinanceManager: React.FC = () => {
-    const [funds, setFunds] = useState<PersonalFund[]>(DEFAULT_FUNDS);
+    const { funds, handleSaveFund, handleDeleteFund, showToast } = useDataContext();
     const [selectedFundId, setSelectedFundId] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [isEditingFund, setIsEditingFund] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const { showToast } = useAppContext();
 
     // Form State for Create/Edit
-    const [formData, setFormData] = useState<PersonalFund>({
+    const [formData, setFormData] = useState<any>({
         id: '',
         name: '',
         icon: 'target',
@@ -266,78 +446,11 @@ const PersonalFinanceManager: React.FC = () => {
         lastUpdated: new Date().toISOString()
     });
 
-    // LOAD DATA & MIGRATE FROM LOCALSTORAGE TO FIRESTORE
-    useEffect(() => {
-        // 1. Subscribe to Firestore (Real-time sync)
-        const unsubscribe = subscribeToCollection(TABLE_NAMES.PERSONAL_FUNDS, (data) => {
-            setFunds(data as PersonalFund[]);
-        });
-
-        // 2. Migration Logic: Check for old local storage data
-        const checkMigration = async () => {
-            // Check for new format in local storage
-            const localFunds = localStorage.getItem('bm_personal_funds');
-            const legacyVacation = localStorage.getItem('bm_personal_vacation');
-
-            if (localFunds) {
-                try {
-                    const parsed = JSON.parse(localFunds);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        showToast('Sincronizando datos locales con la nube...', 'info');
-                        // Upload each fund to firestore
-                        for (const fund of parsed) {
-                            const { id, ...rest } = fund; // Remove local ID, let Firestore generate new one
-                            await addDocument(TABLE_NAMES.PERSONAL_FUNDS, rest);
-                        }
-                        showToast('Migración completada. Datos asegurados en la nube.', 'success');
-                    }
-                    localStorage.removeItem('bm_personal_funds'); // Clear local
-                } catch (e) { console.error(e); }
-            } else if (legacyVacation) {
-                // Check for very old single vacation legacy
-                try {
-                    const oldData = JSON.parse(legacyVacation);
-                    showToast('Migrando fondo de vacaciones a la nube...', 'info');
-                    await addDocument(TABLE_NAMES.PERSONAL_FUNDS, {
-                        name: 'Mis Vacaciones',
-                        icon: 'plane',
-                        color: 'cyan',
-                        currentAmount: oldData.currentAmount || 0,
-                        goal: oldData.goal || 3000,
-                        bankName: oldData.bankName || 'Banco Principal',
-                        monthlyContribution: oldData.monthlyContribution || 100,
-                        lastUpdated: new Date().toISOString()
-                    });
-                    localStorage.removeItem('bm_personal_vacation');
-                    showToast('Fondo de vacaciones migrado exitosamente.', 'success');
-                } catch (e) { console.error(e); }
-            }
-        };
-
-        checkMigration();
-
-        return () => unsubscribe();
-    }, []);
-
-    const handleSaveFund = async () => {
+    const onSaveFund = async () => {
         if (!formData.name) return;
         setIsSaving(true);
         try {
-            const { id, ...dataToSave } = formData;
-            if (isEditingFund && id) {
-                await updateDocument(TABLE_NAMES.PERSONAL_FUNDS, id, { 
-                    ...dataToSave,
-                    lastUpdated: new Date().toISOString()
-                });
-                showToast('Apartado actualizado en la nube.', 'success');
-            } else {
-                await addDocument(TABLE_NAMES.PERSONAL_FUNDS, {
-                    ...dataToSave,
-                    lastUpdated: new Date().toISOString()
-                });
-                showToast('Nuevo apartado creado en la nube.', 'success');
-            }
-            
+            await handleSaveFund(formData);
             setIsCreating(false);
             setIsEditingFund(false);
             setFormData({ ...formData, id: '' }); // Reset ID
@@ -348,13 +461,12 @@ const PersonalFinanceManager: React.FC = () => {
         }
     };
 
-    const handleDeleteFund = async (id: string) => {
+    const onDeleteFund = async (id: string) => {
         if (confirm('¿Estás seguro de eliminar este apartado? Se borrará permanentemente de la base de datos.')) {
             try {
-                await deleteDocument(TABLE_NAMES.PERSONAL_FUNDS, id);
+                await handleDeleteFund(id);
                 setSelectedFundId(null);
                 setIsEditingFund(false);
-                showToast('Apartado eliminado.', 'info');
             } catch (e: any) {
                 showToast('Error al eliminar: ' + e.message, 'error');
             }
@@ -366,9 +478,9 @@ const PersonalFinanceManager: React.FC = () => {
         if (!fund) return;
 
         try {
-            await updateDocument(TABLE_NAMES.PERSONAL_FUNDS, fundId, {
-                currentAmount: fund.currentAmount + fund.monthlyContribution,
-                lastUpdated: new Date().toISOString()
+            await handleSaveFund({
+                ...fund,
+                currentAmount: fund.currentAmount + fund.monthlyContribution
             });
             showToast(`Añadidos ${formatCurrency(fund.monthlyContribution)} a ${fund.name}`, 'success');
         } catch (e: any) {
@@ -535,13 +647,13 @@ const PersonalFinanceManager: React.FC = () => {
 
                     <div className="flex justify-between pt-4 border-t border-slate-700">
                         {isEditingFund && (
-                            <button onClick={() => handleDeleteFund(formData.id)} className="text-red-400 hover:text-red-300 text-sm font-bold flex items-center gap-2">
+                            <button onClick={() => onDeleteFund(formData.id)} className="text-red-400 hover:text-red-300 text-sm font-bold flex items-center gap-2">
                                 <Trash2 size={16} /> Eliminar
                             </button>
                         )}
                         <div className="flex gap-2 ml-auto">
                             <button onClick={() => { setIsCreating(false); setIsEditingFund(false); }} className="px-4 py-2 text-slate-400 hover:text-white font-bold text-sm">Cancelar</button>
-                            <button onClick={handleSaveFund} disabled={isSaving} className="px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-sm shadow-lg flex items-center gap-2">
+                            <button onClick={onSaveFund} disabled={isSaving} className="px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-sm shadow-lg flex items-center gap-2">
                                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
                                 Guardar
                             </button>
@@ -1094,7 +1206,8 @@ const Accounting: React.FC = () => {
             </div>
 
             {activeTab === 'personal' && (
-                <div className="max-w-6xl mx-auto">
+                <div className="max-w-6xl mx-auto space-y-8">
+                    <WithdrawalManager />
                     <PersonalFinanceManager />
                 </div>
             )}

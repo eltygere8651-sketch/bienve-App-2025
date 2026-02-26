@@ -16,7 +16,7 @@ import {
     getCollection
 } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
-import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData, ReinvestmentRecord, LoanStatus, PaymentRecord } from '../types';
+import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData, ReinvestmentRecord, LoanStatus, PaymentRecord, PersonalFund, WithdrawalRecord } from '../types';
 import { calculateMonthlyInterest } from '../config';
 
 export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 'info') => void, user: any, isConfigReady: boolean) => {
@@ -26,6 +26,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
     const [archivedLoans, setArchivedLoans] = useState<Loan[]>([]);
     const [requests, setRequests] = useState<LoanRequest[]>([]);
     const [reinvestments, setReinvestments] = useState<ReinvestmentRecord[]>([]);
+    const [funds, setFunds] = useState<PersonalFund[]>([]);
+    const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
@@ -43,6 +45,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             setArchivedLoans([]);
             setRequests([]);
             setReinvestments([]);
+            setFunds([]);
+            setWithdrawals([]);
             setIsLoading(false);
             return;
         }
@@ -74,11 +78,21 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             setReinvestments(data as ReinvestmentRecord[]);
         }, [], (err) => console.error("Reinvestments sync error", err));
 
+        const unsubFunds = subscribeToCollection(TABLE_NAMES.PERSONAL_FUNDS, (data) => {
+            setFunds(data as PersonalFund[]);
+        }, [], (err) => console.error("Funds sync error", err));
+
+        const unsubWithdrawals = subscribeToCollection(TABLE_NAMES.WITHDRAWALS, (data) => {
+            setWithdrawals(data as WithdrawalRecord[]);
+        }, [], (err) => console.error("Withdrawals sync error", err));
+
         return () => {
             unsubClients();
             unsubLoans();
             unsubRequests();
             unsubReinvestments();
+            unsubFunds();
+            unsubWithdrawals();
         };
     }, [user, isConfigReady]);
 
@@ -574,6 +588,127 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         }
     }, [showToast]);
 
+    const handleSaveFund = useCallback(async (fundData: PersonalFund) => {
+        try {
+            const { id, ...dataToSave } = fundData;
+            if (id) {
+                await updateDocument(TABLE_NAMES.PERSONAL_FUNDS, id, { 
+                    ...dataToSave,
+                    lastUpdated: new Date().toISOString()
+                });
+                showToast('Apartado actualizado.', 'success');
+            } else {
+                await addDocument(TABLE_NAMES.PERSONAL_FUNDS, {
+                    ...dataToSave,
+                    lastUpdated: new Date().toISOString()
+                });
+                showToast('Nuevo apartado creado.', 'success');
+            }
+        } catch (e: any) {
+            showToast('Error al guardar fondo: ' + e.message, 'error');
+        }
+    }, [showToast]);
+
+    const handleDeleteFund = useCallback(async (id: string) => {
+        try {
+            await deleteDocument(TABLE_NAMES.PERSONAL_FUNDS, id);
+            showToast('Apartado eliminado.', 'info');
+        } catch (e: any) {
+            showToast('Error al eliminar fondo: ' + e.message, 'error');
+        }
+    }, [showToast]);
+
+    const handleRegisterWithdrawal = useCallback(async (amount: number, source: 'Banco' | 'Efectivo', notes: string, date: string, peñaPercentage: number) => {
+        try {
+            const peñaAmount = amount * (peñaPercentage / 100);
+            
+            // 1. Add Withdrawal Record
+            await addDocument(TABLE_NAMES.WITHDRAWALS, {
+                amount,
+                source,
+                notes,
+                date,
+                peñaPercentage,
+                peñaAmount,
+                createdAt: new Date().toISOString()
+            });
+
+            // 2. Update Treasury (Deduct total amount)
+            const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+            let currentBank = 0;
+            let currentCash = 0;
+            
+            if (treasuryDoc) {
+                const data = treasuryDoc as any;
+                currentBank = Number(data.bankBalance) || 0;
+                currentCash = Number(data.cashBalance) || 0;
+            }
+
+            if (source === 'Banco') {
+                currentBank -= amount;
+            } else {
+                currentCash -= amount;
+            }
+
+            await setDocument(TABLE_NAMES.TREASURY, 'main', { 
+                bankBalance: Number(currentBank), 
+                cashBalance: Number(currentCash) 
+            });
+
+            // 3. Update Peña Fund (if percentage > 0)
+            if (peñaAmount > 0) {
+                // Find "Peña" fund
+                // We need to access `funds` state here, but `useCallback` captures it.
+                // However, `funds` might be stale if not in dependency array.
+                // Better to query Firestore to be safe or rely on `funds` state if updated correctly.
+                // Since we are inside `useAppData`, we can use `funds` state but need to add it to deps.
+                // Alternatively, we can query for a fund with name "Peña" or similar.
+                
+                // Let's try to find it in the current `funds` state (we'll add `funds` to deps).
+                // Or better, query it to avoid stale state issues if possible, but `funds` state is synced.
+                
+                // We'll use a specific ID or Name convention? Let's search by name "Peña" or create it.
+                // Actually, since `funds` is in scope, let's use it.
+                // Wait, `funds` is not in the dependency array of this `useCallback` yet.
+                // I will add `funds` to dependency array.
+                
+                // But wait, if I add `funds` to dependency array, `handleRegisterWithdrawal` changes on every fund update.
+                // That's fine.
+                
+                // Let's implement the logic to find/create "Peña" fund.
+                // We need to fetch the collection to be sure, or use the state.
+                // Using state is faster but requires correct deps.
+                
+                // Let's use `getCollection` to find the fund to be safe and avoid re-creating the function too often.
+                const fundsSnapshot = await getCollection(TABLE_NAMES.PERSONAL_FUNDS, [where('name', '==', 'Peña')]);
+                let peñaFund = (fundsSnapshot as PersonalFund[])[0];
+
+                if (peñaFund) {
+                    await updateDocument(TABLE_NAMES.PERSONAL_FUNDS, peñaFund.id, {
+                        currentAmount: peñaFund.currentAmount + peñaAmount,
+                        lastUpdated: new Date().toISOString()
+                    });
+                } else {
+                    await addDocument(TABLE_NAMES.PERSONAL_FUNDS, {
+                        name: 'Peña',
+                        icon: 'wallet',
+                        color: 'purple',
+                        currentAmount: peñaAmount,
+                        goal: 10000, // Default goal
+                        bankName: 'Ahorro Personal',
+                        monthlyContribution: 0,
+                        lastUpdated: new Date().toISOString()
+                    });
+                }
+            }
+
+            showToast(`Retiro registrado. ${peñaAmount > 0 ? `Se destinaron ${peñaAmount} a la Peña.` : ''}`, 'success');
+        } catch (err: any) {
+            console.error(err);
+            showToast('Error registrando retiro.', 'error');
+        }
+    }, [showToast]);
+
     const handleGenerateTestClient = useCallback(async () => {
         await handleAddClientAndLoan({
             name: 'Cliente Prueba',
@@ -613,6 +748,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         archivedLoans,
         requests,
         reinvestments,
+        funds,
+        withdrawals,
         isLoading,
         error,
         clientLoanData,
@@ -642,6 +779,9 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         handleBatchDeleteClients,
         handleRegisterReinvestment,
         handleDeleteReinvestment,
+        handleSaveFund,
+        handleDeleteFund,
+        handleRegisterWithdrawal,
         reloadRequests,
         refreshAllData,
         recalculateTreasury,

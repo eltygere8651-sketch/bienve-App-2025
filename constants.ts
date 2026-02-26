@@ -12,6 +12,7 @@ export const TABLE_NAMES = {
     PERSONAL_FUNDS: 'personal_funds', // New collection for isolated personal finance
     TREASURY: 'treasury', // New collection for company treasury state
     REINVESTMENTS: 'reinvestments', // New collection for profit reinvestment tracking
+    WITHDRAWALS: 'withdrawals', // New collection for personal withdrawals
 };
 
 // Placeholder images for the loan request form
