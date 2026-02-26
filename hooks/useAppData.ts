@@ -787,8 +787,74 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
     }, [handleAddClientAndLoan]);
 
-    const handleGenerateTestRequest = useCallback(async () => {}, []); 
-    const handleDeleteTestRequests = useCallback(async () => {}, []);
+    const handleDeleteTestData = useCallback(async () => {
+        try {
+            // 1. Delete Test Clients and their Loans
+            const testClients = clients.filter(c => 
+                c.name.toLowerCase().includes('prueba') || 
+                c.name.toLowerCase().includes('test') ||
+                c.idNumber.toLowerCase().includes('test')
+            );
+
+            let deletedClientsCount = 0;
+            let deletedLoansCount = 0;
+
+            for (const client of testClients) {
+                // Delete client
+                await deleteDocument(TABLE_NAMES.CLIENTS, client.id);
+                deletedClientsCount++;
+
+                // Delete associated loans
+                const clientLoans = loans.filter(l => l.clientId === client.id);
+                for (const loan of clientLoans) {
+                    await deleteDocument(TABLE_NAMES.LOANS, loan.id);
+                    deletedLoansCount++;
+                }
+            }
+
+            // 2. Delete Test Requests
+            const testRequests = requests.filter(r => 
+                r.fullName.toLowerCase().includes('prueba') || 
+                r.fullName.toLowerCase().includes('test') ||
+                r.idNumber.toLowerCase().includes('test')
+            );
+
+            let deletedRequestsCount = 0;
+            for (const request of testRequests) {
+                await deleteDocument(TABLE_NAMES.REQUESTS, request.id);
+                deletedRequestsCount++;
+            }
+
+            showToast(`Datos de prueba eliminados: ${deletedClientsCount} clientes, ${deletedLoansCount} préstamos, ${deletedRequestsCount} solicitudes.`, 'success');
+        } catch (err: any) {
+            console.error(err);
+            showToast('Error al eliminar datos de prueba: ' + err.message, 'error');
+        }
+    }, [clients, loans, requests, showToast]);
+
+    const handleGenerateTestRequest = useCallback(async () => {
+        // Implementation for generating a test request if needed
+    }, []); 
+
+    const handleDeleteTestRequests = useCallback(async () => {
+         try {
+            const testRequests = requests.filter(r => 
+                r.fullName.toLowerCase().includes('prueba') || 
+                r.fullName.toLowerCase().includes('test') ||
+                r.idNumber.toLowerCase().includes('test')
+            );
+
+            let deletedRequestsCount = 0;
+            for (const request of testRequests) {
+                await deleteDocument(TABLE_NAMES.REQUESTS, request.id);
+                deletedRequestsCount++;
+            }
+            showToast(`${deletedRequestsCount} solicitudes de prueba eliminadas.`, 'success');
+        } catch (err: any) {
+            showToast('Error: ' + err.message, 'error');
+        }
+    }, [requests, showToast]);
+
     const reloadRequests = useCallback(async () => {}, []);
     const refreshAllData = useCallback(async () => {}, []);
     const recalculateTreasury = useCallback(async () => {
@@ -834,6 +900,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         handleAddLoan,
         handleGenerateTestRequest,
         handleGenerateTestClient,
+        handleDeleteTestData,
         handleDeleteTestRequests,
         handleUpdateLoan,
         handleUpdateClient,

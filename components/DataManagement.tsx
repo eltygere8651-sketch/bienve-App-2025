@@ -1,14 +1,15 @@
 
 import React, { useState } from 'react';
-import { DatabaseBackup, Download, Loader2, ShieldCheck, Zap, PlusCircle } from 'lucide-react';
+import { DatabaseBackup, Download, Loader2, ShieldCheck, Zap, PlusCircle, Trash2 } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
 
 const DataManagement: React.FC = () => {
     const { showToast } = useAppContext();
-    const { clients, loans, requests, handleGenerateTestClient } = useDataContext();
+    const { clients, loans, requests, handleGenerateTestClient, handleDeleteTestData } = useDataContext();
     const [isExporting, setIsExporting] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const handleExportBackup = async () => {
         setIsExporting(true);
@@ -50,6 +51,14 @@ const DataManagement: React.FC = () => {
         setIsGenerating(true);
         await handleGenerateTestClient();
         setIsGenerating(false);
+    };
+
+    const handleDeleteClick = async () => {
+        if (window.confirm('¿Estás seguro de que quieres eliminar todos los datos de prueba? Esta acción no se puede deshacer.')) {
+            setIsDeleting(true);
+            await handleDeleteTestData();
+            setIsDeleting(false);
+        }
     };
 
     return (
@@ -98,14 +107,24 @@ const DataManagement: React.FC = () => {
                     <p className="text-sm text-slate-400">
                         Se creará un cliente con un préstamo activo de 1.000€ para que puedas emitir recibos de prueba.
                     </p>
-                    <button
-                        onClick={handleGenerateClick}
-                        disabled={isGenerating}
-                        className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-600/50 font-bold rounded-lg transition-all hover:scale-105"
-                    >
-                        {isGenerating ? <Loader2 size={18} className="mr-2 animate-spin" /> : <PlusCircle size={18} className="mr-2" />}
-                        Generar Cliente Test
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                        <button
+                            onClick={handleGenerateClick}
+                            disabled={isGenerating}
+                            className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-600/50 font-bold rounded-lg transition-all hover:scale-105"
+                        >
+                            {isGenerating ? <Loader2 size={18} className="mr-2 animate-spin" /> : <PlusCircle size={18} className="mr-2" />}
+                            Generar Cliente Test
+                        </button>
+                        <button
+                            onClick={handleDeleteClick}
+                            disabled={isDeleting}
+                            className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-600/50 font-bold rounded-lg transition-all hover:scale-105"
+                        >
+                            {isDeleting ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Trash2 size={18} className="mr-2" />}
+                            Limpiar Datos Test
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
