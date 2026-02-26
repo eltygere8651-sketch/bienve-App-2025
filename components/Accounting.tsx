@@ -7,7 +7,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square } from 'lucide-react';
+import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square, LogOut } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 import { ReinvestmentRecord, PersonalFund } from '../types';
@@ -72,10 +72,13 @@ const WithdrawalManager: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in mb-8">
             {/* Form */}
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
                     <LogOut size={20} className="text-rose-400" />
                     Registrar Retiro Personal
                 </h3>
+                <p className="text-xs text-slate-400 mb-4">
+                    Registra tus gastos personales. El monto se descontará automáticamente de la caja.
+                </p>
                 
                 {/* Peña Configuration */}
                 <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-600 mb-6">
@@ -1193,6 +1196,7 @@ const Accounting: React.FC = () => {
                         className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'personal' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-white'}`}
                     >
                         <Umbrella size={16} /> Finanzas Personales
+                        <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">Nuevo</span>
                     </button>
                 </div>
 
