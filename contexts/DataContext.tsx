@@ -49,6 +49,8 @@ interface DataContextType {
     handleSaveFund: (fundData: PersonalFund) => Promise<void>;
     handleDeleteFund: (id: string) => Promise<void>;
     handleRegisterWithdrawal: (amount: number, source: 'Banco' | 'Efectivo', notes: string, date: string, peñaPercentage: number) => Promise<void>;
+    handleDeleteWithdrawal: (id: string) => Promise<void>;
+    handleUpdateWithdrawal: (id: string, updatedData: Partial<WithdrawalRecord>) => Promise<void>;
     reloadRequests: () => Promise<void>;
     refreshAllData: () => Promise<void>; 
     recalculateTreasury: () => Promise<void>;

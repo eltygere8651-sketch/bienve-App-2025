@@ -7,10 +7,12 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square, LogOut } from 'lucide-react';
+import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square, LogOut, FileDown, Share2 } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 import { ReinvestmentRecord, PersonalFund } from '../types';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // --- COMPONENTS ---
 
@@ -33,21 +35,12 @@ const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: 
 // --- REINVESTMENT MANAGER COMPONENT ---
 
 const WithdrawalManager: React.FC = () => {
-    const { handleRegisterWithdrawal, withdrawals } = useDataContext();
+    const { handleRegisterWithdrawal, handleDeleteWithdrawal, withdrawals } = useDataContext();
     const [amount, setAmount] = useState('');
     const [source, setSource] = useState<'Banco' | 'Efectivo'>('Banco');
     const [notes, setNotes] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [peñaPercentage, setPeñaPercentage] = useState(() => {
-        return parseFloat(localStorage.getItem('bm_peña_percentage') || '0');
-    });
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const handlePercentageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = parseFloat(e.target.value);
-        setPeñaPercentage(val);
-        localStorage.setItem('bm_peña_percentage', val.toString());
-    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -56,7 +49,7 @@ const WithdrawalManager: React.FC = () => {
 
         setIsSubmitting(true);
         try {
-            await handleRegisterWithdrawal(val, source, notes, date, peñaPercentage);
+            await handleRegisterWithdrawal(val, source, notes, date, 0);
             setAmount('');
             setNotes('');
             setSource('Banco');
@@ -65,8 +58,72 @@ const WithdrawalManager: React.FC = () => {
         }
     };
 
-    const peñaAmount = (parseFloat(amount) || 0) * (peñaPercentage / 100);
-    const netWithdrawal = (parseFloat(amount) || 0) - peñaAmount;
+    const handleDelete = async (id: string) => {
+        if (window.confirm('¿Estás seguro de eliminar este registro? Se restaurará el saldo.')) {
+            await handleDeleteWithdrawal(id);
+        }
+    };
+
+    const handleExportPDF = () => {
+        const doc = new jsPDF();
+        
+        // Title
+        doc.setFontSize(18);
+        doc.text('Historial de Pagos y Retiros', 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 30);
+
+        // Table
+        const tableColumn = ["Fecha", "Monto", "Origen", "Notas"];
+        const tableRows: any[] = [];
+
+        [...withdrawals].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).forEach(record => {
+            const rowData = [
+                new Date(record.date).toLocaleDateString(),
+                formatCurrency(record.amount),
+                record.source,
+                record.notes || '-'
+            ];
+            tableRows.push(rowData);
+        });
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 40,
+            theme: 'grid',
+            styles: { fontSize: 10, cellPadding: 3 },
+            headStyles: { fillColor: [66, 66, 66] }
+        });
+
+        // Total
+        const total = withdrawals.reduce((acc, r) => acc + r.amount, 0);
+        const finalY = (doc as any).lastAutoTable.finalY || 40;
+        doc.text(`Total: ${formatCurrency(total)}`, 14, finalY + 10);
+
+        doc.save(`pagos_retiros_${new Date().toISOString().split('T')[0]}.pdf`);
+    };
+
+    const handleShare = async () => {
+        const text = `Historial de Pagos:\n\n` + 
+            withdrawals.map(w => `${new Date(w.date).toLocaleDateString()}: ${formatCurrency(w.amount)} (${w.source}) - ${w.notes || ''}`).join('\n') +
+            `\n\nTotal: ${formatCurrency(withdrawals.reduce((acc, r) => acc + r.amount, 0))}`;
+
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: 'Historial de Pagos',
+                    text: text,
+                });
+            } catch (err) {
+                console.error('Error sharing:', err);
+            }
+        } else {
+            // Fallback: Copy to clipboard
+            navigator.clipboard.writeText(text);
+            alert('Historial copiado al portapapeles');
+        }
+    };
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in mb-8">
@@ -74,37 +131,15 @@ const WithdrawalManager: React.FC = () => {
             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
                 <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
                     <LogOut size={20} className="text-rose-400" />
-                    Registrar Retiro Personal
+                    Registrar Pago / Retiro
                 </h3>
                 <p className="text-xs text-slate-400 mb-4">
-                    Registra tus gastos personales. El monto se descontará automáticamente de la caja.
+                    Registra pagos o retiros personales. El monto se descontará automáticamente de la caja.
                 </p>
                 
-                {/* Peña Configuration */}
-                <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-600 mb-6">
-                    <div className="flex justify-between items-center mb-2">
-                        <label className="text-xs font-bold text-purple-400 uppercase flex items-center gap-1">
-                            <Wallet size={12} /> Configuración Peña
-                        </label>
-                        <span className="text-xs font-bold text-white bg-purple-600 px-2 py-0.5 rounded-full">{peñaPercentage}%</span>
-                    </div>
-                    <input 
-                        type="range" 
-                        min="0" 
-                        max="50" 
-                        step="1"
-                        value={peñaPercentage}
-                        onChange={handlePercentageChange}
-                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                    />
-                    <p className="text-[10px] text-slate-500 mt-2">
-                        El {peñaPercentage}% de cada retiro se enviará automáticamente a tu fondo "Peña".
-                    </p>
-                </div>
-
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Total a Retirar (€)</label>
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Total (€)</label>
                         <input 
                             type="number" 
                             value={amount} 
@@ -116,19 +151,6 @@ const WithdrawalManager: React.FC = () => {
                         />
                     </div>
                     
-                    {parseFloat(amount) > 0 && peñaPercentage > 0 && (
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="bg-slate-900 p-2 rounded border border-slate-600">
-                                <span className="block text-slate-500">A tu Bolsillo</span>
-                                <span className="font-bold text-white">{formatCurrency(netWithdrawal)}</span>
-                            </div>
-                            <div className="bg-purple-900/20 p-2 rounded border border-purple-500/30">
-                                <span className="block text-purple-400">A la Peña</span>
-                                <span className="font-bold text-white">{formatCurrency(peñaAmount)}</span>
-                            </div>
-                        </div>
-                    )}
-
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Origen del Dinero</label>
                         <div className="flex gap-2">
@@ -174,7 +196,7 @@ const WithdrawalManager: React.FC = () => {
                         className="w-full py-3 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
                     >
                         {isSubmitting ? <Loader2 className="animate-spin" /> : <LogOut size={18} />}
-                        Registrar Retiro
+                        Registrar Pago
                     </button>
                 </form>
             </div>
@@ -184,10 +206,26 @@ const WithdrawalManager: React.FC = () => {
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <History size={20} className="text-slate-400" />
-                        Historial de Retiros
+                        Historial de Pagos
                     </h3>
-                    <div className="bg-slate-900 px-3 py-1 rounded-lg border border-slate-600 text-xs font-mono text-rose-400 font-bold">
-                        Total: {formatCurrency(withdrawals.reduce((acc, r) => acc + r.amount, 0))}
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={handleExportPDF}
+                            className="p-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg transition-colors"
+                            title="Exportar PDF"
+                        >
+                            <FileDown size={18} />
+                        </button>
+                        <button 
+                            onClick={handleShare}
+                            className="p-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg transition-colors"
+                            title="Compartir"
+                        >
+                            <Share2 size={18} />
+                        </button>
+                        <div className="bg-slate-900 px-3 py-1 rounded-lg border border-slate-600 text-xs font-mono text-rose-400 font-bold">
+                            Total: {formatCurrency(withdrawals.reduce((acc, r) => acc + r.amount, 0))}
+                        </div>
                     </div>
                 </div>
 
@@ -195,7 +233,7 @@ const WithdrawalManager: React.FC = () => {
                     {withdrawals.length === 0 ? (
                         <div className="text-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-xl">
                             <RefreshCw size={32} className="mx-auto mb-2 opacity-50" />
-                            <p>No hay retiros registrados.</p>
+                            <p>No hay pagos registrados.</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
@@ -218,6 +256,13 @@ const WithdrawalManager: React.FC = () => {
                                             {record.notes && <span className="text-slate-400">• {record.notes}</span>}
                                         </div>
                                     </div>
+                                    <button 
+                                        onClick={() => handleDelete(record.id)}
+                                        className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                        title="Eliminar registro"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -1170,49 +1215,63 @@ const Accounting: React.FC = () => {
                 </div>
             </div>
 
-            {/* Navigation Tabs */}
-            <div className="flex flex-col sm:flex-row border-b border-slate-700 mb-6 gap-4 sm:gap-0 justify-between items-end sm:items-center">
-                <div className="flex space-x-4 w-full sm:w-auto overflow-x-auto">
-                    <button
-                        onClick={() => setActiveTab('global')}
-                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'global' ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-400 hover:text-white'}`}
-                    >
-                        <BarChart3 size={16} /> Visión Global
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('profits')}
-                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'profits' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'}`}
-                    >
-                        <Coins size={16} /> Mis Ganancias
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('reinvestments')}
-                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'reinvestments' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}
-                    >
-                        <RefreshCw size={16} /> Reinversiones
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('personal')}
-                        className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'personal' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-slate-400 hover:text-white'}`}
-                    >
-                        <Umbrella size={16} /> Finanzas Personales
-                        <span className="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full animate-pulse">Nuevo</span>
-                    </button>
-                </div>
-
+            {/* Navigation Tabs - Optimized Grid for Mobile */}
+            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 mb-6">
+                <button
+                    onClick={() => setActiveTab('global')}
+                    className={`flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'global' ? 'bg-primary-500/20 text-primary-400 border-primary-500/30 shadow-lg shadow-primary-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
+                >
+                    <BarChart3 size={18} /> 
+                    <span>Global</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('profits')}
+                    className={`flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'profits' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-lg shadow-emerald-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
+                >
+                    <Coins size={18} /> 
+                    <span>Ganancias</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('payments')}
+                    className={`flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'payments' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-lg shadow-rose-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
+                >
+                    <CreditCard size={18} /> 
+                    <span>Pagos</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('reinvestments')}
+                    className={`flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'reinvestments' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 shadow-lg shadow-blue-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
+                >
+                    <RefreshCw size={18} /> 
+                    <span>Reinversiones</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('personal')}
+                    className={`col-span-2 md:col-span-1 md:w-auto flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'personal' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
+                >
+                    <Umbrella size={18} /> 
+                    <span>Finanzas Personales</span>
+                </button>
                 {activeTab === 'global' && (
-                    <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 w-full sm:w-auto">
-                        <button onClick={() => setTimeRange('month')} className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'month' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Mes</button>
-                        <button onClick={() => setTimeRange('year')} className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'year' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Año</button>
-                        <button onClick={() => setTimeRange('all')} className={`flex-1 sm:flex-none px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'all' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Total</button>
+                    <div className="flex justify-end animate-fade-in">
+                        <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 w-full sm:w-auto">
+                            <button onClick={() => setTimeRange('month')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'month' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Mes</button>
+                            <button onClick={() => setTimeRange('year')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'year' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Año</button>
+                            <button onClick={() => setTimeRange('all')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'all' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Total</button>
+                        </div>
                     </div>
                 )}
             </div>
 
             {activeTab === 'personal' && (
                 <div className="max-w-6xl mx-auto space-y-8">
-                    <WithdrawalManager />
                     <PersonalFinanceManager />
+                </div>
+            )}
+
+            {activeTab === 'payments' && (
+                <div className="max-w-6xl mx-auto space-y-8">
+                    <WithdrawalManager />
                 </div>
             )}
 

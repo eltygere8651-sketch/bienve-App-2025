@@ -709,6 +709,71 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         }
     }, [showToast]);
 
+    const handleDeleteWithdrawal = useCallback(async (id: string) => {
+        try {
+            const withdrawalDoc = await getDocument(TABLE_NAMES.WITHDRAWALS, id);
+            if (!withdrawalDoc) throw new Error('Retiro no encontrado');
+            
+            const withdrawal = withdrawalDoc as WithdrawalRecord;
+            const { amount, source, peñaAmount } = withdrawal;
+
+            // 1. Delete Withdrawal Record
+            await deleteDocument(TABLE_NAMES.WITHDRAWALS, id);
+
+            // 2. Update Treasury (Refund amount)
+            const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+            let currentBank = 0;
+            let currentCash = 0;
+            
+            if (treasuryDoc) {
+                const data = treasuryDoc as any;
+                currentBank = Number(data.bankBalance) || 0;
+                currentCash = Number(data.cashBalance) || 0;
+            }
+
+            if (source === 'Banco') {
+                currentBank += amount;
+            } else {
+                currentCash += amount;
+            }
+
+            await setDocument(TABLE_NAMES.TREASURY, 'main', { 
+                bankBalance: Number(currentBank), 
+                cashBalance: Number(currentCash) 
+            });
+
+            // 3. Update Peña Fund (Refund peñaAmount)
+            if (peñaAmount && peñaAmount > 0) {
+                const fundsSnapshot = await getCollection(TABLE_NAMES.PERSONAL_FUNDS, [where('name', '==', 'Peña')]);
+                const peñaFund = (fundsSnapshot as PersonalFund[])[0];
+                
+                if (peñaFund) {
+                    const currentAmount = Number(peñaFund.currentAmount) || 0;
+                    await updateDocument(TABLE_NAMES.PERSONAL_FUNDS, peñaFund.id, {
+                        currentAmount: Math.max(0, currentAmount - peñaAmount),
+                        lastUpdated: new Date().toISOString()
+                    });
+                }
+            }
+
+            showToast('Retiro eliminado y saldos restaurados.', 'success');
+        } catch (e: any) {
+            console.error(e);
+            showToast('Error al eliminar retiro: ' + e.message, 'error');
+        }
+    }, [showToast]);
+
+    const handleUpdateWithdrawal = useCallback(async (id: string, updatedData: Partial<WithdrawalRecord>) => {
+        try {
+            await updateDocument(TABLE_NAMES.WITHDRAWALS, id, {
+                ...updatedData,
+            });
+            showToast('Retiro actualizado.', 'success');
+        } catch (e: any) {
+            showToast('Error al actualizar retiro: ' + e.message, 'error');
+        }
+    }, [showToast]);
+
     const handleGenerateTestClient = useCallback(async () => {
         await handleAddClientAndLoan({
             name: 'Cliente Prueba',
@@ -782,6 +847,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         handleSaveFund,
         handleDeleteFund,
         handleRegisterWithdrawal,
+        handleDeleteWithdrawal,
+        handleUpdateWithdrawal,
         reloadRequests,
         refreshAllData,
         recalculateTreasury,
