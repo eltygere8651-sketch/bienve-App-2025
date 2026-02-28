@@ -1,20 +1,20 @@
-
 import React, { useState, useMemo } from 'react';
 import { useDataContext } from '../contexts/DataContext';
-import { Archive, Sparkles, TrendingUp, CheckCircle, AlertTriangle, FileText, Calendar, Search, History, Users, RefreshCw, Trash2, CheckSquare, Square, ArrowDown } from 'lucide-react';
+import { Archive, Sparkles, TrendingUp, CheckCircle, AlertTriangle, FileText, Calendar, Search, History, Users, RefreshCw, Trash2, CheckSquare, Square, ArrowDown, Edit } from 'lucide-react';
 import { formatCurrency } from '../services/utils';
 import { Loan, LoanStatus, Client } from '../types';
 import LoanDetailsModal from './LoanDetailsModal';
 import { useAppContext } from '../contexts/AppContext';
 
 const HistoryPanel: React.FC = () => {
-    const { archivedLoans, handleArchivePaidLoans, clients, archivedClients, handleRestoreClient, handleBatchDeleteClients, loadMoreArchivedLoans, hasMoreArchivedLoans } = useDataContext();
+    const { archivedLoans, handleArchivePaidLoans, clients, archivedClients, handleRestoreClient, handleBatchDeleteClients, loadMoreArchivedLoans, hasMoreArchivedLoans, handleDeleteLoan } = useDataContext();
     const { showConfirmModal } = useAppContext();
     const [activeTab, setActiveTab] = useState<'loans' | 'clients'>('loans');
     const [searchTerm, setSearchTerm] = useState('');
     const [isCleaning, setIsCleaning] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+    const [initialModalTab, setInitialModalTab] = useState<'details' | 'payment' | 'history' | 'edit'>('history');
     
     // Selection state for Batch Delete
     const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
@@ -103,6 +103,17 @@ const HistoryPanel: React.FC = () => {
         });
     };
 
+    const handleDeleteLoanClick = (loan: Loan) => {
+        showConfirmModal({
+            title: 'Eliminar Préstamo Archivado',
+            message: `¿Estás seguro de que quieres eliminar permanentemente el préstamo de ${loan.clientName} por ${formatCurrency(loan.amount)}? Esta acción es irreversible.`,
+            onConfirm: async () => {
+                await handleDeleteLoan(loan.id, loan.clientName);
+            },
+            type: 'warning'
+        });
+    };
+
     return (
         <>
              <LoanDetailsModal
@@ -110,7 +121,7 @@ const HistoryPanel: React.FC = () => {
                 onClose={() => setSelectedLoan(null)}
                 loan={selectedLoan}
                 client={selectedLoan ? clients.find(c => c.id === selectedLoan.clientId) || null : null}
-                initialTab="history"
+                initialTab={initialModalTab}
             />
             
             <div className="space-y-8 animate-fade-in max-w-7xl mx-auto pb-20 relative">
@@ -224,12 +235,35 @@ const HistoryPanel: React.FC = () => {
                                                                 </div>
                                                             </td>
                                                             <td className="px-6 py-4 text-right">
-                                                                <button 
-                                                                    onClick={() => setSelectedLoan(loan)}
-                                                                    className="text-primary-400 hover:text-primary-300 font-medium text-xs bg-primary-500/10 px-3 py-1.5 rounded-lg border border-primary-500/20 hover:bg-primary-500/20 transition-all"
-                                                                >
-                                                                    Ver Ficha
-                                                                </button>
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            setInitialModalTab('history');
+                                                                            setSelectedLoan(loan);
+                                                                        }}
+                                                                        className="text-primary-400 hover:text-primary-300 font-medium text-xs bg-primary-500/10 px-3 py-1.5 rounded-lg border border-primary-500/20 hover:bg-primary-500/20 transition-all"
+                                                                        title="Ver Detalles"
+                                                                    >
+                                                                        <FileText size={16} />
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            setInitialModalTab('edit');
+                                                                            setSelectedLoan(loan);
+                                                                        }}
+                                                                        className="text-amber-400 hover:text-amber-300 font-medium text-xs bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20 hover:bg-amber-500/20 transition-all"
+                                                                        title="Editar Préstamo"
+                                                                    >
+                                                                        <Edit size={16} />
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => handleDeleteLoanClick(loan)}
+                                                                        className="text-red-400 hover:text-red-300 font-medium text-xs bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/20 transition-all"
+                                                                        title="Eliminar Préstamo"
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     ))}

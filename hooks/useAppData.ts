@@ -497,6 +497,9 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
 
     const handleUpdateLoan = useCallback(async (loanId: string, updatedData: Partial<Loan>) => {
         await updateDocument(TABLE_NAMES.LOANS, loanId, updatedData);
+        
+        // Update local state for archived loans if present
+        setArchivedLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedData } : l));
     }, []);
 
     const handleUpdateClient = useCallback(async (clientId: string, updatedData: Partial<Client>) => {
@@ -505,6 +508,10 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
 
     const handleDeleteLoan = useCallback(async (loanId: string, clientName: string) => {
         await deleteDocument(TABLE_NAMES.LOANS, loanId);
+        
+        // Remove from local state if present
+        setArchivedLoans(prev => prev.filter(l => l.id !== loanId));
+        
         showToast(`Préstamo de ${clientName} eliminado.`, 'info');
     }, [showToast]);
 
@@ -512,10 +519,17 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         // In this implementation with `archived` flag, we just set `archived: true` on PAID loans.
         const paidLoans = loans.filter(l => l.status === LoanStatus.PAID);
         let count = 0;
+        const archived: Loan[] = [];
+
         for (const loan of paidLoans) {
             await updateDocument(TABLE_NAMES.LOANS, loan.id, { archived: true });
+            archived.push({ ...loan, archived: true });
             count++;
         }
+        
+        // Add to archived loans state
+        setArchivedLoans(prev => [...archived, ...prev]);
+        
         showToast(`${count} préstamos archivados.`, 'success');
         return count;
     }, [loans, showToast]);

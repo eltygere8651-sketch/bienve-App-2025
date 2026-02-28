@@ -1,13 +1,12 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { Loan, LoanStatus, FilterStatus, Client } from '../types';
+import { Loan, LoanStatus, FilterStatus, Client, DashboardStats } from '../types';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Banknote, Clock, ThumbsUp, AlertTriangle, FileWarning, CloudCheck, CloudOff, Wallet } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCurrency } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
-import { DashboardStats } from '../services/geminiService';
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; change?: string; changeType?: 'increase' | 'decrease' }> = ({ title, value, icon, change, changeType }) => (
     <div className="glass-card p-6 rounded-2xl relative overflow-hidden group transition-all hover:-translate-y-1 bg-slate-800/60 border border-white/5">

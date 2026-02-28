@@ -110,9 +110,18 @@ export interface LoanRequest {
     signature?: string;
 }
 
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient' | 'history' | 'accounting';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient' | 'history' | 'accounting' | 'loanCalculator';
 
 export type FilterStatus = LoanStatus | 'Todos';
 
 export type NewClientData = Omit<Client, 'id' | 'joinDate'>;
 export type NewLoanData = { amount: number; term: number };
+
+export interface DashboardStats {
+    totalLoaned: number;
+    totalOutstanding: number;
+    activeLoans: number;
+    counts: {
+        [key in LoanStatus]?: number;
+    };
+}

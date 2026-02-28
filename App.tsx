@@ -7,7 +7,7 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Share2, Download, History, PieChart } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Share2, Download, History, PieChart, Calculator } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import LoanRequestForm from './components/LoanRequestForm';
@@ -23,6 +23,7 @@ const DataManagement = React.lazy(() => import('./components/DataManagement'));
 const NewClientForm = React.lazy(() => import('./components/NewClientForm'));
 const HistoryPanel = React.lazy(() => import('./components/HistoryPanel'));
 const Accounting = React.lazy(() => import('./components/Accounting'));
+const LoanCalculator = React.lazy(() => import('./components/LoanCalculator'));
 
 const LoadingFallback = () => (
     <div className="flex justify-center items-center h-full min-h-[50vh]">
@@ -169,6 +170,7 @@ const App: React.FC = () => {
                         case 'history': return isAuthenticated ? <HistoryPanel /> : <Auth />;
                         case 'settings': return isAuthenticated ? <SettingsComponent /> : <Auth />;
                         case 'dataManagement': return isAuthenticated ? <DataManagement /> : <Auth />;
+                        case 'loanCalculator': return isAuthenticated ? <LoanCalculator /> : <Auth />;
                         default: return isAuthenticated ? <Dashboard /> : <Welcome />;
                     }
                 })()}
@@ -215,6 +217,7 @@ const App: React.FC = () => {
                         <div className="mt-8 mb-3 px-3">
                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Herramientas</h3>
                         </div>
+                        <NavItem icon={<Calculator />} label="Calculadora" view="loanCalculator" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<ReceiptText />} label="Recibos" view="receiptGenerator" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<DatabaseBackup />} label="Base de Datos" view="dataManagement" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />

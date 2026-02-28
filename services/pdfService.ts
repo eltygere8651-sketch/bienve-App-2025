@@ -234,7 +234,7 @@ export const generateClientReport = (client: Client, loans: Loan[]) => {
         }
     });
     
-    const pageCount = doc.internal.getNumberOfPages();
+    const pageCount = doc.getNumberOfPages();
     for(let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setFontSize(8);
@@ -667,7 +667,7 @@ export const generateLoanHistoryPDF = (loan: Loan) => {
     });
 
     // Footer
-    const pageCount = doc.internal.getNumberOfPages();
+    const pageCount = doc.getNumberOfPages();
     for(let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setFontSize(8);

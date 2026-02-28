@@ -32,7 +32,7 @@ const RequestStatusChecker: React.FC = () => {
             if (results && results.length > 0) {
                 // Sort by date desc (latest first)
                 results.sort((a: any, b: any) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
-                setResult(results[0] as StatusResult);
+                setResult(results[0] as unknown as StatusResult);
             } else {
                 setResult('not_found');
             }
