@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import { Loan, PaymentRecord } from '../types';
 import { formatCurrency } from '../services/utils';
-import { Calendar, Info, ArrowUp, Edit, Save, X, Loader2 } from 'lucide-react';
+import { Calendar, Info, ArrowUp, Edit, Save, X, Loader2, FileText } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
+import { generatePaymentReceipt } from '../services/pdfService';
 
 interface PaymentHistoryProps {
     loan: Loan;
@@ -59,6 +60,23 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleExportReceipt = (record: PaymentRecord) => {
+        const previousBalance = record.remainingCapitalAfter + record.capitalPaid;
+        
+        generatePaymentReceipt({
+            clientName: loan.clientName,
+            loanId: loan.id,
+            paymentAmount: record.amount,
+            paymentType: 'Pago de Cuota',
+            paymentDate: record.date,
+            notes: record.notes || '',
+            previousBalance: previousBalance,
+            newBalance: record.remainingCapitalAfter,
+            interestPaid: record.interestPaid,
+            capitalPaid: record.capitalPaid
+        });
     };
 
     if (sortedHistory.length === 0) {
@@ -156,7 +174,14 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
                                         <td className="px-4 py-3 text-green-400">{formatCurrency(record.interestPaid)}</td>
                                         <td className="px-4 py-3 text-blue-400">{formatCurrency(record.capitalPaid)}</td>
                                         <td className="px-4 py-3 font-mono text-amber-400">{formatCurrency(record.remainingCapitalAfter)}</td>
-                                        <td className="px-4 py-3 text-right">
+                                        <td className="px-4 py-3 text-right flex justify-end gap-2">
+                                            <button 
+                                                onClick={() => handleExportReceipt(record)} 
+                                                className="p-1.5 hover:bg-slate-700 rounded text-slate-500 hover:text-blue-400 transition-colors"
+                                                title="Descargar Recibo"
+                                            >
+                                                <FileText size={14} />
+                                            </button>
                                             <button 
                                                 onClick={() => startEditing(record)} 
                                                 className="p-1.5 hover:bg-slate-700 rounded text-slate-500 hover:text-primary-400 transition-colors"
