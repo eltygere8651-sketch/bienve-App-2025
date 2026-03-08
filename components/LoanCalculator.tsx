@@ -1,19 +1,56 @@
 import React, { useState, useMemo } from 'react';
-import { Calculator, Calendar, Percent, DollarSign, Share2, FileDown, RefreshCw, ArrowLeft, Table, PieChart, Settings } from 'lucide-react';
+import { Calculator, Calendar, Percent, DollarSign, Share2, FileDown, RefreshCw, ArrowLeft, Table, PieChart, Settings, AlertTriangle, CheckCircle2, Link as LinkIcon, Search, X } from 'lucide-react';
 import { formatCurrency } from '../services/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { useAppContext } from '../contexts/AppContext';
+import { useDataContext } from '../contexts/DataContext';
 import { InputField } from './FormFields';
 import { DEFAULT_ANNUAL_INTEREST_RATE } from '../config';
+import { Loan, LoanStatus } from '../types';
 
 const LoanCalculator: React.FC = () => {
     const { setCurrentView, showToast } = useAppContext();
+    const { loans, clients } = useDataContext();
     
     const [amount, setAmount] = useState<string>('1000');
     const [interestRate, setInterestRate] = useState<string>((DEFAULT_ANNUAL_INTEREST_RATE / 12).toString()); // Monthly rate
     const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [desiredPayment, setDesiredPayment] = useState<string>('');
+    const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
+
+    // Filter active loans for selection
+    const activeLoans = useMemo(() => {
+        if (!loans || !clients) return [];
+        return loans.filter(loan => {
+            return loan.status === LoanStatus.PENDING || loan.status === LoanStatus.OVERDUE;
+        }).map(loan => {
+            const client = clients.find(c => c.id === loan.clientId);
+            return {
+                ...loan,
+                clientName: client?.name || 'Cliente Desconocido'
+            };
+        });
+    }, [loans, clients]);
+
+    const handleSelectLoan = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const loanId = e.target.value;
+        setSelectedLoanId(loanId);
+        
+        if (loanId) {
+            const loan = activeLoans.find(l => l.id === loanId);
+            if (loan) {
+                setAmount(loan.remainingCapital.toString());
+                // The calculator expects a Monthly rate, but loan.interestRate is typically Annual.
+                // We divide by 12 to convert it.
+                const monthlyRate = loan.interestRate / 12;
+                setInterestRate(Number.isInteger(monthlyRate) ? monthlyRate.toString() : monthlyRate.toFixed(2));
+                
+                setStartDate(new Date().toISOString().split('T')[0]);
+                showToast(`Datos cargados del préstamo de ${loan.clientName}`, 'success');
+            }
+        }
+    };
 
     // Calculation Logic
     const results = useMemo(() => {
@@ -23,63 +60,73 @@ const LoanCalculator: React.FC = () => {
         
         if (principal <= 0 || targetPayment <= 0) return null;
 
-        const minPayment = principal * monthlyRate;
-
-        if (targetPayment <= minPayment) {
-            // Payment too low to cover interest
-            return null; 
+        // Validation: Payment must cover interest
+        const firstMonthInterest = principal * monthlyRate;
+        if (targetPayment <= firstMonthInterest) {
+            return { error: "La cuota es muy baja, no cubre los intereses generados." };
         }
 
-        let months = 0;
-        let monthlyPayment = 0;
-
-        if (monthlyRate > 0) {
-            // Formula: n = -ln(1 - (PV * r) / P) / ln(1 + r)
-            const n = -Math.log(1 - (principal * monthlyRate) / targetPayment) / Math.log(1 + monthlyRate);
-            months = Math.ceil(n);
-            // Recalculate exact payment for this integer term to close properly
-            monthlyPayment = (principal * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
-        } else {
-            months = Math.ceil(principal / targetPayment);
-            monthlyPayment = principal / months;
-        }
-
-        let totalPayment = monthlyPayment * months;
-        let totalInterest = totalPayment - principal;
         const schedule: any[] = [];
-
         let currentBalance = principal;
-        let currentDate = new Date(startDate);
+        let totalInterest = 0;
+        let totalPayment = 0;
+        let months = 0;
+        
+        // Safety limit
+        const MAX_MONTHS = 360; 
 
-        for (let i = 1; i <= months; i++) {
-            const interestPayment = currentBalance * monthlyRate;
-            const principalPayment = monthlyPayment - interestPayment;
-            currentBalance -= principalPayment;
-            if (currentBalance < 0) currentBalance = 0; 
+        while (currentBalance > 0.01 && months < MAX_MONTHS) {
+            months++;
             
-            currentDate.setMonth(currentDate.getMonth() + 1);
+            // Calculate date for this month
+            const date = new Date(startDate);
+            date.setMonth(date.getMonth() + months);
+
+            const interest = currentBalance * monthlyRate;
+            let payment = targetPayment;
+            let principalPayment = payment - interest;
+
+            // Check if this is the last payment (or if balance is small enough)
+            // Logic: If remaining balance + interest is less than or equal to target payment, close it.
+            // Or if the remaining balance is very small.
+            if ((currentBalance + interest) <= targetPayment + 0.01) {
+                payment = currentBalance + interest;
+                principalPayment = currentBalance;
+                currentBalance = 0;
+            } else {
+                currentBalance -= principalPayment;
+            }
+
+            // Rounding for display/storage consistency in the schedule
+            // We keep internal precision but schedule usually shows 2 decimals.
+            // However, to "eliminate cents" visually for the user's main quotas, we rely on targetPayment being clean.
+            
+            totalInterest += interest;
+            totalPayment += payment;
 
             schedule.push({
-                month: i,
-                date: new Date(currentDate),
-                payment: monthlyPayment,
-                interest: interestPayment,
+                month: months,
+                date: date,
+                payment: payment,
+                interest: interest,
                 principal: principalPayment,
-                balance: currentBalance
+                balance: Math.max(0, currentBalance)
             });
         }
 
         return {
-            monthlyPayment,
+            monthlyPayment: targetPayment,
+            lastPayment: schedule[schedule.length - 1].payment,
             totalPayment,
             totalInterest,
             schedule,
-            calculatedTerm: months
+            calculatedTerm: months,
+            isCleanSchedule: Math.abs(targetPayment - schedule[schedule.length - 1].payment) < 0.1
         };
     }, [amount, interestRate, startDate, desiredPayment]);
 
     const handleSharePDF = (useShareApi: boolean = false) => {
-        if (!results) return;
+        if (!results || results.error) return;
 
         const doc = new jsPDF();
 
@@ -193,15 +240,21 @@ const LoanCalculator: React.FC = () => {
     };
 
     const getSummaryText = () => {
-        if (!results) return '';
+        if (!results || results.error) return '';
         const totalStr = formatCurrency(results.totalPayment);
-        const termStr = `${results.calculatedTerm} Meses (Calculado)`;
+        const termStr = `${results.calculatedTerm} Meses`;
+        
+        let paymentStr = `${formatCurrency(results.monthlyPayment)}`;
+        if (!results.isCleanSchedule) {
+            paymentStr += ` (Última: ${formatCurrency(results.lastPayment)})`;
+        }
             
         return `*Simulación de Préstamo - B.M Contigo*\n\n` +
                `💰 *Monto:* ${formatCurrency(parseFloat(amount))}\n` +
                `📅 *Plazo:* ${termStr}\n` +
                `📉 *Tasa:* ${interestRate}% Mensual\n\n` +
-               `💵 *Cuota Mensual:* ${formatCurrency(results.monthlyPayment)}\n` +
+               `💵 *Cuota Base:* ${formatCurrency(results.monthlyPayment)}\n` +
+               (!results.isCleanSchedule ? `🏁 *Cuota Final:* ${formatCurrency(results.lastPayment)}\n` : '') +
                `📊 *Total a Pagar:* ${totalStr}\n\n` +
                `Generado el ${new Date().toLocaleDateString()}`;
     };
@@ -217,7 +270,7 @@ const LoanCalculator: React.FC = () => {
     };
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-20">
+        <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-20 relative">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -226,7 +279,7 @@ const LoanCalculator: React.FC = () => {
                     </div>
                     <div>
                         <h1 className="text-2xl font-heading font-bold text-slate-100">Calculadora de Plazos</h1>
-                        <p className="text-slate-400 text-sm">Calcula el tiempo necesario para pagar un préstamo</p>
+                        <p className="text-slate-400 text-sm">Optimiza tus cuotas sin centavos molestos</p>
                     </div>
                 </div>
                 <button 
@@ -241,17 +294,52 @@ const LoanCalculator: React.FC = () => {
                 {/* Input Panel */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-                        <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                            <Settings size={18} className="text-slate-400" /> Parámetros
-                        </h2>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Settings size={18} className="text-slate-400" /> Parámetros
+                            </h2>
+                        </div>
                         
                         <div className="space-y-4">
+                            {activeLoans.length > 0 && (
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                                        Cargar Préstamo Activo
+                                    </label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                            <LinkIcon size={16} />
+                                        </div>
+                                        <select
+                                            value={selectedLoanId || ''}
+                                            onChange={handleSelectLoan}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer hover:bg-slate-900/80 transition-colors"
+                                        >
+                                            <option value="">-- Seleccionar Préstamo --</option>
+                                            {activeLoans.map(loan => (
+                                                <option key={loan.id} value={loan.id}>
+                                                    {loan.clientName} - {formatCurrency(loan.remainingCapital)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                                            <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                                                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <InputField 
-                                label="Monto del Préstamo" 
+                                label="Monto del Préstamo (Saldo)" 
                                 name="amount" 
                                 type="number" 
                                 value={amount} 
-                                onChange={(e) => setAmount(e.target.value)} 
+                                onChange={(e) => {
+                                    setAmount(e.target.value);
+                                    if (selectedLoanId) setSelectedLoanId(null); // Clear selection if manually edited
+                                }} 
                                 icon={<DollarSign size={16} />}
                             />
 
@@ -262,8 +350,11 @@ const LoanCalculator: React.FC = () => {
                                 value={desiredPayment} 
                                 onChange={(e) => setDesiredPayment(e.target.value)} 
                                 icon={<DollarSign size={16} />}
-                                placeholder="¿Cuánto puede pagar?"
+                                placeholder="Ej: 200 (Sin centavos)"
                             />
+                            <p className="text-[10px] text-slate-400 -mt-2">
+                                Tip: Usa números enteros para evitar centavos en las cuotas.
+                            </p>
 
                             <InputField 
                                 label="Tasa Mensual (%)" 
@@ -275,7 +366,7 @@ const LoanCalculator: React.FC = () => {
                             />
 
                             <InputField 
-                                label="Fecha de Inicio" 
+                                label="Fecha de Inicio (Simulación)" 
                                 name="startDate" 
                                 type="date" 
                                 value={startDate} 
@@ -285,7 +376,7 @@ const LoanCalculator: React.FC = () => {
                     </div>
 
                     {/* Summary Card (Mobile/Desktop) */}
-                    {results && (
+                    {results && !results.error && (
                         <div className="bg-gradient-to-br from-indigo-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white">
                             <h3 className="text-sm font-medium text-indigo-100 uppercase tracking-wider mb-1">
                                 Plazo Estimado
@@ -306,8 +397,17 @@ const LoanCalculator: React.FC = () => {
                             </div>
 
                             <div className="mt-4 pt-4 border-t border-white/10">
-                                <p className="text-xs text-indigo-200">Cuota Real Ajustada</p>
-                                <p className="font-bold text-xl">{formatCurrency(results.monthlyPayment)}</p>
+                                <p className="text-xs text-indigo-200 mb-1">Estructura de Pagos</p>
+                                <div className="flex items-center justify-between">
+                                    <span className="font-bold text-xl">{formatCurrency(results.monthlyPayment)}</span>
+                                    <span className="text-sm opacity-80">x {results.calculatedTerm - 1}</span>
+                                </div>
+                                {!results.isCleanSchedule && (
+                                    <div className="flex items-center justify-between mt-1 text-indigo-200">
+                                        <span className="font-bold">{formatCurrency(results.lastPayment)}</span>
+                                        <span className="text-xs">Cuota Final</span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-3 mt-6">
@@ -353,43 +453,52 @@ const LoanCalculator: React.FC = () => {
                 {/* Results Panel */}
                 <div className="lg:col-span-2 space-y-6">
                     {results ? (
-                        <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
-                            <div className="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
-                                <h3 className="font-bold text-white flex items-center gap-2">
-                                    <Table size={18} className="text-slate-400" /> Tabla de Amortización
-                                </h3>
-                                <span className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">
-                                    {results.calculatedTerm} Cuotas
-                                </span>
+                        results.error ? (
+                            <div className="bg-red-900/20 border border-red-500/50 rounded-2xl p-6 flex flex-col items-center justify-center text-center h-full">
+                                <AlertTriangle size={48} className="text-red-400 mb-4" />
+                                <h3 className="text-xl font-bold text-red-200 mb-2">Error en el Cálculo</h3>
+                                <p className="text-red-300">{results.error}</p>
+                                <p className="text-sm text-red-400 mt-2">Intenta aumentar la cuota mensual.</p>
                             </div>
-                            
-                            <div className="overflow-x-auto flex-1">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-900 text-slate-400 uppercase font-bold text-xs sticky top-0 z-10">
-                                        <tr>
-                                            <th className="px-4 py-3 text-center w-16">Mes</th>
-                                            <th className="px-4 py-3">Fecha</th>
-                                            <th className="px-4 py-3 text-right">Cuota</th>
-                                            <th className="px-4 py-3 text-right text-amber-400">Interés</th>
-                                            <th className="px-4 py-3 text-right text-emerald-400">Capital</th>
-                                            <th className="px-4 py-3 text-right">Saldo</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-700">
-                                        {results.schedule.map((row) => (
-                                            <tr key={row.month} className="hover:bg-slate-700/30 transition-colors">
-                                                <td className="px-4 py-3 text-center font-mono text-slate-500">{row.month}</td>
-                                                <td className="px-4 py-3 text-slate-300">{row.date.toLocaleDateString()}</td>
-                                                <td className="px-4 py-3 text-right font-bold text-white">{formatCurrency(row.payment)}</td>
-                                                <td className="px-4 py-3 text-right text-amber-300/80 font-mono">{formatCurrency(row.interest)}</td>
-                                                <td className="px-4 py-3 text-right text-emerald-300/80 font-mono">{formatCurrency(row.principal)}</td>
-                                                <td className="px-4 py-3 text-right font-bold text-slate-200">{formatCurrency(row.balance)}</td>
+                        ) : (
+                            <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden flex flex-col h-full">
+                                <div className="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                                    <h3 className="font-bold text-white flex items-center gap-2">
+                                        <Table size={18} className="text-slate-400" /> Tabla de Amortización
+                                    </h3>
+                                    <span className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded">
+                                        {results.calculatedTerm} Cuotas
+                                    </span>
+                                </div>
+                                
+                                <div className="overflow-x-auto flex-1">
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-slate-900 text-slate-400 uppercase font-bold text-xs sticky top-0 z-10">
+                                            <tr>
+                                                <th className="px-4 py-3 text-center w-16">Mes</th>
+                                                <th className="px-4 py-3">Fecha</th>
+                                                <th className="px-4 py-3 text-right">Cuota</th>
+                                                <th className="px-4 py-3 text-right text-amber-400">Interés</th>
+                                                <th className="px-4 py-3 text-right text-emerald-400">Capital</th>
+                                                <th className="px-4 py-3 text-right">Saldo</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-700">
+                                            {results.schedule.map((row) => (
+                                                <tr key={row.month} className="hover:bg-slate-700/30 transition-colors">
+                                                    <td className="px-4 py-3 text-center font-mono text-slate-500">{row.month}</td>
+                                                    <td className="px-4 py-3 text-slate-300">{row.date.toLocaleDateString()}</td>
+                                                    <td className="px-4 py-3 text-right font-bold text-white">{formatCurrency(row.payment)}</td>
+                                                    <td className="px-4 py-3 text-right text-amber-300/80 font-mono">{formatCurrency(row.interest)}</td>
+                                                    <td className="px-4 py-3 text-right text-emerald-300/80 font-mono">{formatCurrency(row.principal)}</td>
+                                                    <td className="px-4 py-3 text-right font-bold text-slate-200">{formatCurrency(row.balance)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                        </div>
+                        )
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-slate-500 p-10 border-2 border-dashed border-slate-700 rounded-2xl bg-slate-800/30">
                             <PieChart size={48} className="mb-4 opacity-50" />
