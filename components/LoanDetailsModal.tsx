@@ -299,6 +299,28 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                         </div>
                                     </div>
 
+                                    {/* Liquidación Total Card */}
+                                    <div className="bg-gradient-to-r from-indigo-900/40 to-slate-800 border border-indigo-500/30 rounded-xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                        <div>
+                                            <h4 className="text-indigo-400 font-bold flex items-center gap-2 text-lg">
+                                                <Check size={20}/> Liquidación Total
+                                            </h4>
+                                            <p className="text-sm text-slate-400 mt-1">
+                                                Monto total para cancelar la deuda hoy (Capital pendiente + Interés del mes).
+                                            </p>
+                                        </div>
+                                        <div className="text-left sm:text-right w-full sm:w-auto bg-slate-900/50 sm:bg-transparent p-3 sm:p-0 rounded-lg border border-slate-700/50 sm:border-none">
+                                            <p className="text-xs text-slate-500 uppercase font-bold mb-1 sm:hidden">Total a Pagar</p>
+                                            <p className="text-3xl font-bold text-white font-mono">{formatCurrency(loan.remainingCapital + interestDueDisplay)}</p>
+                                            <button 
+                                                onClick={() => { setActiveTab('payment'); setQuickAmount('full'); }} 
+                                                className="mt-2 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-lg shadow-indigo-900/20"
+                                            >
+                                                Liquidar Préstamo
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 h-full">
                                             <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2"><FileText size={16}/> Notas del Préstamo</h4>
