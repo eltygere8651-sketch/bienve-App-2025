@@ -989,7 +989,7 @@ const Accounting: React.FC = () => {
     const [isEditingTreasury, setIsEditingTreasury] = useState(false);
     
     // Time Filtering
-    const [timeRange, setTimeRange] = useState<'all' | 'year' | 'month'>('all');
+    const [timeRange, setTimeRange] = useState<'all' | 'year' | 'month'>('month');
 
     // Real-time subscription to Treasury
     useEffect(() => {

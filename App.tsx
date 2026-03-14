@@ -7,7 +7,7 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Share2, Download, History, PieChart, Calculator } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Share2, Download, History, PieChart, Calculator, TrendingUp } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import LoanRequestForm from './components/LoanRequestForm';
@@ -200,10 +200,11 @@ const App: React.FC = () => {
                 {isAuthenticated ? (
                     <>
                         <NavItem icon={<LayoutDashboard />} label="Panel" view="dashboard" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<PieChart />} label="Contabilidad" view="accounting" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<GitPullRequest />} label="Solicitudes" view="requests" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} badge={requests.length} />
                         <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<PieChart />} label="Contabilidad" view="accounting" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<TrendingUp />} label="Proyección de Pagos" view="loanCalculator" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<History />} label="Historial" view="history" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<GitPullRequest />} label="Solicitudes" view="requests" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} badge={requests.length} />
                     </>
                 ) : (
                     <>
@@ -217,7 +218,6 @@ const App: React.FC = () => {
                         <div className="mt-8 mb-3 px-3">
                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Herramientas</h3>
                         </div>
-                        <NavItem icon={<Calculator />} label="Calculadora" view="loanCalculator" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<ReceiptText />} label="Recibos" view="receiptGenerator" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<DatabaseBackup />} label="Base de Datos" view="dataManagement" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<Settings />} label="Ajustes" view="settings" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />

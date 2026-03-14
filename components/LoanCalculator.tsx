@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Calculator, Calendar, Percent, DollarSign, Share2, FileDown, RefreshCw, ArrowLeft, Table, PieChart, Settings, AlertTriangle, CheckCircle2, Link as LinkIcon, Search, X } from 'lucide-react';
+import { Calculator, Calendar, Percent, DollarSign, Share2, FileDown, RefreshCw, ArrowLeft, Table, PieChart, Settings, AlertTriangle, CheckCircle2, Link as LinkIcon, Search, X, TrendingUp } from 'lucide-react';
 import { formatCurrency } from '../services/utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -17,6 +17,8 @@ const LoanCalculator: React.FC = () => {
     const [interestRate, setInterestRate] = useState<string>((DEFAULT_ANNUAL_INTEREST_RATE / 12).toString()); // Monthly rate
     const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
     const [desiredPayment, setDesiredPayment] = useState<string>('');
+    const [desiredTerm, setDesiredTerm] = useState<string>('12');
+    const [calculationMethod, setCalculationMethod] = useState<'by_payment' | 'by_term'>('by_payment');
     const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
 
     // Filter active loans for selection
@@ -56,9 +58,21 @@ const LoanCalculator: React.FC = () => {
     const results = useMemo(() => {
         const principal = parseFloat(amount) || 0;
         const monthlyRate = (parseFloat(interestRate) || 0) / 100;
-        const targetPayment = parseFloat(desiredPayment) || 0;
+        let targetPayment = parseFloat(desiredPayment) || 0;
+        const targetTerm = parseInt(desiredTerm, 10) || 0;
         
-        if (principal <= 0 || targetPayment <= 0) return null;
+        if (principal <= 0) return null;
+        if (calculationMethod === 'by_payment' && targetPayment <= 0) return null;
+        if (calculationMethod === 'by_term' && targetTerm <= 0) return null;
+
+        // If calculating by term, determine the target payment using the amortization formula
+        if (calculationMethod === 'by_term') {
+            if (monthlyRate === 0) {
+                targetPayment = principal / targetTerm;
+            } else {
+                targetPayment = principal * (monthlyRate * Math.pow(1 + monthlyRate, targetTerm)) / (Math.pow(1 + monthlyRate, targetTerm) - 1);
+            }
+        }
 
         // Validation: Payment must cover interest
         const firstMonthInterest = principal * monthlyRate;
@@ -89,7 +103,7 @@ const LoanCalculator: React.FC = () => {
             // Check if this is the last payment (or if balance is small enough)
             // Logic: If remaining balance + interest is less than or equal to target payment, close it.
             // Or if the remaining balance is very small.
-            if ((currentBalance + interest) <= targetPayment + 0.01) {
+            if ((currentBalance + interest) <= targetPayment + 0.01 || (calculationMethod === 'by_term' && months === targetTerm)) {
                 payment = currentBalance + interest;
                 principalPayment = currentBalance;
                 currentBalance = 0;
@@ -123,7 +137,7 @@ const LoanCalculator: React.FC = () => {
             calculatedTerm: months,
             isCleanSchedule: Math.abs(targetPayment - schedule[schedule.length - 1].payment) < 0.1
         };
-    }, [amount, interestRate, startDate, desiredPayment]);
+    }, [amount, interestRate, startDate, desiredPayment, desiredTerm, calculationMethod]);
 
     const handleSharePDF = (useShareApi: boolean = false) => {
         if (!results || results.error) return;
@@ -275,10 +289,10 @@ const LoanCalculator: React.FC = () => {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
-                        <Calculator size={24} />
+                        <TrendingUp size={24} />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-heading font-bold text-slate-100">Calculadora de Plazos</h1>
+                        <h1 className="text-2xl font-heading font-bold text-slate-100">Proyección de Pagos</h1>
                         <p className="text-slate-400 text-sm">Optimiza tus cuotas sin centavos molestos</p>
                     </div>
                 </div>
@@ -301,6 +315,22 @@ const LoanCalculator: React.FC = () => {
                         </div>
                         
                         <div className="space-y-4">
+                            {/* Method Toggle */}
+                            <div className="flex bg-slate-900/50 p-1 rounded-lg border border-slate-700">
+                                <button
+                                    onClick={() => setCalculationMethod('by_payment')}
+                                    className={`flex-1 py-2 text-xs font-bold rounded-md transition-colors ${calculationMethod === 'by_payment' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                                >
+                                    Por Cuota Deseada
+                                </button>
+                                <button
+                                    onClick={() => setCalculationMethod('by_term')}
+                                    className={`flex-1 py-2 text-xs font-bold rounded-md transition-colors ${calculationMethod === 'by_term' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                                >
+                                    Por Plazo (Meses)
+                                </button>
+                            </div>
+
                             {activeLoans.length > 0 && (
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">
@@ -343,18 +373,32 @@ const LoanCalculator: React.FC = () => {
                                 icon={<DollarSign size={16} />}
                             />
 
-                            <InputField 
-                                label="Cuota Mensual Deseada" 
-                                name="desiredPayment" 
-                                type="number" 
-                                value={desiredPayment} 
-                                onChange={(e) => setDesiredPayment(e.target.value)} 
-                                icon={<DollarSign size={16} />}
-                                placeholder="Ej: 200 (Sin centavos)"
-                            />
-                            <p className="text-[10px] text-slate-400 -mt-2">
-                                Tip: Usa números enteros para evitar centavos en las cuotas.
-                            </p>
+                            {calculationMethod === 'by_payment' ? (
+                                <>
+                                    <InputField 
+                                        label="Cuota Mensual Deseada" 
+                                        name="desiredPayment" 
+                                        type="number" 
+                                        value={desiredPayment} 
+                                        onChange={(e) => setDesiredPayment(e.target.value)} 
+                                        icon={<DollarSign size={16} />}
+                                        placeholder="Ej: 200 (Sin centavos)"
+                                    />
+                                    <p className="text-[10px] text-slate-400 -mt-2">
+                                        Tip: Usa números enteros para evitar centavos en las cuotas.
+                                    </p>
+                                </>
+                            ) : (
+                                <InputField 
+                                    label="Plazo Deseado (Meses)" 
+                                    name="desiredTerm" 
+                                    type="number" 
+                                    value={desiredTerm} 
+                                    onChange={(e) => setDesiredTerm(e.target.value)} 
+                                    icon={<Calendar size={16} />}
+                                    placeholder="Ej: 12"
+                                />
+                            )}
 
                             <InputField 
                                 label="Tasa Mensual (%)" 
@@ -400,7 +444,7 @@ const LoanCalculator: React.FC = () => {
                                 <p className="text-xs text-indigo-200 mb-1">Estructura de Pagos</p>
                                 <div className="flex items-center justify-between">
                                     <span className="font-bold text-xl">{formatCurrency(results.monthlyPayment)}</span>
-                                    <span className="text-sm opacity-80">x {results.calculatedTerm - 1}</span>
+                                    <span className="text-sm opacity-80">x {results.isCleanSchedule ? results.calculatedTerm : results.calculatedTerm - 1}</span>
                                 </div>
                                 {!results.isCleanSchedule && (
                                     <div className="flex items-center justify-between mt-1 text-indigo-200">
