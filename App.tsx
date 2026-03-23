@@ -202,7 +202,7 @@ const App: React.FC = () => {
                         <NavItem icon={<LayoutDashboard />} label="Panel" view="dashboard" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<Users />} label="Clientes" view="clients" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<PieChart />} label="Contabilidad" view="accounting" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<TrendingUp />} label="Proyección de Pagos" view="loanCalculator" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<Calculator />} label="Proyección de Pagos" view="loanCalculator" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<History />} label="Historial" view="history" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<GitPullRequest />} label="Solicitudes" view="requests" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} badge={requests.length} />
                     </>

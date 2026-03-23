@@ -141,7 +141,23 @@ export const generateContractPDF = async (data: ContractData, signatureImage: st
     return doc.output('blob');
 };
 
-export const downloadPdf = (pdfBlob: Blob, filename: string) => {
+export const downloadPdf = async (pdfBlob: Blob, filename: string) => {
+    if (navigator.share) {
+        try {
+            const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    title: filename,
+                    text: 'Documento generado por B.M Contigo',
+                    files: [file]
+                });
+                return;
+            }
+        } catch (error) {
+            console.log('Error al compartir o usuario canceló, descargando en su lugar...', error);
+        }
+    }
+
     const url = URL.createObjectURL(pdfBlob);
     const a = document.createElement('a');
     a.href = url;
@@ -242,7 +258,7 @@ export const generateClientReport = (client: Client, loans: Loan[]) => {
         doc.text(`Página ${i} de ${pageCount} - Generado el ${new Date().toLocaleDateString()}`, 105, 290, { align: 'center' });
     }
 
-    doc.save(`Ficha_${client.name.replace(/\s/g, '_')}.pdf`);
+    downloadPdf(doc.output('blob'), `Ficha_${client.name.replace(/\s/g, '_')}.pdf`);
 };
 
 export const generateFullClientListPDF = (clientsWithLoans: { name: string; idNumber?: string; phone?: string; loans: Loan[] }[]) => {
@@ -326,7 +342,7 @@ export const generateFullClientListPDF = (clientsWithLoans: { name: string; idNu
     doc.setTextColor(0, 0, 0);
     doc.text(totalPortfolioDebt.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }), 125, finalY + 18);
 
-    doc.save(`Cartera_Global_${new Date().toISOString().split('T')[0]}.pdf`);
+    downloadPdf(doc.output('blob'), `Cartera_Global_${new Date().toISOString().split('T')[0]}.pdf`);
 };
 
 interface ReceiptData {
@@ -456,7 +472,7 @@ export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: strin
     doc.text('Este es un recibo generado por sistema.', 105, 290, { align: 'center' });
 
 
-    doc.save(`Recibo_${data.clientName.replace(/\s/g, '_')}_${new Date(data.paymentDate).toISOString().split('T')[0]}.pdf`);
+    downloadPdf(doc.output('blob'), `Recibo_${data.clientName.replace(/\s/g, '_')}_${new Date(data.paymentDate).toISOString().split('T')[0]}.pdf`);
 };
 
 export const generateRequestSummaryPDF = (request: LoanRequest) => {
@@ -551,7 +567,7 @@ export const generateRequestSummaryPDF = (request: LoanRequest) => {
         }
     }
 
-    doc.save(`Solicitud_${request.fullName.replace(/\s/g, '_')}.pdf`);
+    downloadPdf(doc.output('blob'), `Solicitud_${request.fullName.replace(/\s/g, '_')}.pdf`);
 };
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -611,7 +627,7 @@ export const generateIdDocumentsPDF = async (request: LoanRequest) => {
         doc.addPage();
         addImageToPage(doc, backBase64, `Documento de Identidad (Reverso) - ${request.fullName}`);
 
-        doc.save(`DNI_${request.fullName.replace(/\s/g, '_')}.pdf`);
+        downloadPdf(doc.output('blob'), `DNI_${request.fullName.replace(/\s/g, '_')}.pdf`);
     } catch (error) {
         console.error("Error generating ID PDF:", error);
         throw new Error("Could not fetch images to generate PDF.");
@@ -676,5 +692,5 @@ export const generateLoanHistoryPDF = (loan: Loan) => {
         doc.text(`Página ${i} de ${pageCount}`, 195, 290, { align: 'right' });
     }
 
-    doc.save(`Historial_${loan.clientName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+    downloadPdf(doc.output('blob'), `Historial_${loan.clientName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
 };

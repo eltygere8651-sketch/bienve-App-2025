@@ -11,6 +11,7 @@ import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, 
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 import { ReinvestmentRecord, PersonalFund } from '../types';
+import { downloadPdf } from '../services/pdfService';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -101,7 +102,7 @@ const WithdrawalManager: React.FC = () => {
         const finalY = (doc as any).lastAutoTable.finalY || 40;
         doc.text(`Total: ${formatCurrency(total)}`, 14, finalY + 10);
 
-        doc.save(`pagos_retiros_${new Date().toISOString().split('T')[0]}.pdf`);
+        downloadPdf(doc.output('blob'), `pagos_retiros_${new Date().toISOString().split('T')[0]}.pdf`);
     };
 
     const handleShare = async () => {
@@ -1050,8 +1051,18 @@ const Accounting: React.FC = () => {
         let historicalTotalCapitalRecovered = 0;
         let historicalTotalInterestEarned = 0;
 
-        // Sum reinvestments
-        const totalReinvested = reinvestments.reduce((acc, r) => acc + r.amount, 0);
+        // Sum reinvestments (Filtered by Date)
+        const periodReinvested = reinvestments.reduce((acc, r) => {
+            const rDate = new Date(r.date);
+            let include = false;
+            if (timeRange === 'all') include = true;
+            else if (timeRange === 'year') include = rDate.getFullYear() === currentYear;
+            else if (timeRange === 'month') include = rDate.getMonth() === currentMonth && rDate.getFullYear() === currentYear;
+            
+            return include ? acc + r.amount : acc;
+        }, 0);
+        
+        const totalReinvested = reinvestments.reduce((acc, r) => acc + r.amount, 0); // Keep total for ROI calc if needed
 
         // 1. Snapshot Metrics (Always Total Active)
         allLoans.forEach(loan => {
@@ -1110,7 +1121,7 @@ const Accounting: React.FC = () => {
 
         // Net Available Profit (Liquid Profit)
         // This is purely for display: Interest Earned - Reinvested
-        const netAvailableProfit = Math.max(0, periodInterestEarned - totalReinvested);
+        const netAvailableProfit = Math.max(0, periodInterestEarned - periodReinvested);
 
         return {
             totalInvested,
@@ -1124,6 +1135,7 @@ const Accounting: React.FC = () => {
             capitalRatio,
             isBreakEvenReached,
             totalReinvested,
+            periodReinvested,
             netAvailableProfit
         };
     }, [allLoans, timeRange, reinvestments]);
@@ -1321,14 +1333,14 @@ const Accounting: React.FC = () => {
                         <KPICard 
                             title={`Interés Ganado`}
                             value={formatCurrency(stats.periodInterestEarned)} 
-                            subtext="Total Bruto Histórico"
+                            subtext={timeRange === 'all' ? "Total Bruto Histórico" : timeRange === 'year' ? "Total Bruto Este Año" : "Total Bruto Este Mes"}
                             icon={TrendingUp} 
                             color="emerald" 
                         />
                         <KPICard 
                             title={`Beneficio Disponible`}
-                            value={formatCurrency(stats.periodInterestEarned - stats.totalReinvested)} 
-                            subtext="Ganancia Real (Líquida)"
+                            value={formatCurrency(stats.periodInterestEarned - stats.periodReinvested)} 
+                            subtext={timeRange === 'all' ? "Ganancia Real Histórica" : timeRange === 'year' ? "Ganancia Real Este Año" : "Ganancia Real Este Mes"}
                             icon={Coins} 
                             color="teal" 
                         />

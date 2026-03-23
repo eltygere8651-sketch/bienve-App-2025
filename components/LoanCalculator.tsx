@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Calculator, Calendar, Percent, DollarSign, Share2, FileDown, RefreshCw, ArrowLeft, Table, PieChart, Settings, AlertTriangle, CheckCircle2, Link as LinkIcon, Search, X, TrendingUp } from 'lucide-react';
 import { formatCurrency } from '../services/utils';
+import { downloadPdf } from '../services/pdfService';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { useAppContext } from '../contexts/AppContext';
@@ -248,7 +249,7 @@ const LoanCalculator: React.FC = () => {
                 files: [file]
             }).catch(console.error);
         } else {
-            doc.save(fileName);
+            downloadPdf(doc.output('blob'), fileName);
             showToast('PDF descargado correctamente', 'success');
         }
     };
