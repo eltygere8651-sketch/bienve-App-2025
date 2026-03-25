@@ -29,7 +29,10 @@ import {
     DocumentData,
     QueryConstraint,
     getDoc,
-    setDoc
+    setDoc,
+    initializeFirestore,
+    persistentLocalCache,
+    persistentMultipleTabManager
 } from 'firebase/firestore';
 import { FIREBASE_CONFIG } from './firebaseConfig';
 
@@ -44,9 +47,13 @@ export const initializeFirebase = () => {
     try {
         app = initializeApp(FIREBASE_CONFIG);
         auth = getAuth(app);
-        db = getFirestore(app);
         
-        // Persistence setup
+        // Enable offline persistence for Firestore
+        db = initializeFirestore(app, {
+            localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
+        });
+        
+        // Persistence setup for Auth
         setPersistence(auth, browserLocalPersistence).catch((error) => {
             console.error("Persistence error:", error);
         });
@@ -186,6 +193,23 @@ export const findRequestsById = async (idNumber: string) => {
     const q = query(collection(db, 'requests'), where('idNumber', '==', idNumber));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const testConnection = async () => {
+    if (!db) return false;
+    try {
+        const testDocRef = doc(db, '_connection_test', 'test_doc');
+        await setDoc(testDocRef, { timestamp: new Date().toISOString() });
+        const docSnap = await getDoc(testDocRef);
+        if (docSnap.exists()) {
+            await deleteDoc(testDocRef);
+            return true;
+        }
+        return false;
+    } catch (e) {
+        console.error("Connection test failed:", e);
+        return false;
+    }
 };
 
 // Exports for query construction in hooks

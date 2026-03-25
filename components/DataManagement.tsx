@@ -6,7 +6,7 @@ import { useDataContext } from '../contexts/DataContext';
 
 const DataManagement: React.FC = () => {
     const { showToast } = useAppContext();
-    const { clients, loans, requests, handleGenerateTestClient, handleDeleteTestData } = useDataContext();
+    const { clients, archivedClients, loans, archivedLoans, requests, reinvestments, funds, withdrawals, handleGenerateTestClient, handleDeleteTestData } = useDataContext();
     const [isExporting, setIsExporting] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -16,8 +16,13 @@ const DataManagement: React.FC = () => {
         try {
             const data = {
                 clients,
+                archivedClients,
                 loans,
-                requests
+                archivedLoans,
+                requests,
+                reinvestments,
+                funds,
+                withdrawals
             };
 
             const backupData = {
