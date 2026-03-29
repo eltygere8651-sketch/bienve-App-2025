@@ -788,6 +788,52 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         }
     }, [showToast]);
 
+    const handleRegisterFundTransaction = useCallback(async (fundId: string, amount: number, type: 'deposito' | 'gasto', notes: string, date: string) => {
+        try {
+            const fund = funds.find(f => f.id === fundId);
+            if (!fund) throw new Error('Apartado no encontrado');
+
+            const newTransaction = {
+                id: Date.now().toString(),
+                amount,
+                type,
+                notes,
+                date
+            };
+
+            const updatedTransactions = [newTransaction, ...(fund.transactions || [])].slice(0, 50); // Keep last 50
+            const newAmount = type === 'deposito' ? fund.currentAmount + amount : fund.currentAmount - amount;
+
+            await updateDocument(TABLE_NAMES.PERSONAL_FUNDS, fundId, {
+                currentAmount: newAmount,
+                transactions: updatedTransactions,
+                lastUpdated: new Date().toISOString()
+            });
+
+            showToast(`${type === 'deposito' ? 'Depósito' : 'Gasto'} registrado en ${fund.name}`, 'success');
+        } catch (e: any) {
+            console.error(e);
+            showToast('Error al registrar transacción: ' + e.message, 'error');
+        }
+    }, [funds, showToast]);
+
+    const handleQuickAdd = useCallback(async (fundId: string) => {
+        const fund = funds.find(f => f.id === fundId);
+        if (!fund) return;
+
+        try {
+            await handleRegisterFundTransaction(
+                fundId, 
+                fund.monthlyContribution, 
+                'deposito', 
+                'Aporte mensual rápido', 
+                new Date().toISOString().split('T')[0]
+            );
+        } catch (e: any) {
+            showToast('Error de conexión: ' + e.message, 'error');
+        }
+    }, [funds, handleRegisterFundTransaction, showToast]);
+
     const handleGenerateTestClient = useCallback(async () => {
         await handleAddClientAndLoan({
             name: 'Cliente Prueba',
@@ -930,6 +976,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         handleRegisterWithdrawal,
         handleDeleteWithdrawal,
         handleUpdateWithdrawal,
+        handleRegisterFundTransaction,
+        handleQuickAdd,
         reloadRequests,
         refreshAllData,
         recalculateTreasury,

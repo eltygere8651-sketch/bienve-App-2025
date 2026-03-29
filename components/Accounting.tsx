@@ -7,7 +7,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square, LogOut, FileDown, Share2 } from 'lucide-react';
+import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square, LogOut, FileDown, Share2, ArrowDownCircle, ArrowUpCircle, Calculator, TrendingDown } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 import { ReinvestmentRecord, PersonalFund } from '../types';
@@ -476,11 +476,22 @@ const COLOR_STYLES = {
 };
 
 const PersonalFinanceManager: React.FC = () => {
-    const { funds, handleSaveFund, handleDeleteFund, showToast } = useDataContext();
+    const { funds, handleSaveFund, handleDeleteFund, handleRegisterFundTransaction, handleQuickAdd, showToast } = useDataContext();
     const [selectedFundId, setSelectedFundId] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [isEditingFund, setIsEditingFund] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Transaction Form State
+    const [isAddingTransaction, setIsAddingTransaction] = useState(false);
+    const [transType, setTransType] = useState<'deposito' | 'gasto'>('deposito');
+    const [transAmount, setTransAmount] = useState('');
+    const [transNotes, setTransNotes] = useState('');
+    const [transDate, setTransDate] = useState(new Date().toISOString().split('T')[0]);
+
+    // Calculator State
+    const [calcMonths, setCalcMonths] = useState('6');
+    const [calcMonthly, setCalcMonthly] = useState('');
 
     // Form State for Create/Edit
     const [formData, setFormData] = useState<any>({
@@ -522,18 +533,19 @@ const PersonalFinanceManager: React.FC = () => {
         }
     };
 
-    const handleQuickAdd = async (fundId: string) => {
-        const fund = funds.find(f => f.id === fundId);
-        if (!fund) return;
+    const onRegisterTransaction = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedFundId) return;
+        const amount = parseFloat(transAmount);
+        if (isNaN(amount) || amount <= 0) return;
 
         try {
-            await handleSaveFund({
-                ...fund,
-                currentAmount: fund.currentAmount + fund.monthlyContribution
-            });
-            showToast(`Añadidos ${formatCurrency(fund.monthlyContribution)} a ${fund.name}`, 'success');
+            await handleRegisterFundTransaction(selectedFundId, amount, transType, transNotes, transDate);
+            setIsAddingTransaction(false);
+            setTransAmount('');
+            setTransNotes('');
         } catch (e: any) {
-            showToast('Error de conexión: ' + e.message, 'error');
+            showToast('Error: ' + e.message, 'error');
         }
     };
 
@@ -780,19 +792,223 @@ const PersonalFinanceManager: React.FC = () => {
                             <p className="text-xs text-slate-500 mt-1">Sugerido para alcanzar la meta</p>
                         </div>
                         
-                        <button 
-                            onClick={() => handleQuickAdd(activeFund.id)}
-                            className={`${styles.btn} text-white p-4 rounded-xl border-t border-white/10 transition-all active:scale-95 flex flex-col items-center justify-center group shadow-lg`}
-                        >
-                            <div className="flex items-center gap-2 font-bold text-lg mb-1">
-                                <Plus size={20} className="group-hover:rotate-90 transition-transform" /> 
-                                Ingresar Mes
-                            </div>
-                            <span className="text-xs opacity-90 font-medium bg-black/20 px-2 py-0.5 rounded">
-                                Sumar {formatCurrency(activeFund.monthlyContribution)} ahora
-                            </span>
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button 
+                                onClick={() => handleQuickAdd(activeFund.id)}
+                                className={`${styles.btn} text-white p-3 rounded-xl border-t border-white/10 transition-all active:scale-95 flex flex-col items-center justify-center group shadow-lg`}
+                            >
+                                <Plus size={18} className="group-hover:rotate-90 transition-transform mb-1" /> 
+                                <span className="text-xs font-bold">Ingresar Mes</span>
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    setTransType('gasto');
+                                    setIsAddingTransaction(true);
+                                }}
+                                className="bg-slate-800 hover:bg-slate-700 text-rose-400 p-3 rounded-xl border border-slate-700 transition-all active:scale-95 flex flex-col items-center justify-center group shadow-lg"
+                            >
+                                <TrendingDown size={18} className="mb-1" /> 
+                                <span className="text-xs font-bold">Registrar Gasto</span>
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Transaction History & Calculator */}
+                    <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* History */}
+                        <div className="bg-slate-800/40 rounded-2xl border border-white/5 p-5">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                    <History size={16} className="text-slate-400" />
+                                    Historial Reciente
+                                </h3>
+                                <button 
+                                    onClick={() => {
+                                        setTransType('deposito');
+                                        setIsAddingTransaction(true);
+                                    }}
+                                    className="text-[10px] font-bold text-primary-400 hover:underline"
+                                >
+                                    + Añadir Movimiento
+                                </button>
+                                <button 
+                                    onClick={async () => {
+                                        if (confirm('¿Deseas registrar los 1100€ iniciales en este fondo?')) {
+                                            try {
+                                                await handleRegisterFundTransaction(activeFund.id, 1100, 'deposito', 'Saldo Inicial Ahorrado', new Date().toISOString().split('T')[0]);
+                                                showToast('Saldo inicial de 1100€ registrado', 'success');
+                                            } catch (e: any) {
+                                                showToast('Error: ' + e.message, 'error');
+                                            }
+                                        }
+                                    }}
+                                    className="text-[10px] font-bold text-emerald-400 hover:underline ml-4"
+                                >
+                                    Cargar 1100€ Iniciales
+                                </button>
+                            </div>
+
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                {!activeFund.transactions || activeFund.transactions.length === 0 ? (
+                                    <p className="text-center py-8 text-slate-500 text-xs italic">No hay movimientos registrados.</p>
+                                ) : (
+                                    activeFund.transactions.map(t => (
+                                        <div key={t.id} className="flex justify-between items-center p-3 bg-slate-900/40 rounded-lg border border-white/5">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-1.5 rounded-full ${t.type === 'deposito' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                                    {t.type === 'deposito' ? <ArrowUpCircle size={14} /> : <ArrowDownCircle size={14} />}
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-bold text-white">{t.notes || (t.type === 'deposito' ? 'Depósito' : 'Gasto')}</p>
+                                                    <p className="text-[10px] text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
+                                                </div>
+                                            </div>
+                                            <span className={`text-sm font-mono font-bold ${t.type === 'deposito' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                {t.type === 'deposito' ? '+' : '-'}{formatCurrency(t.amount)}
+                                            </span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Calculator */}
+                        <div className="bg-slate-800/40 rounded-2xl border border-white/5 p-5">
+                            <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-4">
+                                <Calculator size={16} className="text-slate-400" />
+                                Calculador de Ahorro
+                            </h3>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Aporte Mensual (€)</label>
+                                    <input 
+                                        type="number" 
+                                        value={calcMonthly || activeFund.monthlyContribution} 
+                                        onChange={e => setCalcMonthly(e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none"
+                                        placeholder={activeFund.monthlyContribution.toString()}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Durante cuántos meses?</label>
+                                    <div className="flex gap-2 mb-2">
+                                        {['3', '6', '12', '24'].map(m => (
+                                            <button 
+                                                key={m}
+                                                onClick={() => setCalcMonths(m)}
+                                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${calcMonths === m ? 'bg-primary-600/20 text-primary-400 border-primary-500' : 'bg-slate-900 text-slate-500 border-slate-700'}`}
+                                            >
+                                                {m}m
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="relative">
+                                        <input 
+                                            type="number" 
+                                            value={calcMonths} 
+                                            onChange={e => setCalcMonths(e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none pr-12"
+                                            placeholder="Personalizado..."
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500 uppercase">Meses</span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-slate-900 p-4 rounded-xl border border-primary-500/20">
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Dinero total disponible en {calcMonths} meses</p>
+                                    <div className="flex items-baseline gap-2">
+                                        <span className="text-2xl font-bold text-white">
+                                            {formatCurrency(activeFund.currentAmount + (parseFloat(calcMonthly) || activeFund.monthlyContribution) * parseInt(calcMonths))}
+                                        </span>
+                                        <span className="text-[10px] text-emerald-400 font-bold">
+                                            (+{formatCurrency((parseFloat(calcMonthly) || activeFund.monthlyContribution) * parseInt(calcMonths))})
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-2">
+                                        {activeFund.currentAmount + (parseFloat(calcMonthly) || activeFund.monthlyContribution) * parseInt(calcMonths) >= activeFund.goal 
+                                            ? '✅ ¡Alcanzarás tu meta!' 
+                                            : `Faltarían ${formatCurrency(activeFund.goal - (activeFund.currentAmount + (parseFloat(calcMonthly) || activeFund.monthlyContribution) * parseInt(calcMonths)))} para la meta.`}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Transaction Modal */}
+                    {isAddingTransaction && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                            <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-in">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                        {transType === 'deposito' ? <ArrowUpCircle className="text-emerald-400" /> : <ArrowDownCircle className="text-rose-400" />}
+                                        {transType === 'deposito' ? 'Nuevo Depósito' : 'Registrar Gasto'}
+                                    </h3>
+                                    <button onClick={() => setIsAddingTransaction(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+                                </div>
+
+                                <form onSubmit={onRegisterTransaction} className="space-y-4">
+                                    <div className="flex gap-2 p-1 bg-slate-900 rounded-xl border border-slate-700 mb-4">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setTransType('deposito')}
+                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${transType === 'deposito' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            Depósito
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setTransType('gasto')}
+                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${transType === 'gasto' ? 'bg-rose-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            Gasto
+                                        </button>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto (€)</label>
+                                        <input 
+                                            type="number" 
+                                            value={transAmount} 
+                                            onChange={e => setTransAmount(e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold text-lg focus:border-primary-500 outline-none"
+                                            placeholder="0.00"
+                                            step="0.01"
+                                            required
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha</label>
+                                        <input 
+                                            type="date" 
+                                            value={transDate} 
+                                            onChange={e => setTransDate(e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notas / Concepto</label>
+                                        <input 
+                                            type="text" 
+                                            value={transNotes} 
+                                            onChange={e => setTransNotes(e.target.value)}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none"
+                                            placeholder="Ej: Ahorro extra, Compra de repuesto..."
+                                        />
+                                    </div>
+
+                                    <button 
+                                        type="submit"
+                                        className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all mt-4 ${transType === 'deposito' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-rose-600 hover:bg-rose-500'}`}
+                                    >
+                                        Confirmar Movimiento
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         );

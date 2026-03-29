@@ -45,6 +45,14 @@ export interface WithdrawalRecord {
     createdAt: string;
 }
 
+export interface PersonalTransaction {
+    id: string;
+    date: string;
+    amount: number;
+    type: 'deposito' | 'gasto';
+    notes?: string;
+}
+
 export interface PersonalFund {
     id: string;
     name: string;
@@ -55,6 +63,7 @@ export interface PersonalFund {
     bankName: string;
     monthlyContribution: number;
     lastUpdated: string;
+    transactions?: PersonalTransaction[];
 }
 
 export interface Loan {

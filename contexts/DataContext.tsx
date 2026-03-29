@@ -49,6 +49,8 @@ interface DataContextType {
     handleDeleteReinvestment: (id: string) => Promise<void>; // New
     handleSaveFund: (fundData: PersonalFund) => Promise<void>;
     handleDeleteFund: (id: string) => Promise<void>;
+    handleRegisterFundTransaction: (fundId: string, amount: number, type: 'deposito' | 'gasto', notes: string, date: string) => Promise<void>;
+    handleQuickAdd: (fundId: string) => Promise<void>;
     handleRegisterWithdrawal: (amount: number, source: 'Banco' | 'Efectivo', notes: string, date: string, peñaPercentage: number) => Promise<void>;
     handleDeleteWithdrawal: (id: string) => Promise<void>;
     handleUpdateWithdrawal: (id: string, updatedData: Partial<WithdrawalRecord>) => Promise<void>;
