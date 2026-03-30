@@ -831,21 +831,6 @@ const PersonalFinanceManager: React.FC = () => {
                                 >
                                     + Añadir Movimiento
                                 </button>
-                                <button 
-                                    onClick={async () => {
-                                        if (confirm('¿Deseas registrar los 1100€ iniciales en este fondo?')) {
-                                            try {
-                                                await handleRegisterFundTransaction(activeFund.id, 1100, 'deposito', 'Saldo Inicial Ahorrado', new Date().toISOString().split('T')[0]);
-                                                showToast('Saldo inicial de 1100€ registrado', 'success');
-                                            } catch (e: any) {
-                                                showToast('Error: ' + e.message, 'error');
-                                            }
-                                        }
-                                    }}
-                                    className="text-[10px] font-bold text-emerald-400 hover:underline ml-4"
-                                >
-                                    Cargar 1100€ Iniciales
-                                </button>
                             </div>
 
                             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
