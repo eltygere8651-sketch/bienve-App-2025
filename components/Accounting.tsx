@@ -4,447 +4,22 @@ import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCurrency } from '../services/utils';
 import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-    PieChart, Pie, Cell 
-} from 'recharts';
-import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square, LogOut, FileDown, Share2, ArrowDownCircle, ArrowUpCircle, Calculator, TrendingDown } from 'lucide-react';
-import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
+    BarChart3, Coins, Umbrella, RefreshCw, Sparkles, BrainCircuit, Landmark, CreditCard,
+    TrendingUp, TrendingDown, Target, Info, LayoutDashboard, Database, Download, HelpCircle
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { subscribeToCollection } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
-import { ReinvestmentRecord, PersonalFund } from '../types';
-import { downloadPdf } from '../services/pdfService';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
-// --- COMPONENTS ---
-
-const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: any, color: string, isRisk?: boolean }> = ({ title, value, subtext, icon: Icon, color, isRisk }) => (
-    <div className={`bg-slate-800/60 border ${isRisk ? 'border-red-500/30 bg-red-900/10' : 'border-slate-700'} p-6 rounded-2xl flex flex-col justify-between backdrop-blur-md relative overflow-hidden group hover:-translate-y-1 transition-transform`}>
-        <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:scale-125 transition-transform duration-500 text-${color}-400`}>
-            <Icon size={64} />
-        </div>
-        <div>
-            <div className={`flex items-center gap-2 text-${color}-400 mb-2`}>
-                <Icon size={20} />
-                <span className="text-sm font-bold uppercase tracking-wider">{title}</span>
-            </div>
-            <h3 className="text-3xl font-heading font-bold text-white mb-1">{value}</h3>
-            {subtext && <p className="text-xs text-slate-400">{subtext}</p>}
-        </div>
-    </div>
-);
-
-// --- REINVESTMENT MANAGER COMPONENT ---
-
-const WithdrawalManager: React.FC = () => {
-    const { handleRegisterWithdrawal, handleDeleteWithdrawal, withdrawals } = useDataContext();
-    const [amount, setAmount] = useState('');
-    const [source, setSource] = useState<'Banco' | 'Efectivo'>('Banco');
-    const [notes, setNotes] = useState('');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const val = parseFloat(amount);
-        if (isNaN(val) || val <= 0) return;
-
-        setIsSubmitting(true);
-        try {
-            await handleRegisterWithdrawal(val, source, notes, date, 0);
-            setAmount('');
-            setNotes('');
-            setSource('Banco');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleDelete = async (id: string) => {
-        if (window.confirm('¿Estás seguro de eliminar este registro? Se restaurará el saldo.')) {
-            await handleDeleteWithdrawal(id);
-        }
-    };
-
-    const handleExportPDF = () => {
-        const doc = new jsPDF();
-        
-        // Title
-        doc.setFontSize(18);
-        doc.text('Historial de Pagos y Retiros', 14, 22);
-        doc.setFontSize(11);
-        doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 30);
-
-        // Table
-        const tableColumn = ["Fecha", "Monto", "Origen", "Notas"];
-        const tableRows: any[] = [];
-
-        [...withdrawals].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).forEach(record => {
-            const rowData = [
-                new Date(record.date).toLocaleDateString(),
-                formatCurrency(record.amount),
-                record.source,
-                record.notes || '-'
-            ];
-            tableRows.push(rowData);
-        });
-
-        autoTable(doc, {
-            head: [tableColumn],
-            body: tableRows,
-            startY: 40,
-            theme: 'grid',
-            styles: { fontSize: 10, cellPadding: 3 },
-            headStyles: { fillColor: [66, 66, 66] }
-        });
-
-        // Total
-        const total = withdrawals.reduce((acc, r) => acc + r.amount, 0);
-        const finalY = (doc as any).lastAutoTable.finalY || 40;
-        doc.text(`Total: ${formatCurrency(total)}`, 14, finalY + 10);
-
-        downloadPdf(doc.output('blob'), `pagos_retiros_${new Date().toISOString().split('T')[0]}.pdf`);
-    };
-
-    const handleShare = async () => {
-        const text = `Historial de Pagos:\n\n` + 
-            withdrawals.map(w => `${new Date(w.date).toLocaleDateString()}: ${formatCurrency(w.amount)} (${w.source}) - ${w.notes || ''}`).join('\n') +
-            `\n\nTotal: ${formatCurrency(withdrawals.reduce((acc, r) => acc + r.amount, 0))}`;
-
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: 'Historial de Pagos',
-                    text: text,
-                });
-            } catch (err) {
-                console.error('Error sharing:', err);
-            }
-        } else {
-            // Fallback: Copy to clipboard
-            navigator.clipboard.writeText(text);
-            alert('Historial copiado al portapapeles');
-        }
-    };
-
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in mb-8">
-            {/* Form */}
-            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
-                <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                    <LogOut size={20} className="text-rose-400" />
-                    Registrar Pago / Retiro
-                </h3>
-                <p className="text-xs text-slate-400 mb-4">
-                    Registra pagos o retiros personales. El monto se descontará automáticamente de la caja.
-                </p>
-                
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Total (€)</label>
-                        <input 
-                            type="number" 
-                            value={amount} 
-                            onChange={e => setAmount(e.target.value)} 
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold text-lg focus:border-rose-500 outline-none" 
-                            placeholder="Ej: 1000.00"
-                            step="0.01"
-                            required
-                        />
-                    </div>
-                    
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Origen del Dinero</label>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setSource('Banco')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Banco' ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
-                            >
-                                Banco
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSource('Efectivo')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Efectivo' ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
-                            >
-                                Efectivo
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha</label>
-                        <input 
-                            type="date" 
-                            value={date} 
-                            onChange={e => setDate(e.target.value)} 
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-rose-500 outline-none" 
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notas (Opcional)</label>
-                        <textarea 
-                            value={notes} 
-                            onChange={e => setNotes(e.target.value)} 
-                            rows={2}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-rose-500 outline-none resize-none" 
-                            placeholder="Detalles..."
-                        />
-                    </div>
-                    <button 
-                        type="submit" 
-                        disabled={isSubmitting}
-                        className="w-full py-3 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
-                    >
-                        {isSubmitting ? <Loader2 className="animate-spin" /> : <LogOut size={18} />}
-                        Registrar Pago
-                    </button>
-                </form>
-            </div>
-
-            {/* List */}
-            <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <History size={20} className="text-slate-400" />
-                        Historial de Pagos
-                    </h3>
-                    <div className="flex items-center gap-2">
-                        <button 
-                            onClick={handleExportPDF}
-                            className="p-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg transition-colors"
-                            title="Exportar PDF"
-                        >
-                            <FileDown size={18} />
-                        </button>
-                        <button 
-                            onClick={handleShare}
-                            className="p-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg transition-colors"
-                            title="Compartir"
-                        >
-                            <Share2 size={18} />
-                        </button>
-                        <div className="bg-slate-900 px-3 py-1 rounded-lg border border-slate-600 text-xs font-mono text-rose-400 font-bold">
-                            Total: {formatCurrency(withdrawals.reduce((acc, r) => acc + r.amount, 0))}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto max-h-[500px] pr-2">
-                    {withdrawals.length === 0 ? (
-                        <div className="text-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-xl">
-                            <RefreshCw size={32} className="mx-auto mb-2 opacity-50" />
-                            <p>No hay pagos registrados.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {[...withdrawals].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(record => (
-                                <div key={record.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center group hover:bg-slate-900 transition-colors">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-bold text-white text-lg">{formatCurrency(record.amount)}</span>
-                                            <span className={`text-[10px] uppercase px-2 py-0.5 rounded border ${record.source === 'Banco' ? 'border-blue-500/30 text-blue-400 bg-blue-500/10' : 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'}`}>
-                                                {record.source}
-                                            </span>
-                                            {record.peñaAmount && record.peñaAmount > 0 && (
-                                                <span className="text-[10px] uppercase px-2 py-0.5 rounded border border-purple-500/30 text-purple-400 bg-purple-500/10 flex items-center gap-1">
-                                                    <Wallet size={10} /> Peña: {formatCurrency(record.peñaAmount)}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs text-slate-500">
-                                            <Calendar size={12} /> {new Date(record.date).toLocaleDateString()}
-                                            {record.notes && <span className="text-slate-400">• {record.notes}</span>}
-                                        </div>
-                                    </div>
-                                    <button 
-                                        onClick={() => handleDelete(record.id)}
-                                        className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                        title="Eliminar registro"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const ReinvestmentManager: React.FC = () => {
-    const { reinvestments, handleRegisterReinvestment, handleDeleteReinvestment } = useDataContext();
-    const [amount, setAmount] = useState('');
-    const [source, setSource] = useState<'Banco' | 'Efectivo'>('Banco');
-    const [notes, setNotes] = useState('');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [deductFromTreasury, setDeductFromTreasury] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const val = parseFloat(amount);
-        if (isNaN(val) || val <= 0) return;
-
-        setIsSubmitting(true);
-        try {
-            await handleRegisterReinvestment(val, source, notes, date, deductFromTreasury);
-            setAmount('');
-            setNotes('');
-            setSource('Banco');
-            setDeductFromTreasury(true);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-            {/* Form */}
-            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    <Plus size={20} className="text-primary-400" />
-                    Registrar Reinversión
-                </h3>
-                <p className="text-sm text-slate-400 mb-6">
-                    Registra el capital que has sacado de tus beneficios (intereses) para volver a prestarlo.
-                </p>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Reinvertido (€)</label>
-                        <input 
-                            type="number" 
-                            value={amount} 
-                            onChange={e => setAmount(e.target.value)} 
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold text-lg focus:border-primary-500 outline-none" 
-                            placeholder="Ej: 500.00"
-                            step="0.01"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Origen del Dinero</label>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setSource('Banco')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Banco' ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
-                            >
-                                Banco
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSource('Efectivo')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Efectivo' ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
-                            >
-                                Efectivo
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha</label>
-                        <input 
-                            type="date" 
-                            value={date} 
-                            onChange={e => setDate(e.target.value)} 
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none" 
-                            required
-                        />
-                    </div>
-                    
-                    {/* Treasury Deduction Checkbox */}
-                    <div 
-                        onClick={() => setDeductFromTreasury(!deductFromTreasury)}
-                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-colors ${deductFromTreasury ? 'bg-blue-900/20 border-blue-500/30' : 'bg-slate-900 border-slate-600'}`}
-                    >
-                        <div className={`mt-0.5 rounded text-white ${deductFromTreasury ? 'text-blue-400' : 'text-slate-500'}`}>
-                            {deductFromTreasury ? <CheckSquare size={18} /> : <Square size={18} />}
-                        </div>
-                        <div>
-                            <p className={`text-sm font-bold ${deductFromTreasury ? 'text-blue-200' : 'text-slate-400'}`}>Descontar del Saldo Actual</p>
-                            <p className="text-xs text-slate-500 mt-1">
-                                Marca esto si el dinero sale de la caja en este momento. Desmárcalo si ya lo descontaste al crear el préstamo.
-                            </p>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notas (Opcional)</label>
-                        <textarea 
-                            value={notes} 
-                            onChange={e => setNotes(e.target.value)} 
-                            rows={2}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none resize-none" 
-                            placeholder="Detalles..."
-                        />
-                    </div>
-                    <button 
-                        type="submit" 
-                        disabled={isSubmitting}
-                        className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
-                    >
-                        {isSubmitting ? <Loader2 className="animate-spin" /> : <Save size={18} />}
-                        Guardar Registro
-                    </button>
-                </form>
-            </div>
-
-            {/* List */}
-            <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <History size={20} className="text-slate-400" />
-                        Historial de Reinversiones
-                    </h3>
-                    <div className="bg-slate-900 px-3 py-1 rounded-lg border border-slate-600 text-xs font-mono text-emerald-400 font-bold">
-                        Total: {formatCurrency(reinvestments.reduce((acc, r) => acc + r.amount, 0))}
-                    </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto max-h-[500px] pr-2">
-                    {reinvestments.length === 0 ? (
-                        <div className="text-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-xl">
-                            <RefreshCw size={32} className="mx-auto mb-2 opacity-50" />
-                            <p>No hay reinversiones registradas.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {[...reinvestments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(record => (
-                                <div key={record.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center group hover:bg-slate-900 transition-colors">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-bold text-white text-lg">{formatCurrency(record.amount)}</span>
-                                            <span className={`text-[10px] uppercase px-2 py-0.5 rounded border ${record.source === 'Banco' ? 'border-blue-500/30 text-blue-400 bg-blue-500/10' : 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'}`}>
-                                                {record.source}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs text-slate-500">
-                                            <Calendar size={12} /> {new Date(record.date).toLocaleDateString()}
-                                            {record.notes && <span className="text-slate-400">• {record.notes}</span>}
-                                        </div>
-                                    </div>
-                                    <button 
-                                        onClick={() => handleDeleteReinvestment(record.id)}
-                                        className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                        title="Eliminar registro"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-
-
-// --- PERSONAL FINANCE MANAGER (ISOLATED LOGIC VIA FIRESTORE) ---
+// Modular Components
+import KPICard from './accounting/KPICard';
+import TreasuryManager from './accounting/TreasuryManager';
+import WithdrawalManager from './accounting/WithdrawalManager';
+import ReinvestmentManager from './accounting/ReinvestmentManager';
+import BusinessIntelligence from './accounting/BusinessIntelligence';
+import ProfitsCalculator from './accounting/ProfitsCalculator';
+import PersonalFinanceManager from './accounting/PersonalFinanceManager';
+import PaymentHistory from './accounting/PaymentHistory';
 
 interface TreasuryConfig {
     bankName: string;
@@ -452,753 +27,25 @@ interface TreasuryConfig {
     cashBalance: number;
 }
 
-// Icon Mapping
-const ICON_MAP: Record<string, any> = {
-    'plane': Plane,
-    'palmtree': Palmtree,
-    'car': Car,
-    'home': Home,
-    'laptop': Laptop,
-    'gift': Gift,
-    'heart': Heart,
-    'target': Target,
-    'wallet': Wallet,
-    'umbrella': Umbrella
-};
-
-const COLOR_STYLES = {
-    cyan: { bg: 'from-cyan-900/40 to-blue-900/40', border: 'border-cyan-500/30', text: 'text-cyan-400', bar: 'from-cyan-500 to-blue-500', btn: 'bg-cyan-600 hover:bg-cyan-500' },
-    purple: { bg: 'from-purple-900/40 to-indigo-900/40', border: 'border-purple-500/30', text: 'text-purple-400', bar: 'from-purple-500 to-indigo-500', btn: 'bg-purple-600 hover:bg-purple-500' },
-    emerald: { bg: 'from-emerald-900/40 to-teal-900/40', border: 'border-emerald-500/30', text: 'text-emerald-400', bar: 'from-emerald-500 to-teal-500', btn: 'bg-emerald-600 hover:bg-emerald-500' },
-    orange: { bg: 'from-orange-900/40 to-amber-900/40', border: 'border-orange-500/30', text: 'text-orange-400', bar: 'from-orange-500 to-amber-500', btn: 'bg-orange-600 hover:bg-orange-500' },
-    rose: { bg: 'from-rose-900/40 to-pink-900/40', border: 'border-rose-500/30', text: 'text-rose-400', bar: 'from-rose-500 to-pink-500', btn: 'bg-rose-600 hover:bg-rose-500' },
-    blue: { bg: 'from-blue-900/40 to-indigo-900/40', border: 'border-blue-500/30', text: 'text-blue-400', bar: 'from-blue-500 to-indigo-500', btn: 'bg-blue-600 hover:bg-blue-500' },
-};
-
-const PersonalFinanceManager: React.FC = () => {
-    const { funds, handleSaveFund, handleDeleteFund, handleRegisterFundTransaction, handleQuickAdd, showToast } = useDataContext();
-    const [selectedFundId, setSelectedFundId] = useState<string | null>(null);
-    const [isCreating, setIsCreating] = useState(false);
-    const [isEditingFund, setIsEditingFund] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-
-    // Transaction Form State
-    const [isAddingTransaction, setIsAddingTransaction] = useState(false);
-    const [transType, setTransType] = useState<'deposito' | 'gasto'>('deposito');
-    const [transAmount, setTransAmount] = useState('');
-    const [transNotes, setTransNotes] = useState('');
-    const [transDate, setTransDate] = useState(new Date().toISOString().split('T')[0]);
-
-    // Calculator State
-    const [calcMonths, setCalcMonths] = useState('6');
-    const [calcMonthly, setCalcMonthly] = useState('');
-
-    // Form State for Create/Edit
-    const [formData, setFormData] = useState<any>({
-        id: '',
-        name: '',
-        icon: 'target',
-        color: 'blue',
-        currentAmount: 0,
-        goal: 1000,
-        bankName: 'Banco Principal',
-        monthlyContribution: 100,
-        lastUpdated: new Date().toISOString()
-    });
-
-    const onSaveFund = async () => {
-        if (!formData.name) return;
-        setIsSaving(true);
-        try {
-            await handleSaveFund(formData);
-            setIsCreating(false);
-            setIsEditingFund(false);
-            setFormData({ ...formData, id: '' }); // Reset ID
-        } catch (e: any) {
-            showToast('Error al guardar: ' + e.message, 'error');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const onDeleteFund = async (id: string) => {
-        if (confirm('¿Estás seguro de eliminar este apartado? Se borrará permanentemente de la base de datos.')) {
-            try {
-                await handleDeleteFund(id);
-                setSelectedFundId(null);
-                setIsEditingFund(false);
-            } catch (e: any) {
-                showToast('Error al eliminar: ' + e.message, 'error');
-            }
-        }
-    };
-
-    const onRegisterTransaction = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedFundId) return;
-        const amount = parseFloat(transAmount);
-        if (isNaN(amount) || amount <= 0) return;
-
-        try {
-            await handleRegisterFundTransaction(selectedFundId, amount, transType, transNotes, transDate);
-            setIsAddingTransaction(false);
-            setTransAmount('');
-            setTransNotes('');
-        } catch (e: any) {
-            showToast('Error: ' + e.message, 'error');
-        }
-    };
-
-    const activeFund = funds.find(f => f.id === selectedFundId);
-    const styles = activeFund ? COLOR_STYLES[activeFund.color] : COLOR_STYLES.blue;
-    const ActiveIcon = activeFund ? (ICON_MAP[activeFund.icon] || Target) : Target;
-
-    // --- VIEW: DASHBOARD (List of Funds) ---
-    if (!selectedFundId && !isCreating) {
-        return (
-            <div className="space-y-6 animate-fade-in">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
-                    <div>
-                        <h2 className="text-xl font-heading font-bold text-white flex items-center gap-2">
-                            <Umbrella className="text-cyan-400" /> Finanzas Personales
-                        </h2>
-                        <div className="flex items-center gap-2 mt-1">
-                            <p className="text-slate-400 text-sm">Tus metas y ahorros privados.</p>
-                            <span className="text-[10px] bg-slate-700 px-2 py-0.5 rounded-full text-green-400 flex items-center gap-1 border border-slate-600">
-                                <Cloud size={10} /> Sincronizado en Nube
-                            </span>
-                        </div>
-                    </div>
-                    <button 
-                        onClick={() => {
-                            setFormData({
-                                id: '', name: '', icon: 'target', color: 'blue',
-                                currentAmount: 0, goal: 1000, bankName: 'Banco Principal',
-                                monthlyContribution: 100, lastUpdated: new Date().toISOString()
-                            });
-                            setIsCreating(true);
-                        }}
-                        className="flex items-center gap-2 bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-xl font-bold text-sm transition-all shadow-lg shadow-primary-900/20"
-                    >
-                        <Plus size={18} /> Crear Apartado
-                    </button>
-                </div>
-
-                {funds.length === 0 ? (
-                    <div className="text-center py-16 bg-slate-800/30 rounded-2xl border border-dashed border-slate-700">
-                        <div className="bg-slate-800 p-4 rounded-full inline-block mb-4">
-                            <Target size={32} className="text-slate-500" />
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-300">No tienes apartados creados</h3>
-                        <p className="text-slate-500 text-sm mb-4">Crea tu primer fondo para vacaciones, emergencias o compras. Se guardará de forma segura en la nube.</p>
-                        <button onClick={() => setIsCreating(true)} className="text-primary-400 font-bold text-sm hover:underline">Crear ahora</button>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {funds.map(fund => {
-                            const FundIcon = ICON_MAP[fund.icon] || Target;
-                            const fStyle = COLOR_STYLES[fund.color] || COLOR_STYLES.blue;
-                            const percent = Math.min(100, (fund.currentAmount / fund.goal) * 100);
-                            
-                            return (
-                                <div 
-                                    key={fund.id}
-                                    onClick={() => setSelectedFundId(fund.id)}
-                                    className={`bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-${fund.color}-500/50 cursor-pointer transition-all hover:-translate-y-1 group relative overflow-hidden`}
-                                >
-                                    <div className={`absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform duration-500 ${fStyle.text}`}>
-                                        <FundIcon size={80} />
-                                    </div>
-                                    
-                                    <div className="flex justify-between items-start mb-4 relative z-10">
-                                        <div className={`p-3 rounded-lg bg-slate-900 ${fStyle.text}`}>
-                                            <FundIcon size={24} />
-                                        </div>
-                                        {percent >= 100 && <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-1 rounded-full border border-emerald-500/30">COMPLETADO</span>}
-                                    </div>
-                                    
-                                    <div className="relative z-10">
-                                        <h3 className="font-bold text-slate-200 text-lg mb-0.5 truncate">{fund.name}</h3>
-                                        <p className="text-slate-500 text-xs mb-3">{fund.bankName}</p>
-                                        
-                                        <div className="flex items-baseline gap-1 mb-2">
-                                            <span className="text-2xl font-bold text-white">{formatCurrency(fund.currentAmount)}</span>
-                                            <span className="text-xs text-slate-500">/ {formatCurrency(fund.goal)}</span>
-                                        </div>
-
-                                        <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                                            <div className={`h-full bg-gradient-to-r ${fStyle.bar}`} style={{ width: `${percent}%` }}></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-        );
-    }
-
-    // --- VIEW: CREATE / EDIT FORM ---
-    if (isCreating || isEditingFund) {
-        return (
-            <div className="max-w-2xl mx-auto bg-slate-800 rounded-2xl border border-slate-700 p-6 sm:p-8 animate-fade-in">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                        {isEditingFund ? <Edit2 size={20} className="text-primary-400"/> : <Plus size={20} className="text-primary-400"/>}
-                        {isEditingFund ? 'Editar Apartado' : 'Nuevo Apartado'}
-                    </h2>
-                    <button onClick={() => { setIsCreating(false); setIsEditingFund(false); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400"><X size={20}/></button>
-                </div>
-
-                <div className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="sm:col-span-2">
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Nombre del Objetivo</label>
-                            <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" placeholder="Ej: Coche Nuevo" />
-                        </div>
-                        
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Monto Actual (€)</label>
-                            <input type="number" value={formData.currentAmount} onChange={e => setFormData({...formData, currentAmount: parseFloat(e.target.value) || 0})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Meta Final (€)</label>
-                            <input type="number" value={formData.goal} onChange={e => setFormData({...formData, goal: parseFloat(e.target.value) || 0})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" />
-                        </div>
-                        
-                        <div className="sm:col-span-2">
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Banco / Ubicación</label>
-                            <input type="text" value={formData.bankName} onChange={e => setFormData({...formData, bankName: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" placeholder="Ej: Cuenta Naranja, Efectivo..." />
-                        </div>
-                        
-                        <div className="sm:col-span-2">
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Aporte Mensual Planeado (€)</label>
-                            <input type="number" value={formData.monthlyContribution} onChange={e => setFormData({...formData, monthlyContribution: parseFloat(e.target.value) || 0})} className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white focus:border-primary-500 outline-none" />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Icono y Tema</label>
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            {Object.keys(ICON_MAP).map(iconKey => {
-                                const Ico = ICON_MAP[iconKey];
-                                return (
-                                    <button 
-                                        key={iconKey}
-                                        onClick={() => setFormData({...formData, icon: iconKey})}
-                                        className={`p-2 rounded-lg border ${formData.icon === iconKey ? 'bg-primary-600 text-white border-primary-500' : 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600'}`}
-                                    >
-                                        <Ico size={18} />
-                                    </button>
-                                )
-                            })}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {Object.keys(COLOR_STYLES).map(colorKey => (
-                                <button 
-                                    key={colorKey}
-                                    onClick={() => setFormData({...formData, color: colorKey as any})}
-                                    className={`w-8 h-8 rounded-full border-2 ${formData.color === colorKey ? 'border-white scale-110' : 'border-transparent opacity-60 hover:opacity-100'}`}
-                                    style={{ backgroundColor: colorKey === 'cyan' ? '#06b6d4' : colorKey === 'purple' ? '#a855f7' : colorKey === 'emerald' ? '#10b981' : colorKey === 'orange' ? '#f97316' : colorKey === 'rose' ? '#f43f5e' : '#3b82f6' }}
-                                />
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between pt-4 border-t border-slate-700">
-                        {isEditingFund && (
-                            <button onClick={() => onDeleteFund(formData.id)} className="text-red-400 hover:text-red-300 text-sm font-bold flex items-center gap-2">
-                                <Trash2 size={16} /> Eliminar
-                            </button>
-                        )}
-                        <div className="flex gap-2 ml-auto">
-                            <button onClick={() => { setIsCreating(false); setIsEditingFund(false); }} className="px-4 py-2 text-slate-400 hover:text-white font-bold text-sm">Cancelar</button>
-                            <button onClick={onSaveFund} disabled={isSaving} className="px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-sm shadow-lg flex items-center gap-2">
-                                {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
-                                Guardar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // --- VIEW: DETAIL (Active Fund) ---
-    if (activeFund) {
-        const percent = Math.min(100, (activeFund.currentAmount / activeFund.goal) * 100);
-        
-        return (
-            <div className={`bg-gradient-to-br ${styles.bg} border ${styles.border} rounded-3xl p-1 relative overflow-hidden shadow-2xl animate-fade-in`}>
-                <div className={`absolute top-0 right-0 p-8 opacity-10 pointer-events-none ${styles.text}`}>
-                    <ActiveIcon size={180} />
-                </div>
-
-                <div className="bg-slate-900/60 backdrop-blur-sm rounded-[20px] p-6 sm:p-8 h-full relative z-10">
-                    <button onClick={() => setSelectedFundId(null)} className="absolute top-6 left-6 text-slate-400 hover:text-white flex items-center gap-1 text-sm font-bold transition-colors">
-                        <ArrowLeft size={16} /> Volver
-                    </button>
-
-                    <div className="mt-8 flex flex-col sm:flex-row justify-between items-start gap-4 mb-6">
-                        <div className="flex items-center gap-4">
-                            <div className={`p-3 bg-slate-800 rounded-xl ${styles.text} border border-white/5`}>
-                                <ActiveIcon size={32} />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-heading font-bold text-white">{activeFund.name}</h2>
-                                <p className="text-sm text-slate-400 flex items-center gap-1">
-                                    <Landmark size={12} />
-                                    {activeFund.bankName}
-                                </p>
-                            </div>
-                        </div>
-                        
-                        <button 
-                            onClick={() => {
-                                setFormData(activeFund);
-                                setIsEditingFund(true);
-                            }}
-                            className="p-2 hover:bg-white/10 rounded-lg text-slate-300 transition-colors self-end sm:self-start"
-                            title="Editar configuración"
-                        >
-                            <Edit2 size={18} />
-                        </button>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row items-end gap-3 mb-4">
-                        <span className="text-5xl sm:text-6xl font-heading font-bold text-white tracking-tight">
-                            {formatCurrency(activeFund.currentAmount)}
-                        </span>
-                        <span className={`text-base mb-2 font-medium opacity-80 ${styles.text}`}>
-                            de {formatCurrency(activeFund.goal)}
-                        </span>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="relative h-6 bg-slate-900/50 rounded-full overflow-hidden mb-8 border border-white/5 shadow-inner">
-                        <div 
-                            className={`absolute top-0 left-0 h-full bg-gradient-to-r ${styles.bar} transition-all duration-1000 ease-out flex items-center justify-end px-2`}
-                            style={{ width: `${percent}%` }}
-                        >
-                            {percent > 10 && <span className="text-[10px] font-bold text-white drop-shadow-md">{percent.toFixed(0)}%</span>}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5 flex flex-col justify-center">
-                            <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Aporte Mensual Configurado</p>
-                            <p className={`text-2xl font-bold ${styles.text}`}>+{formatCurrency(activeFund.monthlyContribution)}</p>
-                            <p className="text-xs text-slate-500 mt-1">Sugerido para alcanzar la meta</p>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                            <button 
-                                onClick={() => handleQuickAdd(activeFund.id)}
-                                className={`${styles.btn} text-white p-3 rounded-xl border-t border-white/10 transition-all active:scale-95 flex flex-col items-center justify-center group shadow-lg`}
-                            >
-                                <Plus size={18} className="group-hover:rotate-90 transition-transform mb-1" /> 
-                                <span className="text-xs font-bold">Ingresar Mes</span>
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    setTransType('gasto');
-                                    setIsAddingTransaction(true);
-                                }}
-                                className="bg-slate-800 hover:bg-slate-700 text-rose-400 p-3 rounded-xl border border-slate-700 transition-all active:scale-95 flex flex-col items-center justify-center group shadow-lg"
-                            >
-                                <TrendingDown size={18} className="mb-1" /> 
-                                <span className="text-xs font-bold">Registrar Gasto</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Transaction History & Calculator */}
-                    <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* History */}
-                        <div className="bg-slate-800/40 rounded-2xl border border-white/5 p-5">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                    <History size={16} className="text-slate-400" />
-                                    Historial Reciente
-                                </h3>
-                                <button 
-                                    onClick={() => {
-                                        setTransType('deposito');
-                                        setIsAddingTransaction(true);
-                                    }}
-                                    className="text-[10px] font-bold text-primary-400 hover:underline"
-                                >
-                                    + Añadir Movimiento
-                                </button>
-                            </div>
-
-                            <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                                {!activeFund.transactions || activeFund.transactions.length === 0 ? (
-                                    <p className="text-center py-8 text-slate-500 text-xs italic">No hay movimientos registrados.</p>
-                                ) : (
-                                    activeFund.transactions.map(t => (
-                                        <div key={t.id} className="flex justify-between items-center p-3 bg-slate-900/40 rounded-lg border border-white/5">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`p-1.5 rounded-full ${t.type === 'deposito' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-                                                    {t.type === 'deposito' ? <ArrowUpCircle size={14} /> : <ArrowDownCircle size={14} />}
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-bold text-white">{t.notes || (t.type === 'deposito' ? 'Depósito' : 'Gasto')}</p>
-                                                    <p className="text-[10px] text-slate-500">{new Date(t.date).toLocaleDateString()}</p>
-                                                </div>
-                                            </div>
-                                            <span className={`text-sm font-mono font-bold ${t.type === 'deposito' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                {t.type === 'deposito' ? '+' : '-'}{formatCurrency(t.amount)}
-                                            </span>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Calculator */}
-                        <div className="bg-slate-800/40 rounded-2xl border border-white/5 p-5">
-                            <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-4">
-                                <Calculator size={16} className="text-slate-400" />
-                                Calculador de Ahorro
-                            </h3>
-                            
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Aporte Mensual (€)</label>
-                                    <input 
-                                        type="number" 
-                                        value={calcMonthly || activeFund.monthlyContribution} 
-                                        onChange={e => setCalcMonthly(e.target.value)}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none"
-                                        placeholder={activeFund.monthlyContribution.toString()}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Durante cuántos meses?</label>
-                                    <div className="flex gap-2 mb-2">
-                                        {['3', '6', '12', '24'].map(m => (
-                                            <button 
-                                                key={m}
-                                                onClick={() => setCalcMonths(m)}
-                                                className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all ${calcMonths === m ? 'bg-primary-600/20 text-primary-400 border-primary-500' : 'bg-slate-900 text-slate-500 border-slate-700'}`}
-                                            >
-                                                {m}m
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="relative">
-                                        <input 
-                                            type="number" 
-                                            value={calcMonths} 
-                                            onChange={e => setCalcMonths(e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none pr-12"
-                                            placeholder="Personalizado..."
-                                        />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500 uppercase">Meses</span>
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-900 p-4 rounded-xl border border-primary-500/20">
-                                    <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Dinero total disponible en {calcMonths} meses</p>
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="text-2xl font-bold text-white">
-                                            {formatCurrency(activeFund.currentAmount + (parseFloat(calcMonthly) || activeFund.monthlyContribution) * parseInt(calcMonths))}
-                                        </span>
-                                        <span className="text-[10px] text-emerald-400 font-bold">
-                                            (+{formatCurrency((parseFloat(calcMonthly) || activeFund.monthlyContribution) * parseInt(calcMonths))})
-                                        </span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-500 mt-2">
-                                        {activeFund.currentAmount + (parseFloat(calcMonthly) || activeFund.monthlyContribution) * parseInt(calcMonths) >= activeFund.goal 
-                                            ? '✅ ¡Alcanzarás tu meta!' 
-                                            : `Faltarían ${formatCurrency(activeFund.goal - (activeFund.currentAmount + (parseFloat(calcMonthly) || activeFund.monthlyContribution) * parseInt(calcMonths)))} para la meta.`}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Transaction Modal */}
-                    {isAddingTransaction && (
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                            <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scale-in">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                        {transType === 'deposito' ? <ArrowUpCircle className="text-emerald-400" /> : <ArrowDownCircle className="text-rose-400" />}
-                                        {transType === 'deposito' ? 'Nuevo Depósito' : 'Registrar Gasto'}
-                                    </h3>
-                                    <button onClick={() => setIsAddingTransaction(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
-                                </div>
-
-                                <form onSubmit={onRegisterTransaction} className="space-y-4">
-                                    <div className="flex gap-2 p-1 bg-slate-900 rounded-xl border border-slate-700 mb-4">
-                                        <button 
-                                            type="button"
-                                            onClick={() => setTransType('deposito')}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${transType === 'deposito' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                                        >
-                                            Depósito
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={() => setTransType('gasto')}
-                                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${transType === 'gasto' ? 'bg-rose-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                                        >
-                                            Gasto
-                                        </button>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto (€)</label>
-                                        <input 
-                                            type="number" 
-                                            value={transAmount} 
-                                            onChange={e => setTransAmount(e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold text-lg focus:border-primary-500 outline-none"
-                                            placeholder="0.00"
-                                            step="0.01"
-                                            required
-                                            autoFocus
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha</label>
-                                        <input 
-                                            type="date" 
-                                            value={transDate} 
-                                            onChange={e => setTransDate(e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notas / Concepto</label>
-                                        <input 
-                                            type="text" 
-                                            value={transNotes} 
-                                            onChange={e => setTransNotes(e.target.value)}
-                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none"
-                                            placeholder="Ej: Ahorro extra, Compra de repuesto..."
-                                        />
-                                    </div>
-
-                                    <button 
-                                        type="submit"
-                                        className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-all mt-4 ${transType === 'deposito' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-rose-600 hover:bg-rose-500'}`}
-                                    >
-                                        Confirmar Movimiento
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
-    return null;
-};
-
-// --- PROFITS CALCULATOR (Updated to subtract reinvested profits) ---
-
-interface ProfitsProps {
-    totalInvested: number;
-    totalRecoveredCapital: number;
-    totalInterestEarned: number;
-    overdueAmount: number;
-    totalReinvested: number; // New prop
-}
-
-const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecoveredCapital, totalInterestEarned, overdueAmount, totalReinvested }) => {
-    // REGLA DE ORO: Total Dinero Entrado (Capital + Interés) vs Total Dinero Salido (Capital Prestado)
-    const totalCashIn = totalRecoveredCapital + totalInterestEarned;
-    const netPosition = totalCashIn - totalInvested;
-    const isBreakEvenReached = netPosition > 0;
-    
-    // Cálculo de "Ganancia Real Segura"
-    // Restamos las ganancias reinvertidas porque ese dinero ya no está en la caja (está prestado de nuevo)
-    const availableForWithdrawal = Math.max(0, netPosition - overdueAmount - totalReinvested);
-    
-    const [withdrawalPercentage, setWithdrawalPercentage] = useState(0); 
-    const withdrawAmount = availableForWithdrawal * (withdrawalPercentage / 100);
-
-    const progressPercent = totalInvested > 0 ? Math.min(100, (totalCashIn / totalInvested) * 100) : 0;
-
-    return (
-        <div className="space-y-6 animate-fade-in">
-            
-            {/* Header Section */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 p-6 rounded-2xl shadow-xl">
-                <div className="flex flex-col md:flex-row gap-6 justify-between items-start">
-                    <div className="flex items-start gap-4">
-                        <div className={`p-3 rounded-xl ${isBreakEvenReached ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                            {isBreakEvenReached ? <Scale size={32} /> : <Lock size={32} />}
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-white">Análisis de Retorno de Inversión (ROI)</h2>
-                            <p className="text-slate-400 text-sm mt-1 max-w-lg">
-                                Aplicando la <strong>Regla de Oro</strong>: No retires ganancias hasta que tu flujo de caja haya cubierto tu inversión inicial.
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <div className="text-right bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
-                        <p className="text-xs text-slate-500 uppercase font-bold">Posición Neta Actual</p>
-                        <p className={`text-2xl font-mono font-bold ${netPosition >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {netPosition >= 0 ? '+' : ''}{formatCurrency(netPosition)}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Progress Bar To Break Even */}
-                <div className="mt-8">
-                    <div className="flex justify-between text-sm mb-2 font-medium">
-                        <span className="text-slate-400">Progreso Recuperación Capital</span>
-                        <span className={isBreakEvenReached ? "text-emerald-400" : "text-amber-400"}>{progressPercent.toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full h-4 bg-slate-700 rounded-full overflow-hidden border border-slate-600 relative">
-                        {/* Marker for Break Even */}
-                        <div className="absolute top-0 bottom-0 w-0.5 bg-white/30 z-10 left-[100%]" style={{ left: '100%' }}></div>
-                        <div 
-                            className={`h-full transition-all duration-1000 ${isBreakEvenReached ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-600 to-amber-400'}`} 
-                            style={{ width: `${progressPercent}%` }}
-                        ></div>
-                    </div>
-                    <div className="flex justify-between text-xs text-slate-500 mt-1">
-                        <span>$0</span>
-                        <span>Meta: {formatCurrency(totalInvested)} (Invertido)</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Decision Engine */}
-            {!isBreakEvenReached ? (
-                // SCENARIO 1: STILL RECOVERING (LOCKED)
-                <div className="bg-red-900/10 border border-red-500/20 p-6 rounded-2xl flex flex-col md:flex-row items-center gap-6 text-center md:text-left">
-                    <div className="p-4 bg-red-500/10 rounded-full text-red-400 animate-pulse">
-                        <AlertTriangle size={40} />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-xl font-bold text-red-200 mb-2">Fase de Acumulación: NO RETIRAR</h3>
-                        <p className="text-slate-300 text-sm mb-4">
-                            Aún no has recuperado tu capital inicial. Todo el dinero que entra (capital + intereses) debe reinvertirse para cubrir el dinero que salió de tu bolsillo.
-                        </p>
-                        <div className="bg-slate-900/50 p-4 rounded-xl inline-block border border-red-500/20">
-                            <p className="text-xs text-slate-400 uppercase">Te falta recuperar</p>
-                            <p className="text-xl font-bold text-white">{formatCurrency(Math.abs(netPosition))}</p>
-                        </div>
-                    </div>
-                </div>
-            ) : (
-                // SCENARIO 2: PROFITABLE (UNLOCKED)
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 bg-slate-800 border border-slate-700 p-6 rounded-2xl">
-                        <div className="flex items-center gap-3 mb-6">
-                            <ShieldCheck className="text-emerald-400" size={24} />
-                            <h3 className="text-lg font-bold text-white">Calculadora de Dividendos Seguros</h3>
-                        </div>
-
-                        {availableForWithdrawal <= 0 ? (
-                             <div className="p-4 bg-amber-900/20 border border-amber-500/30 rounded-xl text-amber-200 text-sm flex items-start gap-3">
-                                <AlertTriangle className="shrink-0 mt-0.5" />
-                                <div>
-                                    <strong>Precaución:</strong> Has recuperado tu capital, pero tus ganancias líquidas actuales están comprometidas en nuevos préstamos (reinversión) o deudas vencidas.
-                                </div>
-                             </div>
-                        ) : (
-                            <>
-                                <div className="mb-6">
-                                    <label className="block text-sm font-bold text-slate-300 mb-2">
-                                        ¿Cuánto quieres pagarte? ({withdrawalPercentage}%)
-                                    </label>
-                                    <input 
-                                        type="range" 
-                                        min="0" 
-                                        max="100" 
-                                        step="10"
-                                        value={withdrawalPercentage}
-                                        onChange={(e) => setWithdrawalPercentage(parseInt(e.target.value))}
-                                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                                    />
-                                    <div className="flex justify-between mt-2 text-xs text-slate-500">
-                                        <span>Reinvertir Todo</span>
-                                        <span>Retirar Máximo Seguro</span>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-emerald-900/20 border border-emerald-500/30 p-4 rounded-xl">
-                                        <p className="text-xs text-emerald-400 font-bold uppercase mb-1">A tu Bolsillo</p>
-                                        <p className="text-2xl font-bold text-white">{formatCurrency(withdrawAmount)}</p>
-                                    </div>
-                                    <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl">
-                                        <p className="text-xs text-blue-400 font-bold uppercase mb-1">Reinvertir en Negocio</p>
-                                        <p className="text-2xl font-bold text-white">{formatCurrency(availableForWithdrawal - withdrawAmount)}</p>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl flex flex-col justify-center space-y-4 text-sm">
-                        <h4 className="font-bold text-white border-b border-slate-700 pb-2">Desglose de Lógica</h4>
-                        <div className="flex justify-between">
-                            <span className="text-slate-400">Capital Invertido:</span>
-                            <span className="text-slate-200">{formatCurrency(totalInvested)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-slate-400">Total Recuperado:</span>
-                            <span className="text-emerald-400">+{formatCurrency(totalCashIn)}</span>
-                        </div>
-                        <div className="flex justify-between border-t border-slate-700 pt-2">
-                            <span className="text-slate-300">Posición Neta:</span>
-                            <span className="text-white font-bold">{formatCurrency(netPosition)}</span>
-                        </div>
-                        <div className="flex justify-between text-red-300">
-                            <span className="flex items-center gap-1"><AlertTriangle size={12}/> Reserva Riesgo (Vencido):</span>
-                            <span>-{formatCurrency(overdueAmount)}</span>
-                        </div>
-                        <div className="flex justify-between text-blue-300">
-                            <span className="flex items-center gap-1"><RefreshCw size={12}/> Ganancia Reinvertida:</span>
-                            <span>-{formatCurrency(totalReinvested)}</span>
-                        </div>
-                        <div className="bg-slate-900 p-3 rounded-lg flex justify-between items-center mt-2">
-                            <span className="text-emerald-400 font-bold uppercase text-xs">Disponible Líquido:</span>
-                            <span className="text-xl font-bold text-white">{formatCurrency(availableForWithdrawal)}</span>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
 const Accounting: React.FC = () => {
-    const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded, recalculateTreasury, reinvestments } = useDataContext(); // Added reinvestments
+    const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded, recalculateTreasury, reinvestments } = useDataContext();
     const { showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal' | 'reinvestments'>('global');
+    const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal' | 'reinvestments' | 'intelligence' | 'payments'>('global');
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-    
-    // Treasury Config State
+    const [timeRange, setTimeRange] = useState<'all' | 'year' | 'month'>('month');
+
+    // Treasury State
     const [treasurySettings, setTreasurySettings] = useState<TreasuryConfig>({
         bankName: 'Banco',
         bankBalance: 0,
         cashBalance: 0
     });
-    const [isEditingTreasury, setIsEditingTreasury] = useState(false);
-    
-    // Time Filtering
-    const [timeRange, setTimeRange] = useState<'all' | 'year' | 'month'>('month');
 
-    // Real-time subscription to Treasury
     useEffect(() => {
         const unsubscribe = subscribeToCollection(TABLE_NAMES.TREASURY, (data) => {
+            if (!data) return;
             const mainDoc = data.find(d => d.id === 'main');
             if (mainDoc) {
-                // Ensure values are numbers to prevent NaN in UI
                 setTreasurySettings({
                     bankName: mainDoc.bankName || 'Banco',
                     bankBalance: Number(mainDoc.bankBalance) || 0,
@@ -1209,26 +56,9 @@ const Accounting: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
-    const handleUpdateTreasury = async () => {
-        try {
-            await setDocument(TABLE_NAMES.TREASURY, 'main', treasurySettings);
-            setIsEditingTreasury(false);
-            showToast('Tesorería actualizada correctamente.', 'success');
-        } catch (e: any) {
-            showToast('Error al actualizar tesorería: ' + e.message, 'error');
-        }
-    };
-
-    const handleRecalculate = async () => {
-        if(confirm("Esta acción escaneará todo el historial de préstamos (excluyendo clientes de prueba) y reescribirá el saldo actual con la suma exacta. ¿Continuar?")) {
-            await recalculateTreasury();
-            setIsEditingTreasury(false);
-        }
-    };
-
-    // Filter ALL LOANS to EXCLUDE test clients from accounting stats
+    // Logic
     const allLoans = useMemo(() => {
-        const raw = [...loans, ...archivedLoans];
+        const raw = [...(loans || []), ...(archivedLoans || [])];
         return raw.filter(l => {
             const name = l.clientName.toLowerCase();
             return !name.includes('prueba') && !name.includes('test');
@@ -1240,62 +70,29 @@ const Accounting: React.FC = () => {
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
 
-        let totalInvested = 0; // Cumulative (Snapshot)
-        let currentOutstanding = 0; // Snapshot
-        let overdueAmount = 0; // Snapshot
-        
-        let periodRecoveredCapital = 0; // Flow (Filtered)
-        let periodInterestEarned = 0; // Flow (Filtered)
+        let totalInvested = 0;
+        let currentOutstanding = 0;
+        let overdueAmount = 0;
+        let periodRecoveredCapital = 0;
+        let periodInterestEarned = 0;
         let forecastedMonthlyIncome = 0;
-
-        // Cumulative Historical Totals (For Ratio Calculation)
         let historicalTotalCapitalRecovered = 0;
         let historicalTotalInterestEarned = 0;
 
-        // Sum reinvestments (Filtered by Date)
-        const periodReinvested = reinvestments.reduce((acc, r) => {
-            const rDate = new Date(r.date);
-            let include = false;
-            if (timeRange === 'all') include = true;
-            else if (timeRange === 'year') include = rDate.getFullYear() === currentYear;
-            else if (timeRange === 'month') include = rDate.getMonth() === currentMonth && rDate.getFullYear() === currentYear;
-            
-            return include ? acc + r.amount : acc;
-        }, 0);
-        
-        const totalReinvested = reinvestments.reduce((acc, r) => acc + r.amount, 0); // Keep total for ROI calc if needed
-
-        // 1. Snapshot Metrics (Always Total Active)
         allLoans.forEach(loan => {
-            if (!loan.archived) {
-                // If active or overdue, it contributes to current portfolio risk/value
-                if (loan.status !== 'Pagado') {
-                    currentOutstanding += loan.remainingCapital;
-                    forecastedMonthlyIncome += loan.remainingCapital * 0.08;
-                    if (loan.status === 'Vencido') {
-                        overdueAmount += loan.remainingCapital;
-                    }
-                }
+            if (!loan.archived && loan.status !== 'Pagado') {
+                currentOutstanding += loan.remainingCapital;
+                forecastedMonthlyIncome += loan.remainingCapital * 0.08;
+                if (loan.status === 'Vencido') overdueAmount += loan.remainingCapital;
             }
-            // Invested is always total historical for context
             totalInvested += (loan.initialCapital || loan.amount);
-            
-            // Calculate Historical Totals for Ratio
-            if (loan.paymentHistory) {
-                loan.paymentHistory.forEach(payment => {
-                    historicalTotalCapitalRecovered += Number(payment.capitalPaid || 0);
-                    historicalTotalInterestEarned += Number(payment.interestPaid || 0);
-                });
-            }
-        });
-
-        // 2. Flow Metrics (Filtered by Date)
-        allLoans.forEach(loan => {
             if (loan.paymentHistory) {
                 loan.paymentHistory.forEach(payment => {
                     const payDate = new Date(payment.date);
-                    let include = false;
+                    historicalTotalCapitalRecovered += Number(payment.capitalPaid || 0);
+                    historicalTotalInterestEarned += Number(payment.interestPaid || 0);
 
+                    let include = false;
                     if (timeRange === 'all') include = true;
                     else if (timeRange === 'year') include = payDate.getFullYear() === currentYear;
                     else if (timeRange === 'month') include = payDate.getMonth() === currentMonth && payDate.getFullYear() === currentYear;
@@ -1308,526 +105,192 @@ const Accounting: React.FC = () => {
             }
         });
 
+        const totalReinvested = reinvestments.reduce((acc, r) => acc + r.amount, 0);
         const defaultRate = currentOutstanding > 0 ? (overdueAmount / currentOutstanding) * 100 : 0;
-
-        // Calculate Ratio based on filtered (or historical if filter is all)
-        // Using historical totals gives a better "average behavior" of the portfolio
-        const totalInflow = historicalTotalCapitalRecovered + historicalTotalInterestEarned;
-        const profitRatio = totalInflow > 0 ? (historicalTotalInterestEarned / totalInflow) : 0;
-        const capitalRatio = totalInflow > 0 ? (historicalTotalCapitalRecovered / totalInflow) : 1;
-
-        // ROI Check for visual feedback in Treasury
-        const netPosition = totalInflow - totalInvested;
-        const isBreakEvenReached = netPosition >= 0;
-
-        // Net Available Profit (Liquid Profit)
-        // This is purely for display: Interest Earned - Reinvested
-        const netAvailableProfit = Math.max(0, periodInterestEarned - periodReinvested);
 
         return {
             totalInvested,
+            currentOutstanding,
+            overdueAmount,
             periodRecoveredCapital,
             periodInterestEarned,
-            currentOutstanding,
             forecastedMonthlyIncome,
-            overdueAmount,
             defaultRate,
-            profitRatio,
-            capitalRatio,
-            isBreakEvenReached,
             totalReinvested,
-            periodReinvested,
-            netAvailableProfit
+            historicalTotalCapitalRecovered,
+            historicalTotalInterestEarned
         };
     }, [allLoans, timeRange, reinvestments]);
 
-    // Data for Monthly Cash Flow Chart
-    const monthlyData = useMemo(() => {
-        const data: Record<string, { name: string, capital: number, interes: number, total: number }> = {};
-
-        allLoans.forEach(loan => {
-            if (loan.paymentHistory) {
-                loan.paymentHistory.forEach(payment => {
-                    const date = new Date(payment.date);
-                    // Filter logic for chart
-                    
-                    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                    const label = date.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
-
-                    if (!data[key]) {
-                        data[key] = { name: label, capital: 0, interes: 0, total: 0 };
-                    }
-                    data[key].capital += Number(payment.capitalPaid || 0);
-                    data[key].interes += Number(payment.interestPaid || 0);
-                    data[key].total += Number(payment.amount || 0);
-                });
-            }
-        });
-
-        return Object.entries(data)
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([_, val]) => val)
-            .slice(-12); 
-    }, [allLoans]);
-
-    // Data for Pie Chart
-    const distributionData = [
-        { name: 'Capital Retornado', value: stats.periodRecoveredCapital, color: '#3b82f6' }, 
-        { name: 'Interés Ganado', value: stats.periodInterestEarned, color: '#10b981' }, 
-        { name: 'Pendiente (Deuda)', value: stats.currentOutstanding, color: '#ef4444' }, 
-    ];
-
-    const handleLoadFullHistory = async () => {
+    const handleLoadMore = async () => {
         setIsLoadingHistory(true);
         await loadAllHistory();
         setIsLoadingHistory(false);
     };
 
-    const getFilterLabel = () => {
-        if (timeRange === 'month') return 'Este Mes';
-        if (timeRange === 'year') return 'Este Año';
-        return 'Histórico Total';
-    }
-
-    const currentTotalTreasury = treasurySettings.bankBalance + treasurySettings.cashBalance;
-    // Calculate simple ratios for visual representation
-    // If reinvested is high, it eats into profit availability
-    const estimatedProfitInTreasury = currentTotalTreasury * stats.profitRatio;
-    const estimatedCapitalInTreasury = currentTotalTreasury * stats.capitalRatio;
-    
-    // NEW: Calculate Total Collected for Hero Card
-    const totalCollected = stats.periodRecoveredCapital + stats.periodInterestEarned;
-
     return (
-        <div className="space-y-8 animate-fade-in pb-10">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-heading font-bold text-white flex items-center gap-3">
-                        <PieIcon className="text-primary-400" size={32} />
-                        Contabilidad
-                    </h1>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
-                        <p className="text-slate-400">Análisis financiero y gestión de utilidades.</p>
-                        <span className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20 font-bold self-start sm:self-auto">
-                            Excluye Clientes de Prueba
-                        </span>
-                    </div>
-                </div>
-                
-                <div className="flex gap-2">
-                    {!allHistoryLoaded && hasMoreArchivedLoans && (
-                        <button 
-                            onClick={handleLoadFullHistory}
-                            disabled={isLoadingHistory}
-                            className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 hover:text-white px-4 py-2 rounded-lg text-sm font-medium transition-all"
+        <div className="min-h-screen bg-slate-950 text-slate-200">
+            {/* Header / Sub-nav */}
+            <div className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 py-4 px-6 md:px-12 flex flex-col md:flex-row justify-between items-center gap-6">
+                 <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 shadow-inner w-full md:w-auto">
+                    {(['global', 'profits', 'payments', 'intelligence', 'reinvestments', 'personal'] as const).map(tab => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`flex-1 md:flex-none px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-black shadow-xl scale-105' : 'text-slate-500 hover:text-slate-200'}`}
                         >
-                            {isLoadingHistory ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> : <Database size={16} />}
-                            <span className="hidden sm:inline">Cargar Historial</span>
+                            {tab === 'global' && 'Resumen'}
+                            {tab === 'profits' && 'ROI'}
+                            {tab === 'payments' && 'Cierre'}
+                            {tab === 'intelligence' && 'Predictivo'}
+                            {tab === 'reinvestments' && 'Ciclos'}
+                            {tab === 'personal' && 'Ahorro'}
                         </button>
-                    )}
+                    ))}
                 </div>
-            </div>
 
-            {/* Navigation Tabs - Optimized Grid for Mobile */}
-            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 mb-6">
-                <button
-                    onClick={() => setActiveTab('global')}
-                    className={`flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'global' ? 'bg-primary-500/20 text-primary-400 border-primary-500/30 shadow-lg shadow-primary-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
-                >
-                    <BarChart3 size={18} /> 
-                    <span>Global</span>
-                </button>
-                <button
-                    onClick={() => setActiveTab('profits')}
-                    className={`flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'profits' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-lg shadow-emerald-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
-                >
-                    <Coins size={18} /> 
-                    <span>Ganancias</span>
-                </button>
-                <button
-                    onClick={() => setActiveTab('payments')}
-                    className={`flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'payments' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-lg shadow-rose-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
-                >
-                    <CreditCard size={18} /> 
-                    <span>Pagos</span>
-                </button>
-                <button
-                    onClick={() => setActiveTab('reinvestments')}
-                    className={`flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'reinvestments' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 shadow-lg shadow-blue-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
-                >
-                    <RefreshCw size={18} /> 
-                    <span>Reinversiones</span>
-                </button>
-                <button
-                    onClick={() => setActiveTab('personal')}
-                    className={`col-span-2 md:col-span-1 md:w-auto flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'personal' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 shadow-lg shadow-cyan-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
-                >
-                    <Umbrella size={18} /> 
-                    <span>Finanzas Personales</span>
-                </button>
                 {activeTab === 'global' && (
-                    <div className="flex justify-end animate-fade-in">
-                        <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 w-full sm:w-auto">
-                            <button onClick={() => setTimeRange('month')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'month' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Mes</button>
-                            <button onClick={() => setTimeRange('year')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'year' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Año</button>
-                            <button onClick={() => setTimeRange('all')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'all' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Total</button>
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                        <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 w-full sm:w-auto">
+                            {(['month', 'year', 'all'] as const).map(range => (
+                                <button 
+                                    key={range}
+                                    onClick={() => setTimeRange(range)} 
+                                    className={`flex-1 sm:flex-none px-5 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-colors ${timeRange === range ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    {range === 'month' ? 'Mes' : range === 'year' ? 'Año' : 'Total'}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 )}
             </div>
 
-            {activeTab === 'personal' && (
-                <div className="max-w-6xl mx-auto space-y-8">
-                    <PersonalFinanceManager />
-                </div>
-            )}
-
-            {activeTab === 'payments' && (
-                <div className="max-w-6xl mx-auto space-y-8">
-                    <WithdrawalManager />
-                </div>
-            )}
-
-            {activeTab === 'reinvestments' && (
-                <div className="max-w-6xl mx-auto">
-                    <ReinvestmentManager />
-                </div>
-            )}
-
-            {activeTab === 'profits' && (
-                <ProfitsCalculator 
-                    totalInvested={stats.totalInvested} // Always Total for ROI calc
-                    totalRecoveredCapital={allLoans.reduce((acc, l) => acc + Number(l.totalCapitalPaid || 0), 0)} // Total
-                    totalInterestEarned={allLoans.reduce((acc, l) => acc + Number(l.totalInterestPaid || 0), 0)} // Total
-                    overdueAmount={stats.overdueAmount} // Current Snapshot
-                    totalReinvested={stats.totalReinvested}
-                />
-            )}
-
-            {activeTab === 'global' && (
-                <>
-                    {/* NEW: Summary Hero Card */}
-                    <div className="bg-gradient-to-r from-blue-900/20 to-indigo-900/20 border border-blue-500/30 p-6 rounded-2xl mb-6 relative overflow-hidden flex items-center justify-between shadow-xl">
-                        <div className="relative z-10">
-                            <p className="text-blue-200 font-bold uppercase text-xs tracking-wider mb-2 flex items-center gap-2">
-                                <Sparkles size={14} className="text-blue-400"/>
-                                Ingreso Total ({getFilterLabel()})
-                            </p>
-                            <p className="text-4xl sm:text-5xl font-heading font-bold text-white tracking-tight">
-                                {formatCurrency(totalCollected)}
-                            </p>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-sm text-slate-400 mt-2">
-                                <div><span className="text-blue-400 font-bold">{formatCurrency(stats.periodInterestEarned)}</span> Interés</div>
-                                <span className="hidden sm:inline">+</span>
-                                <div><span className="text-indigo-400 font-bold">{formatCurrency(stats.periodRecoveredCapital)}</span> Capital</div>
-                            </div>
-                        </div>
-                        <div className="hidden sm:block p-4 bg-blue-600/10 rounded-full text-blue-400 border border-blue-500/20 relative z-10">
-                            <Banknote size={40} />
-                        </div>
-                        {/* Subtle background element */}
-                        <div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-blue-500/5 to-transparent pointer-events-none"></div>
-                    </div>
-
-                    {/* KPI Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                        <KPICard 
-                            title={`Interés Ganado`}
-                            value={formatCurrency(stats.periodInterestEarned)} 
-                            subtext={timeRange === 'all' ? "Total Bruto Histórico" : timeRange === 'year' ? "Total Bruto Este Año" : "Total Bruto Este Mes"}
-                            icon={TrendingUp} 
-                            color="emerald" 
-                        />
-                        <KPICard 
-                            title={`Beneficio Disponible`}
-                            value={formatCurrency(stats.periodInterestEarned - stats.periodReinvested)} 
-                            subtext={timeRange === 'all' ? "Ganancia Real Histórica" : timeRange === 'year' ? "Ganancia Real Este Año" : "Ganancia Real Este Mes"}
-                            icon={Coins} 
-                            color="teal" 
-                        />
-                        <KPICard 
-                            title="Tasa de Morosidad" 
-                            value={`${stats.defaultRate.toFixed(1)}%`}
-                            subtext={`Vencido: ${formatCurrency(stats.overdueAmount)}`}
-                            icon={AlertTriangle} 
-                            color={stats.defaultRate > 15 ? 'red' : 'amber'} 
-                            isRisk={stats.defaultRate > 15}
-                        />
-                        <KPICard 
-                            title="Proyección Mes" 
-                            value={formatCurrency(stats.forecastedMonthlyIncome)} 
-                            subtext="Si todos pagan (8% s/ deuda)"
-                            icon={BarChart3} 
-                            color="indigo" 
-                        />
-                    </div>
-
-                    {/* Treasury Breakdown */}
-                    <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
-                        <div className="flex justify-between items-start mb-4">
-                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                <Wallet size={20} className="text-primary-400" />
-                                Tesorería y Flujo de Caja
-                            </h3>
-                            <button 
-                                onClick={() => setIsEditingTreasury(!isEditingTreasury)}
-                                className="text-xs text-slate-400 hover:text-white flex items-center gap-1 bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-600 transition-colors"
-                            >
-                                <Edit3 size={14} /> Configurar
-                            </button>
-                        </div>
-
-                        {isEditingTreasury && (
-                            <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-600 mb-6 animate-fade-in-down">
-                                <h4 className="text-sm font-bold text-slate-300 mb-3 uppercase">Arqueo de Caja / Ajuste Manual</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">Nombre Banco</label>
-                                        <input type="text" value={treasurySettings.bankName} onChange={e => setTreasurySettings({...treasurySettings, bankName: e.target.value})} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">Saldo en Banco (€)</label>
-                                        <input type="number" value={treasurySettings.bankBalance} onChange={e => setTreasurySettings({...treasurySettings, bankBalance: parseFloat(e.target.value) || 0})} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 mb-1">Saldo en Efectivo (€)</label>
-                                        <input type="number" value={treasurySettings.cashBalance} onChange={e => setTreasurySettings({...treasurySettings, cashBalance: parseFloat(e.target.value) || 0})} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
-                                    </div>
-                                </div>
-                                <div className="flex flex-col sm:flex-row justify-between gap-4 border-t border-slate-700 pt-3">
-                                    <button 
-                                        onClick={handleRecalculate}
-                                        className="px-4 py-1.5 bg-blue-600/20 text-blue-300 border border-blue-500/30 text-xs font-bold rounded-lg hover:bg-blue-600/30 flex items-center gap-2"
-                                    >
-                                        <RefreshCw size={14} /> Auditar y Recalcular Saldos
-                                    </button>
-                                    <div className="flex gap-2 justify-end">
-                                        <button onClick={() => setIsEditingTreasury(false)} className="px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-white">Cancelar</button>
-                                        <button onClick={handleUpdateTreasury} className="px-4 py-1.5 bg-primary-600 text-white text-xs font-bold rounded-lg hover:bg-primary-500">Guardar Cambios</button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                            <div className="bg-slate-900/30 border border-slate-700 p-4 rounded-xl flex items-center gap-4">
-                                <div className="p-3 bg-slate-800 rounded-full text-slate-400">
-                                    <Banknote size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-xs text-slate-400 uppercase font-bold">Disponible en Efectivo</p>
-                                    <p className="text-xl font-bold text-white">{formatCurrency(treasurySettings.cashBalance)}</p>
-                                </div>
-                            </div>
-                            <div className="bg-slate-900/30 border border-slate-700 p-4 rounded-xl flex items-center gap-4">
-                                <div className="p-3 bg-slate-800 rounded-full text-slate-400">
-                                    <CreditCard size={24} />
-                                </div>
-                                <div>
-                                    <p className="text-xs text-slate-400 uppercase font-bold">Disponible en {treasurySettings.bankName || 'Banco'}</p>
-                                    <p className="text-xl font-bold text-white">{formatCurrency(treasurySettings.bankBalance)}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Treasury Breakdown Logic */}
-                        <div className="bg-black/20 rounded-xl p-4 border border-slate-700/50">
-                            <div className="flex justify-between items-end mb-2">
-                                <h4 className="text-sm font-bold text-slate-300">Composición Estimada del Flujo de Caja</h4>
-                                <div className="text-right">
-                                    <p className="text-[10px] text-slate-500 uppercase">Liquidez Total</p>
-                                    <p className="text-lg font-bold text-white">{formatCurrency(currentTotalTreasury)}</p>
-                                </div>
-                            </div>
-                            
-                            <div className="flex h-3 w-full rounded-full overflow-hidden mb-3">
-                                <div style={{ width: `${stats.capitalRatio * 100}%` }} className="bg-blue-500" title="Capital"></div>
-                                <div style={{ width: `${stats.profitRatio * 100}%` }} className={stats.isBreakEvenReached ? "bg-emerald-500" : "bg-amber-500"} title="Ganancia"></div>
+            <main className="p-6 md:p-12 space-y-12">
+                <AnimatePresence mode="wait">
+                    {activeTab === 'global' && (
+                        <motion.div 
+                            key="global"
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.98 }}
+                            className="space-y-12"
+                        >
+                            {/* Summary Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <KPICard 
+                                    title="Intereses Cobrados" 
+                                    value={formatCurrency(stats.periodInterestEarned)} 
+                                    subtext={timeRange === 'all' ? 'Historial Completo' : timeRange === 'year' ? 'Total Año Actual' : 'Ganancia Neta Mensual'}
+                                    icon={Coins} 
+                                    color="emerald"
+                                    index={0}
+                                />
+                                <KPICard 
+                                    title="Capital en Calle" 
+                                    value={formatCurrency(stats.currentOutstanding)} 
+                                    subtext="Suma de Capitales Activos"
+                                    icon={BarChart3} 
+                                    color="blue"
+                                    index={1}
+                                />
+                                <KPICard 
+                                    title="Tasa de Mora" 
+                                    value={`${stats.defaultRate.toFixed(1)}%`} 
+                                    subtext={`Cartera Vencida: ${formatCurrency(stats.overdueAmount)}`}
+                                    icon={stats.defaultRate > 5 ? TrendingDown : Sparkles} 
+                                    color={stats.defaultRate > 5 ? "rose" : "emerald"}
+                                    isRisk={stats.defaultRate > 10}
+                                    index={2}
+                                />
+                                <KPICard 
+                                    title="Meta Recaudación" 
+                                    value={formatCurrency(stats.forecastedMonthlyIncome)} 
+                                    subtext="Próximo Retorno de Intereses"
+                                    icon={TrendingUp} 
+                                    color="indigo"
+                                    index={3}
+                                />
                             </div>
 
-                            <div className="flex justify-between gap-4">
-                                <div className="flex-1 bg-blue-900/20 p-3 rounded-lg border border-blue-500/20">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                        <p className="text-xs text-blue-300 font-bold uppercase">Capital Operativo</p>
-                                    </div>
-                                    <p className="text-lg font-bold text-white">{formatCurrency(estimatedCapitalInTreasury)}</p>
-                                    <p className="text-[10px] text-slate-400 mt-1">Dinero para prestar (No gastar)</p>
-                                </div>
-                                
-                                <div className={`flex-1 p-3 rounded-lg border ${stats.isBreakEvenReached ? 'bg-emerald-900/20 border-emerald-500/20' : 'bg-amber-900/20 border-amber-500/20'}`}>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <div className={`w-2 h-2 rounded-full ${stats.isBreakEvenReached ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
-                                        <p className={`text-xs font-bold uppercase ${stats.isBreakEvenReached ? 'text-emerald-300' : 'text-amber-300'}`}>
-                                            {stats.isBreakEvenReached ? 'Beneficio Neto' : 'Interés Generado'}
-                                        </p>
-                                    </div>
-                                    <p className="text-lg font-bold text-white">{formatCurrency(estimatedProfitInTreasury)}</p>
-                                    <p className="text-[10px] text-slate-400 mt-1">
-                                        {stats.isBreakEvenReached ? 'Disponible para retiro' : 'Reinvertir (Recuperando Capital)'}
-                                    </p>
-                                </div>
-                            </div>
-                            <p className="text-[10px] text-slate-500 mt-3 text-center italic">
-                                * Estimación basada en el ratio histórico de tu cartera ({stats.capitalRatio.toFixed(2) * 100}% capital / {stats.profitRatio.toFixed(2) * 100}% interés).
-                            </p>
-                        </div>
-                    </div>
+                            {/* Treasury Section */}
+                            <TreasuryManager 
+                                settings={treasurySettings} 
+                                onRecalculate={recalculateTreasury} 
+                            />
 
-                    {/* Charts Section */}
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                        
-                        {/* Monthly Cash Flow */}
-                        <div className="xl:col-span-2 bg-slate-800 p-4 sm:p-6 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
-                            <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                                <TrendingUp size={20} className="text-primary-400" />
-                                Flujo de Caja (Histórico 12 Meses)
-                            </h3>
-                            <div className="h-[250px] sm:h-[300px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-                                        <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(val) => `€${val}`} />
-                                        <Tooltip 
-                                            contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
-                                            formatter={(value: number) => formatCurrency(value)}
-                                        />
-                                        <Legend wrapperStyle={{fontSize: '12px', paddingTop: '10px'}}/>
-                                        <Bar dataKey="capital" name="Capital Retornado" stackId="a" fill="#3b82f6" radius={[0, 0, 4, 4]} />
-                                        <Bar dataKey="interes" name="Interés (Ganancia)" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
+                            {/* Withdrawal Management */}
+                            <WithdrawalManager />
+                        </motion.div>
+                    )}
 
-                        {/* Distribution Pie */}
-                        <div className="bg-slate-800 p-4 sm:p-6 rounded-2xl border border-slate-700 shadow-lg flex flex-col overflow-hidden">
-                            <div className="flex justify-between items-start mb-6">
-                                <h3 className="text-lg font-bold text-white">Estado Actual</h3>
-                                <span className="text-[10px] bg-slate-700 px-2 py-1 rounded text-slate-300">Según Filtro</span>
-                            </div>
-                            <div className="flex-1 min-h-[250px] relative">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={distributionData}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={80}
-                                            paddingAngle={5}
-                                            dataKey="value"
-                                        >
-                                            {distributionData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip 
-                                             contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#fff' }}
-                                             formatter={(value: number) => formatCurrency(value)}
-                                        />
-                                        <Legend verticalAlign="bottom" height={36} wrapperStyle={{fontSize: '12px'}}/>
-                                    </PieChart>
-                                </ResponsiveContainer>
-                                {/* Center Text */}
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
-                                    <div className="text-center">
-                                        <p className="text-xs text-slate-400 font-bold uppercase">Entrada Neta</p>
-                                        <p className="text-lg sm:text-xl font-bold text-white">{formatCurrency(stats.periodRecoveredCapital + stats.periodInterestEarned)}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    {activeTab === 'profits' && (
+                        <motion.div 
+                            key="profits"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                        >
+                            <ProfitsCalculator 
+                                totalInvested={stats.totalInvested}
+                                totalRecoveredCapital={stats.historicalTotalCapitalRecovered}
+                                totalInterestEarned={stats.historicalTotalInterestEarned}
+                                overdueAmount={stats.overdueAmount}
+                                totalReinvested={stats.totalReinvested}
+                            />
+                        </motion.div>
+                    )}
 
-                    {/* Detailed Breakdown */}
-                    <div className="bg-slate-800 rounded-2xl border border-slate-700 shadow-lg overflow-hidden">
-                        <div className="p-6 border-b border-slate-700 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-white">Desglose de Cartera Activa</h3>
-                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                                <Info size={14} />
-                                <span>Datos en tiempo real (Filtrados)</span>
-                            </div>
-                        </div>
-                        
-                        {/* Mobile View: Cards */}
-                        <div className="md:hidden">
-                            <div className="divide-y divide-slate-700">
-                                {allLoans.filter(l => !l.archived).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map(loan => (
-                                    <div key={loan.id} className="p-4 flex flex-col gap-3">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <p className="font-bold text-white text-base truncate max-w-[180px]">{loan.clientName}</p>
-                                                <div className="flex items-center text-xs text-slate-500 mt-0.5 gap-1">
-                                                    <Calendar size={12} />
-                                                    {new Date(loan.startDate).toLocaleDateString()}
-                                                </div>
-                                            </div>
-                                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
-                                                loan.status === 'Pagado' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-                                                loan.status === 'Vencido' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
-                                            }`}>
-                                                {loan.status}
-                                            </span>
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-2 gap-2 text-sm">
-                                            <div className="bg-slate-900/50 p-2 rounded border border-slate-700/50">
-                                                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Capital Inicial</p>
-                                                <p className="font-mono text-slate-300 font-medium">{formatCurrency(loan.initialCapital || loan.amount)}</p>
-                                            </div>
-                                            <div className="bg-slate-900/50 p-2 rounded border border-red-500/20 bg-red-900/10">
-                                                <p className="text-[10px] text-red-400 uppercase tracking-wider font-bold">Pendiente</p>
-                                                <p className="font-mono text-red-300 font-bold">{formatCurrency(loan.remainingCapital)}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+                    {activeTab === 'intelligence' && (
+                        <motion.div 
+                            key="intelligence"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <BusinessIntelligence allLoans={allLoans} />
+                        </motion.div>
+                    )}
 
-                        {/* Desktop View: Table */}
-                        <div className="hidden md:block overflow-x-auto">
-                            <table className="w-full text-left text-sm whitespace-nowrap">
-                                <thead className="bg-slate-900/50 text-slate-400 uppercase font-bold text-xs">
-                                    <tr>
-                                        <th className="px-6 py-4">Cliente</th>
-                                        <th className="px-6 py-4">Fecha Inicio</th>
-                                        <th className="px-6 py-4">Capital Inicial</th>
-                                        <th className="px-6 py-4 text-emerald-400">Interés Ganado (Total)</th>
-                                        <th className="px-6 py-4 text-blue-400">Capital Amortizado (Total)</th>
-                                        <th className="px-6 py-4 text-red-400">Deuda Pendiente</th>
-                                        <th className="px-6 py-4 text-right">Estado</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-700">
-                                    {allLoans.filter(l => !l.archived).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()).map(loan => (
-                                        <tr key={loan.id} className="hover:bg-slate-700/30 transition-colors">
-                                            <td className="px-6 py-4 font-bold text-white">{loan.clientName}</td>
-                                            <td className="px-6 py-4 text-slate-400">{new Date(loan.startDate).toLocaleDateString()}</td>
-                                            <td className="px-6 py-4 text-slate-300 font-mono">{formatCurrency(loan.initialCapital || loan.amount)}</td>
-                                            <td className="px-6 py-4 text-emerald-400 font-mono font-bold">+{formatCurrency(loan.totalInterestPaid)}</td>
-                                            <td className="px-6 py-4 text-blue-400 font-mono">{formatCurrency(loan.totalCapitalPaid)}</td>
-                                            <td className="px-6 py-4 text-red-400 font-mono">{formatCurrency(loan.remainingCapital)}</td>
-                                            <td className="px-6 py-4 text-right">
-                                                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
-                                                    loan.status === 'Pagado' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-                                                    loan.status === 'Vencido' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                    'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                                                }`}>
-                                                    {loan.status}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </>
-            )}
+                    {activeTab === 'reinvestments' && (
+                        <motion.div 
+                            key="reinvestments"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                        >
+                            <ReinvestmentManager />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'personal' && (
+                        <motion.div 
+                            key="personal"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                        >
+                            <PersonalFinanceManager />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'payments' && (
+                        <motion.div 
+                            key="payments"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                        >
+                            <PaymentHistory 
+                                loans={archivedLoans}
+                                isLoading={isLoadingHistory}
+                                hasMore={!allHistoryLoaded && hasMoreArchivedLoans}
+                                onLoadMore={handleLoadMore}
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </main>
         </div>
     );
 };
