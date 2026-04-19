@@ -12,14 +12,14 @@ import { subscribeToCollection } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 
 // Modular Components
-import KPICard from './accounting/KPICard';
-import TreasuryManager from './accounting/TreasuryManager';
-import WithdrawalManager from './accounting/WithdrawalManager';
-import ReinvestmentManager from './accounting/ReinvestmentManager';
-import BusinessIntelligence from './accounting/BusinessIntelligence';
-import ProfitsCalculator from './accounting/ProfitsCalculator';
-import PersonalFinanceManager from './accounting/PersonalFinanceManager';
-import PaymentHistory from './accounting/PaymentHistory';
+import KPICard from '@/components/accounting/KPICard';
+import TreasuryManager from '@/components/accounting/TreasuryManager';
+import WithdrawalManager from '@/components/accounting/WithdrawalManager';
+import ReinvestmentManager from '@/components/accounting/ReinvestmentManager';
+import BusinessIntelligence from '@/components/accounting/BusinessIntelligence';
+import ProfitsCalculator from '@/components/accounting/ProfitsCalculator';
+import PersonalFinanceManager from '@/components/accounting/PersonalFinanceManager';
+import PaymentHistory from '@/components/accounting/PaymentHistory';
 
 interface TreasuryConfig {
     bankName: string;
