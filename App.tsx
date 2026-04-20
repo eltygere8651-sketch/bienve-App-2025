@@ -7,7 +7,7 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Share2, Download, History, PieChart, Calculator, TrendingUp } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Share2, Download, History, PieChart, Calculator, TrendingUp, Palette } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import LoanRequestForm from './components/LoanRequestForm';
@@ -44,6 +44,8 @@ const App: React.FC = () => {
         isAuthenticated,
         logout,
         initializationStatus,
+        isRGBMode,
+        setIsRGBMode,
     } = useAppContext();
     
     const { requests, isLoading: dataIsLoading, error } = useDataContext();
@@ -105,6 +107,13 @@ const App: React.FC = () => {
     // Componente interno para los botones de acción
     const HeaderActionsMobile = () => (
         <div className="flex items-center gap-1">
+            <button 
+                onClick={() => setIsRGBMode(!isRGBMode)}
+                className={`p-2 rounded-full transition-all duration-300 ${isRGBMode ? 'bg-gradient-to-r from-red-500 via-green-500 to-blue-500 text-white animate-pulse' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+                title="Modo RGB"
+            >
+                <Palette size={20} />
+            </button>
             {!isInStandaloneMode && (
                 <button 
                     onClick={handleInstallApp}
@@ -187,9 +196,9 @@ const App: React.FC = () => {
             >
                 <div className="relative flex items-center">
                     <div className="absolute -inset-4 bg-primary-500/20 blur-xl rounded-full opacity-40"></div>
-                    <Handshake className="text-primary-400 h-9 w-9 relative z-10" />
+                    <Handshake className="text-primary-500 h-9 w-9 relative z-10" />
                     {(isSidebarOpen || isMobileMenuOpen) && (
-                        <h1 className="text-2xl font-heading font-bold ml-3 text-white tracking-tight relative z-10">
+                        <h1 className="text-2xl font-heading font-bold ml-3 text-primary-500 tracking-tight relative z-10">
                             B.M Contigo
                         </h1>
                     )}
@@ -227,24 +236,32 @@ const App: React.FC = () => {
 
              <div className="p-5 border-t border-white/5 bg-black/10 flex-shrink-0 safe-area-bottom">
                 {/* BOTONES DE UTILIDAD (PC) */}
-                <div className={`grid ${isSidebarOpen || isMobileMenuOpen ? 'grid-cols-2' : 'grid-cols-1'} gap-3 mb-4`}>
+                <div className={`grid ${isSidebarOpen || isMobileMenuOpen ? 'grid-cols-3' : 'grid-cols-1'} gap-3 mb-4`}>
+                    <button 
+                        onClick={() => setIsRGBMode(!isRGBMode)}
+                        className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all border group shadow-sm hover:shadow-lg hover:-translate-y-1 ${isRGBMode ? 'bg-primary-500/20 text-white border-primary-500/50 animate-glow-pulse' : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border-white/5'}`}
+                        title="Modo RGB"
+                    >
+                        <Palette size={20} className={isRGBMode ? 'animate-spin-slow text-primary-300' : 'group-hover:text-amber-400 transition-colors'} />
+                        {(isSidebarOpen || isMobileMenuOpen) && <span className={`text-[10px] mt-1 font-bold uppercase tracking-wide ${isRGBMode ? 'text-primary-200' : ''}`}>RGB</span>}
+                    </button>
                      {!isInStandaloneMode && (
                         <button 
                             onClick={handleInstallApp}
-                            className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-white/5 group shadow-sm hover:shadow-md"
+                            className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all border group shadow-sm hover:shadow-lg hover:-translate-y-1 ${isRGBMode ? 'bg-primary-500/10 text-slate-300 border-primary-500/30 animate-float-small' : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border-white/5'}`}
                             title="Instalar App"
                         >
-                            <Download size={20} className="group-hover:text-emerald-400 transition-colors" />
-                            {(isSidebarOpen || isMobileMenuOpen) && <span className="text-[10px] mt-1 font-bold uppercase tracking-wide">Instalar</span>}
+                            <Download size={20} className={isRGBMode ? 'text-primary-400' : 'group-hover:text-emerald-400 transition-colors'} />
+                            {(isSidebarOpen || isMobileMenuOpen) && <span className={`text-[10px] mt-1 font-bold uppercase tracking-wide ${isRGBMode ? 'text-primary-300' : ''}`}>Instalar</span>}
                         </button>
                     )}
                     <button 
                         onClick={() => setIsShareModalOpen(true)}
-                        className={`flex flex-col items-center justify-center p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-white/5 group shadow-sm hover:shadow-md ${isInStandaloneMode ? 'col-span-2' : ''}`}
+                        className={`flex flex-col items-center justify-center p-3 rounded-xl transition-all border group shadow-sm hover:shadow-lg hover:-translate-y-1 ${isInStandaloneMode ? 'col-span-2' : ''} ${isRGBMode ? 'bg-primary-500/10 text-slate-300 border-primary-500/30 animate-float-small' : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border-white/5'}`}
                         title="Compartir App"
                     >
-                        <Share2 size={20} className="group-hover:text-primary-400 transition-colors" />
-                        {(isSidebarOpen || isMobileMenuOpen) && <span className="text-[10px] mt-1 font-bold uppercase tracking-wide">Compartir</span>}
+                        <Share2 size={20} className={isRGBMode ? 'text-primary-400' : 'group-hover:text-primary-400 transition-colors'} />
+                        {(isSidebarOpen || isMobileMenuOpen) && <span className={`text-[10px] mt-1 font-bold uppercase tracking-wide ${isRGBMode ? 'text-primary-300' : ''}`}>Compartir</span>}
                     </button>
                 </div>
 
@@ -298,10 +315,10 @@ const App: React.FC = () => {
             */}
             <div className="fixed inset-0 flex bg-slate-900 font-sans text-slate-300 overflow-hidden">
                  {/* Mobile Header */}
-                <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900/90 backdrop-blur-xl flex items-center justify-between px-4 z-30 border-b border-white/5">
+                <header className={`md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900/90 backdrop-blur-xl flex items-center justify-between px-4 z-30 transition-colors border-b ${isRGBMode ? 'border-primary-500/50 shadow-[0_1px_15px_rgba(var(--p-rgb),0.2)]' : 'border-white/5'}`}>
                     <div className="flex items-center gap-2" onClick={handleLogoClick}>
                          <Handshake className="text-primary-500 h-6 w-6" />
-                         <h1 className="text-lg font-heading font-bold text-white">B.M Contigo</h1>
+                         <h1 className="text-lg font-heading font-bold text-primary-500">B.M Contigo</h1>
                     </div>
                     <div className="flex items-center gap-2">
                         <HeaderActionsMobile />
@@ -321,14 +338,14 @@ const App: React.FC = () => {
                 </div>
 
                  {/* Desktop Sidebar */}
-                 <aside className={`hidden md:flex transition-all duration-300 ease-in-out border-r border-white/5 bg-slate-900/40 backdrop-blur-xl flex-col ${isSidebarOpen ? 'w-72' : 'w-20'}`}>
+                 <aside className={`hidden md:flex transition-all duration-300 ease-in-out border-r bg-slate-900/40 backdrop-blur-xl flex-col ${isSidebarOpen ? 'w-72' : 'w-20'} ${isRGBMode ? 'border-primary-500/50 shadow-[1px_0_15px_rgba(var(--p-rgb),0.1)]' : 'border-white/5'}`}>
                     <SidebarContent />
                 </aside>
                 
                 {/* Main Content Area */}
                 <main className="flex-1 flex flex-col h-full relative w-full">
                     {/* Background Ambient Glow */}
-                    <div className="absolute top-0 left-0 w-full h-96 bg-primary-900/10 rounded-full blur-[120px] -translate-y-1/2 pointer-events-none"></div>
+                    <div className={`absolute top-0 left-0 w-full h-96 transition-colors rounded-full blur-[120px] -translate-y-1/2 pointer-events-none ${isRGBMode ? 'bg-primary-500/20' : 'bg-primary-900/10'}`}></div>
 
                     {/* Scrollable Container - FIX: Added pb-32 for extra mobile spacing */}
                     <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-10 pt-20 md:pt-8 scroll-smooth pb-32 touch-pan-y">

@@ -21,10 +21,9 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
     
-    // Let all API calls to Supabase go directly to the network.
-    // The application's own IndexedDB cache (via dbService) is responsible for offline data.
-    if (url.hostname.includes('supabase.co')) {
-        return; // Do nothing, let the browser handle the network request.
+    // Optimization: Skip caching for analytics and certain external scripts if needed
+    if (url.hostname.includes('googleapis.com') || url.hostname.includes('gstatic.com')) {
+        return; 
     }
     
     // "Cache first" strategy for app shell and other assets

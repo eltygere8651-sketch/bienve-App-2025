@@ -31,8 +31,12 @@
           colors: {
             // Paleta PRIMARY: Indigo (Confianza, Modernidad)
             primary: { 
-                50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8',
-                500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81', 950: '#1e1b4b'
+                50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 
+                400: 'hsl(var(--p-h, 239), var(--p-s, 84%), var(--p-l, 74%))',
+                500: 'hsl(var(--p-h, 239), var(--p-s, 84%), var(--p-l, 67%))', 
+                600: 'hsl(var(--p-h, 239), var(--p-s, 84%), var(--p-l, 60%))', 
+                700: 'hsl(var(--p-h, 239), var(--p-s, 84%), var(--p-l, 53%))', 
+                800: '#3730a3', 900: '#312e81', 950: '#1e1b4b'
             },
             // Paleta SLATE: Base del tema Deep Navy
             slate: {
@@ -44,12 +48,23 @@
                 500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b'
             }
           },
-           animation: {
+            animation: {
                 'modal-backdrop': 'fadeInBackdrop 0.3s ease-out forwards',
                 'modal-content': 'fadeInContent 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
                 'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                'spin-slow': 'spin 5s linear infinite',
+                'glow-pulse': 'glowPulse 2s ease-in-out infinite',
+                'float-small': 'float 3s ease-in-out infinite',
             },
             keyframes: {
+                glowPulse: {
+                    '0%, 100%': { boxShadow: '0 0 5px rgba(var(--p-rgb), 0.2)' },
+                    '50%': { boxShadow: '0 0 20px rgba(var(--p-rgb), 0.5)' },
+                },
+                float: {
+                    '0%, 100%': { transform: 'translateY(0)' },
+                    '50%': { transform: 'translateY(-4px)' },
+                },
                 fadeInBackdrop: {
                     from: { opacity: '0', backdropFilter: 'blur(0px)' },
                     to: { opacity: '1', backdropFilter: 'blur(4px)' },
@@ -71,12 +86,10 @@
     "recharts": "https://aistudiocdn.com/recharts@^3.3.0",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
-    "dexie": "https://aistudiocdn.com/dexie@^4.0.7",
     "jspdf": "https://aistudiocdn.com/jspdf@^2.5.1",
     "jspdf-autotable": "https://aistudiocdn.com/jspdf-autotable@^3.8.2",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.84.0"
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
   }
 }
 </script>
@@ -131,6 +144,7 @@
         border: 1px solid rgba(255, 255, 255, 0.05);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
+
 </style>
 <link rel="stylesheet" href="/index.css">
 </head>

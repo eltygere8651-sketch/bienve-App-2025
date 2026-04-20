@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Save, RotateCcw } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
-import { DEFAULT_CONTRACT_TEMPLATE } from '../services/pdfService';
+import { DEFAULT_CONTRACT_TEMPLATE } from '../services/pdfTemplates';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 
 const ContractTemplateSettings = () => {

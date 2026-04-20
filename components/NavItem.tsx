@@ -21,9 +21,10 @@ const NavItem: React.FC<NavItemProps> = React.memo(({ icon, label, view, current
                 onClick={() => onClick(view)}
                 className={`w-full flex items-center justify-between p-3 my-1.5 rounded-xl cursor-pointer transition-all duration-200 text-left group border border-transparent outline-none focus:ring-2 focus:ring-primary-500/50 ${
                     isActive
-                        ? 'bg-primary-600/10 text-primary-300 border-primary-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
+                        ? 'bg-primary-600/10 text-primary-400 border-primary-500/30'
                         : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                 }`}
+                style={isActive ? { boxShadow: '0 0 15px rgba(var(--p-rgb), 0.15)' } : {}}
                 title={label}
             >
                 <div className="flex items-center flex-1 min-w-0"> 

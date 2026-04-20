@@ -18,84 +18,30 @@ import {
 import { generateMasterBackupPDF } from '../services/pdfService';
 import { LOCAL_STORAGE_KEYS, TABLE_NAMES } from '../constants';
 import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData, ReinvestmentRecord, LoanStatus, PaymentRecord, PersonalFund, WithdrawalRecord } from '../types';
-import { calculateMonthlyInterest } from '../config';
+import { calculateMonthlyInterest, calculateLoanParameters } from '../config';
+
+import { useDataSubscriptions } from './useDataSubscriptions';
 
 export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 'info') => void, user: any, isConfigReady: boolean) => {
-    const [clients, setClients] = useState<Client[]>([]);
-    const [archivedClients, setArchivedClients] = useState<Client[]>([]);
-    const [loans, setLoans] = useState<Loan[]>([]);
-    const [archivedLoans, setArchivedLoans] = useState<Loan[]>([]);
-    const [requests, setRequests] = useState<LoanRequest[]>([]);
-    const [reinvestments, setReinvestments] = useState<ReinvestmentRecord[]>([]);
-    const [funds, setFunds] = useState<PersonalFund[]>([]);
-    const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const {
+        clients,
+        archivedClients,
+        loans,
+        archivedLoans,
+        requests,
+        reinvestments,
+        funds,
+        withdrawals,
+        isLoading,
+        error,
+        setIsLoading,
+        setArchivedLoans
+    } = useDataSubscriptions(user, isConfigReady, showToast);
     
     // Pagination state for archived loans
     const [lastArchivedLoanDoc, setLastArchivedLoanDoc] = useState<any>(null);
     const [hasMoreArchivedLoans, setHasMoreArchivedLoans] = useState(true);
     const [allHistoryLoaded, setAllHistoryLoaded] = useState(false);
-
-    // --- SUBSCRIPTIONS ---
-    useEffect(() => {
-        if (!isConfigReady || !user) {
-            setClients([]);
-            setArchivedClients([]);
-            setLoans([]);
-            setArchivedLoans([]);
-            setRequests([]);
-            setReinvestments([]);
-            setFunds([]);
-            setWithdrawals([]);
-            setIsLoading(false);
-            return;
-        }
-
-        setIsLoading(true);
-
-        const unsubClients = subscribeToCollection(TABLE_NAMES.CLIENTS, (data) => {
-            const all = data as Client[];
-            setClients(all.filter(c => !c.archived));
-            setArchivedClients(all.filter(c => c.archived));
-        }, [], (err) => setError(err.message));
-
-        // Subscribe to active loans only if possible, or filter client side.
-        // For simplicity and to ensure UI responsiveness, we subscribe to all and filter.
-        // If dataset grows large, we should split collections or use query limits for active loans.
-        const unsubLoans = subscribeToCollection(TABLE_NAMES.LOANS, (data) => {
-            const all = data as Loan[];
-            setLoans(all.filter(l => !l.archived));
-            // Note: We don't setArchivedLoans here from subscription to avoid loading thousands of records.
-            // Archived loans are loaded via pagination below.
-            setIsLoading(false);
-        }, [], (err) => { setError(err.message); setIsLoading(false); });
-
-        const unsubRequests = subscribeToCollection(TABLE_NAMES.REQUESTS, (data) => {
-            setRequests(data as LoanRequest[]);
-        }, [], (err) => console.error("Requests sync error", err));
-
-        const unsubReinvestments = subscribeToCollection(TABLE_NAMES.REINVESTMENTS, (data) => {
-            setReinvestments(data as ReinvestmentRecord[]);
-        }, [], (err) => console.error("Reinvestments sync error", err));
-
-        const unsubFunds = subscribeToCollection(TABLE_NAMES.PERSONAL_FUNDS, (data) => {
-            setFunds(data as PersonalFund[]);
-        }, [], (err) => console.error("Funds sync error", err));
-
-        const unsubWithdrawals = subscribeToCollection(TABLE_NAMES.WITHDRAWALS, (data) => {
-            setWithdrawals(data as WithdrawalRecord[]);
-        }, [], (err) => console.error("Withdrawals sync error", err));
-
-        return () => {
-            unsubClients();
-            unsubLoans();
-            unsubRequests();
-            unsubReinvestments();
-            unsubFunds();
-            unsubWithdrawals();
-        };
-    }, [user, isConfigReady]);
 
     // Initial fetch for archived loans
     useEffect(() => {
@@ -149,6 +95,33 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         }
     }, [user, showToast]);
 
+    // --- HELPERS ---
+    const _updateTreasuryBalance = useCallback(async (amount: number, type: 'inflow' | 'outflow', source: 'Banco' | 'Efectivo') => {
+        try {
+            const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
+            let balances = { bankBalance: 0, cashBalance: 0 };
+            
+            if (treasuryDoc) {
+                balances = {
+                    bankBalance: Number((treasuryDoc as any).bankBalance) || 0,
+                    cashBalance: Number((treasuryDoc as any).cashBalance) || 0
+                };
+            }
+
+            const multiplier = type === 'inflow' ? 1 : -1;
+            
+            if (source === 'Banco') {
+                balances.bankBalance += (amount * multiplier);
+            } else {
+                balances.cashBalance += (amount * multiplier);
+            }
+
+            await setDocument(TABLE_NAMES.TREASURY, 'main', balances);
+        } catch (e) {
+            console.error("Treasury update error:", e);
+        }
+    }, []);
+
     // --- ACTIONS ---
 
     const handleLoanRequestSubmit = useCallback(async (requestData: any, files: { frontId: string, backId: string }) => {
@@ -181,20 +154,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             });
 
             // 2. Create Loan
-            // Calculate details
-            const annualRate = 96; // 8% monthly
-            const monthlyRateDecimal = (annualRate / 12) / 100;
-            let monthlyPayment = 0;
-            let totalRepayment = 0;
-
-            if (loanTerm > 0) {
-                monthlyPayment = (loanAmount * monthlyRateDecimal) / (1 - Math.pow(1 + monthlyRateDecimal, -loanTerm));
-                totalRepayment = monthlyPayment * loanTerm;
-            } else {
-                // Indefinite
-                monthlyPayment = loanAmount * monthlyRateDecimal;
-                totalRepayment = loanAmount; // Base reference
-            }
+            // Calculate details using centralized logic
+            const { monthlyPayment, totalRepayment, monthlyRatePercentage } = calculateLoanParameters(loanAmount, loanTerm);
 
             await addDocument(TABLE_NAMES.LOANS, {
                 clientId: newClient.id,
@@ -202,7 +163,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
                 amount: loanAmount,
                 initialCapital: loanAmount,
                 remainingCapital: loanAmount,
-                interestRate: annualRate,
+                interestRate: monthlyRatePercentage * 12, // Annual rate for storage
                 term: loanTerm,
                 startDate: new Date().toISOString(),
                 status: LoanStatus.PENDING,
@@ -218,23 +179,15 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             // 3. Update Request Status (or delete?)
             await updateDocument(TABLE_NAMES.REQUESTS, request.id, { status: RequestStatus.APPROVED });
             
-            // 4. Update Treasury (Deduct loan amount from Bank or Cash? Defaulting to Bank for approvals)
-            try {
-                const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
-                let currentBank = 0;
-                if (treasuryDoc) {
-                    currentBank = Number((treasuryDoc as any).bankBalance) || 0;
-                }
-                currentBank -= loanAmount;
-                await setDocument(TABLE_NAMES.TREASURY, 'main', { bankBalance: currentBank });
-            } catch (e) { console.error("Treasury update error", e); }
+            // 4. Update Treasury (Deduct loan amount)
+            await _updateTreasuryBalance(loanAmount, 'outflow', 'Banco');
 
             showToast(`Préstamo aprobado para ${request.fullName}.`, 'success');
         } catch (err: any) {
             console.error(err);
             showToast('Error al aprobar: ' + err.message, 'error');
         }
-    }, [showToast]);
+    }, [showToast, _updateTreasuryBalance]);
 
     const handleRejectRequest = useCallback(async (request: LoanRequest) => {
         try {
@@ -298,21 +251,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
 
         // Update Treasury
-        try {
-            const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
-            let currentBank = 0;
-            let currentCash = 0;
-            if (treasuryDoc) {
-                currentBank = Number((treasuryDoc as any).bankBalance) || 0;
-                currentCash = Number((treasuryDoc as any).cashBalance) || 0;
-            }
-            if (paymentMethod === 'Banco') currentBank += amount;
-            else currentCash += amount;
-            
-            await setDocument(TABLE_NAMES.TREASURY, 'main', { bankBalance: currentBank, cashBalance: currentCash });
-        } catch (e) { console.error("Treasury update error", e); }
-
-    }, [loans, showToast]);
+        await _updateTreasuryBalance(amount, 'inflow', paymentMethod);
+    }, [loans, showToast, _updateTreasuryBalance]);
 
     const handleUpdatePayment = useCallback(async (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => {
         const loan = loans.find(l => l.id === loanId);
@@ -400,30 +340,16 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
 
         // 2. Loan
-        const annualRate = 96;
-        const monthlyRateDecimal = (annualRate / 12) / 100;
-        const amount = loanData.amount;
-        const term = loanData.term;
-        
-        let monthlyPayment = 0;
-        let totalRepayment = 0;
-
-        if (term > 0) {
-            monthlyPayment = (amount * monthlyRateDecimal) / (1 - Math.pow(1 + monthlyRateDecimal, -term));
-            totalRepayment = monthlyPayment * term;
-        } else {
-            monthlyPayment = amount * monthlyRateDecimal;
-            totalRepayment = amount;
-        }
+        const { monthlyPayment, totalRepayment, monthlyRatePercentage } = calculateLoanParameters(loanData.amount, loanData.term);
 
         await addDocument(TABLE_NAMES.LOANS, {
             clientId: newClient.id,
             clientName: clientData.name,
-            amount: amount,
-            initialCapital: amount,
-            remainingCapital: amount,
-            interestRate: annualRate,
-            term: term,
+            amount: loanData.amount,
+            initialCapital: loanData.amount,
+            remainingCapital: loanData.amount,
+            interestRate: monthlyRatePercentage * 12,
+            term: loanData.term,
             startDate: new Date().toISOString(),
             status: LoanStatus.PENDING,
             monthlyPayment,
@@ -434,34 +360,15 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             paymentHistory: []
         });
 
-        // 3. Treasury Deduction (Default to Cash for manual creation?)
-        try {
-            const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
-            let currentCash = 0;
-            if (treasuryDoc) {
-                currentCash = Number((treasuryDoc as any).cashBalance) || 0;
-            }
-            currentCash -= amount;
-            await setDocument(TABLE_NAMES.TREASURY, 'main', { cashBalance: currentCash });
-        } catch (e) { console.error(e); }
+        // 3. Treasury Deduction (Default to Cash for manual creation)
+        await _updateTreasuryBalance(loanData.amount, 'outflow', 'Efectivo');
 
         showToast('Cliente y préstamo registrados.', 'success');
-    }, [showToast]);
+    }, [showToast, _updateTreasuryBalance]);
 
     const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => {
         const { amount, term, interestRate, startDate, notes } = loanData;
-        const monthlyRateDecimal = (interestRate / 12) / 100;
-        
-        let monthlyPayment = 0;
-        let totalRepayment = 0;
-
-        if (term > 0) {
-            monthlyPayment = (amount * monthlyRateDecimal) / (1 - Math.pow(1 + monthlyRateDecimal, -term));
-            totalRepayment = monthlyPayment * term;
-        } else {
-            monthlyPayment = amount * monthlyRateDecimal;
-            totalRepayment = amount;
-        }
+        const { monthlyPayment, totalRepayment } = calculateLoanParameters(amount, term, interestRate);
 
         await addDocument(TABLE_NAMES.LOANS, {
             clientId,
@@ -483,25 +390,17 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
 
         // Treasury Deduction
-        try {
-            const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
-            let currentCash = 0;
-            if (treasuryDoc) {
-                currentCash = Number((treasuryDoc as any).cashBalance) || 0;
-            }
-            currentCash -= amount;
-            await setDocument(TABLE_NAMES.TREASURY, 'main', { cashBalance: currentCash });
-        } catch (e) { console.error(e); }
+        await _updateTreasuryBalance(amount, 'outflow', 'Efectivo');
 
         showToast('Nuevo préstamo añadido.', 'success');
-    }, [showToast]);
+    }, [showToast, _updateTreasuryBalance]);
 
     const handleUpdateLoan = useCallback(async (loanId: string, updatedData: Partial<Loan>) => {
         await updateDocument(TABLE_NAMES.LOANS, loanId, updatedData);
         
         // Update local state for archived loans if present
         setArchivedLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedData } : l));
-    }, []);
+    }, [setArchivedLoans]);
 
     const handleUpdateClient = useCallback(async (clientId: string, updatedData: Partial<Client>) => {
         await updateDocument(TABLE_NAMES.CLIENTS, clientId, updatedData);
@@ -514,7 +413,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         setArchivedLoans(prev => prev.filter(l => l.id !== loanId));
         
         showToast(`Préstamo de ${clientName} eliminado.`, 'info');
-    }, [showToast]);
+    }, [showToast, setArchivedLoans]);
 
     const handleArchivePaidLoans = useCallback(async () => {
         // In this implementation with `archived` flag, we just set `archived: true` on PAID loans.
@@ -533,7 +432,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         
         showToast(`${count} préstamos archivados.`, 'success');
         return count;
-    }, [loans, showToast]);
+    }, [loans, showToast, setArchivedLoans]);
 
     const handleArchiveClient = useCallback(async (clientId: string) => {
         await updateDocument(TABLE_NAMES.CLIENTS, clientId, { archived: true });
@@ -564,26 +463,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             });
 
             if (deductFromTreasury) {
-                const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
-                let currentBank = 0;
-                let currentCash = 0;
-                
-                if (treasuryDoc) {
-                    const data = treasuryDoc as any;
-                    currentBank = Number(data.bankBalance) || 0;
-                    currentCash = Number(data.cashBalance) || 0;
-                }
-
-                if (source === 'Banco') {
-                    currentBank -= amount;
-                } else {
-                    currentCash -= amount;
-                }
-
-                await setDocument(TABLE_NAMES.TREASURY, 'main', { 
-                    bankBalance: Number(currentBank), 
-                    cashBalance: Number(currentCash) 
-                });
+                await _updateTreasuryBalance(amount, 'outflow', source);
             }
 
             showToast(`Reinversión registrada.${deductFromTreasury ? ' Saldo actualizado.' : ''}`, 'success');
@@ -591,7 +471,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             console.error(err);
             showToast('Error registrando reinversión.', 'error');
         }
-    }, [showToast]);
+    }, [showToast, _updateTreasuryBalance]);
 
     const handleDeleteReinvestment = useCallback(async (id: string) => {
         try {
@@ -649,26 +529,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             });
 
             // 2. Update Treasury (Deduct total amount)
-            const treasuryDoc = await getDocument(TABLE_NAMES.TREASURY, 'main');
-            let currentBank = 0;
-            let currentCash = 0;
-            
-            if (treasuryDoc) {
-                const data = treasuryDoc as any;
-                currentBank = Number(data.bankBalance) || 0;
-                currentCash = Number(data.cashBalance) || 0;
-            }
-
-            if (source === 'Banco') {
-                currentBank -= amount;
-            } else {
-                currentCash -= amount;
-            }
-
-            await setDocument(TABLE_NAMES.TREASURY, 'main', { 
-                bankBalance: Number(currentBank), 
-                cashBalance: Number(currentCash) 
-            });
+            await _updateTreasuryBalance(amount, 'outflow', source);
 
             // 3. Update Peña Fund (if percentage > 0)
             if (peñaAmount > 0) {
@@ -722,7 +583,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             console.error(err);
             showToast('Error registrando retiro.', 'error');
         }
-    }, [showToast]);
+    }, [showToast, _updateTreasuryBalance]);
 
     const handleDeleteWithdrawal = useCallback(async (id: string) => {
         try {
