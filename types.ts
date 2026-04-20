@@ -88,6 +88,7 @@ export interface Loan {
     contractPdfUrl?: string;
     notes?: string;
     archived?: boolean; // Nuevo: Flag para historial
+    pendingInterest?: number; // Nuevo: Intereses acumulados no pagados
 }
 
 export interface Client {

@@ -37,7 +37,8 @@ const Dashboard: React.FC = () => {
 
     const detailedStats = useMemo((): DashboardStats => {
         const totalLoaned = loans.reduce((acc, loan) => acc + (loan.initialCapital || loan.amount), 0);
-        const totalOutstanding = loans.reduce((acc, loan) => acc + loan.remainingCapital, 0);
+        // Total Outstanding now includes both remaining capital AND accumulated interest
+        const totalOutstanding = loans.reduce((acc, loan) => acc + loan.remainingCapital + (loan.pendingInterest || 0), 0);
         const activeLoans = loans.filter(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE).length;
         
         const counts = loans.reduce((acc, loan) => {

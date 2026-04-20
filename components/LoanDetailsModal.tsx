@@ -74,6 +74,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                 initialCapital: loan.initialCapital || loan.amount,
                 amount: loan.amount, // Also sync amount property
                 remainingCapital: loan.remainingCapital,
+                pendingInterest: loan.pendingInterest || 0,
                 term: loan.term,
                 interestRate: loan.interestRate,
                 startDate: new Date(loan.startDate).toISOString().split('T')[0],
@@ -101,18 +102,30 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         const amount = parseFloat(paymentAmount);
         if (isNaN(amount) || amount <= 0) return null;
         
-        const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
-        const interestPart = Math.min(amount, interest);
-        const capitalPart = Math.max(0, amount - interest);
+        const pendingInt = loan.pendingInterest || 0;
+
+        // Only pay off accrued PENDING interest
+        const payOffPending = Math.min(amount, pendingInt);
+        const remainingAfterPending = amount - payOffPending;
+
+        // Everything else goes to Capital
+        const capitalPart = Math.max(0, remainingAfterPending);
         const newBalance = Math.max(0, loan.remainingCapital - capitalPart);
 
-        return { interestPart, capitalPart, newBalance, interestDue: interest };
+        return { 
+            interestPart: payOffPending, 
+            capitalPart, 
+            newBalance, 
+            pendingInterestPaid: payOffPending 
+        };
     }, [loan, paymentAmount]);
 
     const interestDueDisplay = useMemo(() => {
         if (!loan) return 0;
         return calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest;
     }, [loan]);
+
+    const pendingInterestDisplay = loan?.pendingInterest || 0;
 
     if (!isOpen || !loan || !client) return null;
 
@@ -193,8 +206,8 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     };
 
     const setQuickAmount = (type: 'interest' | 'full') => {
-        if (type === 'interest') setPaymentAmount(interestDueDisplay.toFixed(2));
-        if (type === 'full') setPaymentAmount((loan.remainingCapital + interestDueDisplay).toFixed(2));
+        if (type === 'interest') setPaymentAmount(pendingInterestDisplay.toFixed(2));
+        if (type === 'full') setPaymentAmount((loan.remainingCapital + pendingInterestDisplay).toFixed(2));
     };
 
     return (
@@ -276,15 +289,19 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                                             <p className="text-xs text-slate-400 uppercase">Capital Inicial</p>
                                             <p className="text-lg font-bold text-white mt-1">{formatCurrency(loan.initialCapital)}</p>
                                         </div>
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 relative overflow-hidden">
                                             <div className="absolute right-0 top-0 p-2 opacity-10"><Banknote size={40}/></div>
-                                            <p className="text-xs text-primary-400 font-bold uppercase">Deuda Actual</p>
+                                            <p className="text-xs text-primary-400 font-bold uppercase">Capital Pendiente</p>
                                             <p className="text-2xl font-bold text-white mt-1">{formatCurrency(loan.remainingCapital)}</p>
+                                        </div>
+                                        <div className={`bg-slate-800 p-4 rounded-xl border ${pendingInterestDisplay > 0 ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'}`}>
+                                            <p className="text-xs text-red-400 font-bold uppercase">Interés Vencido</p>
+                                            <p className={`text-lg font-bold mt-1 ${pendingInterestDisplay > 0 ? 'text-red-400' : 'text-slate-500'}`}>{formatCurrency(pendingInterestDisplay)}</p>
                                         </div>
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                                             <p className="text-xs text-slate-400 uppercase">Interés Generado</p>
@@ -306,12 +323,12 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                 <Check size={20}/> Liquidación Total
                                             </h4>
                                             <p className="text-sm text-slate-400 mt-1">
-                                                Monto total para cancelar la deuda hoy (Capital pendiente + Interés del mes).
+                                                Monto total para cancelar la deuda (Capital + Interés vencido).
                                             </p>
                                         </div>
                                         <div className="text-left sm:text-right w-full sm:w-auto bg-slate-900/50 sm:bg-transparent p-3 sm:p-0 rounded-lg border border-slate-700/50 sm:border-none">
                                             <p className="text-xs text-slate-500 uppercase font-bold mb-1 sm:hidden">Total a Pagar</p>
-                                            <p className="text-3xl font-bold text-white font-mono">{formatCurrency(loan.remainingCapital + interestDueDisplay)}</p>
+                                            <p className="text-3xl font-bold text-white font-mono">{formatCurrency(loan.remainingCapital + pendingInterestDisplay)}</p>
                                             <button 
                                                 onClick={() => { setActiveTab('payment'); setQuickAmount('full'); }} 
                                                 className="mt-2 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-lg shadow-indigo-900/20"
@@ -355,10 +372,10 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                         </h3>
                                         
                                         <div className="flex gap-2 mb-6">
-                                            <button onClick={() => setQuickAmount('interest')} className="flex-1 py-2 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 transition-colors border border-slate-600">
-                                                Solo Interés ({formatCurrency(interestDueDisplay)})
+                                            <button onClick={() => setQuickAmount('interest')} className="flex-1 py-3 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 transition-colors border border-slate-600">
+                                                Cobrar Interés Vencido ({formatCurrency(pendingInterestDisplay)})
                                             </button>
-                                            <button onClick={() => setQuickAmount('full')} className="flex-1 py-2 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 transition-colors border border-slate-600">
+                                            <button onClick={() => setQuickAmount('full')} className="flex-1 py-3 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 transition-colors border border-slate-600">
                                                 Liquidar Todo
                                             </button>
                                         </div>
@@ -403,10 +420,12 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
 
                                             {paymentPreview && (
                                                 <div className="text-xs space-y-1 px-2">
-                                                    <div className="flex justify-between text-slate-400">
-                                                        <span>Aplica a Interés:</span>
-                                                        <span className="text-amber-400 font-mono">{formatCurrency(paymentPreview.interestPart)}</span>
-                                                    </div>
+                                                    {paymentPreview.pendingInterestPaid > 0 && (
+                                                        <div className="flex justify-between text-red-400 font-bold bg-red-400/5 px-2 py-1 rounded">
+                                                            <span>Saldar Interés Vencido:</span>
+                                                            <span className="font-mono">-{formatCurrency(paymentPreview.pendingInterestPaid)}</span>
+                                                        </div>
+                                                    )}
                                                     <div className="flex justify-between text-slate-400">
                                                         <span>Aplica a Capital:</span>
                                                         <span className="text-blue-400 font-mono">{formatCurrency(paymentPreview.capitalPart)}</span>
@@ -490,14 +509,14 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
 
                                                 {/* Safe Balance Adjustment */}
                                                 <div className="relative">
-                                                    <label className="block text-sm font-medium text-slate-300 mb-1">Deuda Actual / Saldo (€)</label>
+                                                    <label className="block text-sm font-medium text-slate-300 mb-1">Capital Pendiente (€)</label>
                                                     <div className="flex gap-2">
                                                         <div className="relative flex-1">
                                                             <input 
                                                                 type="number" 
                                                                 value={String(loanFormData.remainingCapital || '')} 
                                                                 readOnly
-                                                                className="w-full px-3 py-2 border border-slate-600 rounded-lg shadow-sm bg-slate-900/50 text-slate-400 cursor-not-allowed" 
+                                                                className="w-full px-3 py-2 border border-slate-600 rounded-lg shadow-sm bg-slate-900/50 text-slate-400 cursor-not-allowed font-mono" 
                                                             />
                                                             <Lock size={16} className="absolute right-3 top-3 text-slate-500" />
                                                         </div>
@@ -505,11 +524,24 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                             type="button" 
                                                             onClick={() => setShowCorrectionInput(!showCorrectionInput)} 
                                                             className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg border border-slate-600 transition-colors"
-                                                            title="Corregir Saldo"
+                                                            title="Corregir Capital"
                                                         >
                                                             <RotateCcw size={18} />
                                                         </button>
                                                     </div>
+                                                </div>
+
+                                                {/* Pending Interest Adjustment */}
+                                                <div className="relative">
+                                                    <InputField 
+                                                        label="Interés Vencido (€)" 
+                                                        name="pendingInterest" 
+                                                        type="number" 
+                                                        value={String(loanFormData.pendingInterest || 0)} 
+                                                        onChange={(e) => setLoanFormData({...loanFormData, pendingInterest: Number(e.target.value)})} 
+                                                        step="0.01" 
+                                                    />
+                                                    <p className="text-[10px] text-slate-500 mt-1">Ajuste directo del interés acumulado no pagado.</p>
                                                 </div>
 
                                                 {showCorrectionInput && (

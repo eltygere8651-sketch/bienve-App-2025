@@ -213,20 +213,26 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         const loan = loans.find(l => l.id === loanId);
         if (!loan) throw new Error("Loan not found");
 
-        const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
+        const pendingInt = loan.pendingInterest || 0;
         
-        const interestPart = Math.min(amount, interest);
-        const capitalPart = Math.max(0, amount - interest);
+        // Priority 1: Pay off PENDING (accumulated) interest from previous missed months only
+        const payOffPending = Math.min(amount, pendingInt);
+        const remainingAfterPending = amount - payOffPending;
+        const newPendingInterest = pendingInt - payOffPending;
+
+        // Priority 2: ALL remaining amount goes DIRECTLY to capital
+        // (Current month's interest is only accrued after 30 days of inactivity)
+        const capitalPart = Math.max(0, remainingAfterPending);
         const remainingCapitalAfter = Math.max(0, loan.remainingCapital - capitalPart);
 
         const newPayment: PaymentRecord = {
             id: Date.now().toString(),
             date,
             amount,
-            interestPaid: interestPart,
+            interestPaid: payOffPending, // Only pay what was already vencido
             capitalPaid: capitalPart,
             remainingCapitalAfter,
-            notes,
+            notes: payOffPending > 0 ? `(Saldó ${payOffPending} de intereses vencidos) ${notes}` : notes,
             paymentMethod
         };
 
@@ -236,12 +242,15 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         
         let newStatus = loan.status;
         if (remainingCapitalAfter <= 0) newStatus = LoanStatus.PAID;
-        // Logic for OVERDUE -> PENDING if they pay something? 
-        // Or keep OVERDUE until caught up? Keeping simple for now.
-        if (newStatus === LoanStatus.OVERDUE && remainingCapitalAfter > 0) newStatus = LoanStatus.PENDING;
+        // Logic for OVERDUE -> PENDING if they pay something and are caught up? 
+        // For now, if they pay anything and remaining debt exists, we go to PENDING
+        if (remainingCapitalAfter > 0) {
+            newStatus = LoanStatus.PENDING;
+        }
 
         await updateDocument(TABLE_NAMES.LOANS, loanId, {
             remainingCapital: remainingCapitalAfter,
+            pendingInterest: newPendingInterest,
             paymentHistory: updatedHistory,
             totalCapitalPaid,
             totalInterestPaid,
@@ -252,7 +261,50 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
 
         // Update Treasury
         await _updateTreasuryBalance(amount, 'inflow', paymentMethod);
-    }, [loans, showToast, _updateTreasuryBalance]);
+    }, [loans, _updateTreasuryBalance]);
+
+    // NEW: Background check for overdue loans (Runs when app loads or loans update)
+    useEffect(() => {
+        const detectOverdue = async () => {
+            if (!loans.length || isLoading) return;
+            
+            const today = new Date();
+            const loansToUpdate: {id: string, data: any}[] = [];
+
+            loans.forEach(loan => {
+                if (loan.status === LoanStatus.PAID || loan.archived) return;
+
+                const baseDate = loan.lastPaymentDate ? new Date(loan.lastPaymentDate) : new Date(loan.startDate);
+                const diffTime = Math.abs(today.getTime() - baseDate.getTime());
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+                // Rule: For every full 30-day block without payment, accrue interest
+                const monthsMissed = Math.floor(diffDays / 30);
+                
+                // If it's been more than 30 days since last payment/accrual
+                if (monthsMissed >= 1) {
+                    const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
+                    // We accrue for ONE month at a time to keep it incremental and safe with the baseDate update
+                    loansToUpdate.push({
+                        id: loan.id,
+                        data: {
+                            status: LoanStatus.OVERDUE,
+                            pendingInterest: (loan.pendingInterest || 0) + interest,
+                            // Moving the baseDate forward by 30 days to mark THIS month as "accrued"
+                            // This ensures next time the effect runs, it won't accrue again until ANOTHER 30 days pass
+                            lastPaymentDate: new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                        }
+                    });
+                }
+            });
+
+            for (const batch of loansToUpdate) {
+                await updateDocument(TABLE_NAMES.LOANS, batch.id, batch.data);
+            }
+        };
+
+        detectOverdue();
+    }, [loans.length, isLoading]);
 
     const handleUpdatePayment = useCallback(async (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => {
         const loan = loans.find(l => l.id === loanId);
