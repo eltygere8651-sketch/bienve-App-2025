@@ -89,6 +89,7 @@ export interface Loan {
     notes?: string;
     archived?: boolean; // Nuevo: Flag para historial
     pendingInterest?: number; // Nuevo: Intereses acumulados no pagados
+    pendingInterestDetails?: string; // Nuevo: Detalle de los meses/periodos vencidos
 }
 
 export interface Client {

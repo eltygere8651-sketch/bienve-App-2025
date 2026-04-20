@@ -220,6 +220,19 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         const remainingAfterPending = amount - payOffPending;
         const newPendingInterest = pendingInt - payOffPending;
 
+        let newPendingInterestDetails = loan.pendingInterestDetails || '';
+        if (newPendingInterest <= 0) {
+            newPendingInterestDetails = '';
+        } else if (payOffPending > 0) {
+            // If they paid exactly one or more months, try to remove them from details
+            const monthlyInterest = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest;
+            const monthsCovered = Math.floor(payOffPending / monthlyInterest);
+            if (monthsCovered > 0) {
+                const detailsArray = newPendingInterestDetails.split(', ');
+                newPendingInterestDetails = detailsArray.slice(monthsCovered).join(', ');
+            }
+        }
+
         // Priority 2: ALL remaining amount goes DIRECTLY to capital
         // (Current month's interest is only accrued after 30 days of inactivity)
         const capitalPart = Math.max(0, remainingAfterPending);
@@ -251,6 +264,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         await updateDocument(TABLE_NAMES.LOANS, loanId, {
             remainingCapital: remainingCapitalAfter,
             pendingInterest: newPendingInterest,
+            pendingInterestDetails: newPendingInterestDetails,
             paymentHistory: updatedHistory,
             totalCapitalPaid,
             totalInterestPaid,
@@ -283,16 +297,26 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
                 
                 // If it's been more than 30 days since last payment/accrual
                 if (monthsMissed >= 1) {
+                    const accrualDate = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+                    const monthName = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(accrualDate);
+                    
                     const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
+                    
+                    const currentDetails = loan.pendingInterestDetails ? loan.pendingInterestDetails.split(', ') : [];
+                    if (!currentDetails.includes(monthName)) {
+                        currentDetails.push(monthName);
+                    }
+
                     // We accrue for ONE month at a time to keep it incremental and safe with the baseDate update
                     loansToUpdate.push({
                         id: loan.id,
                         data: {
                             status: LoanStatus.OVERDUE,
                             pendingInterest: (loan.pendingInterest || 0) + interest,
+                            pendingInterestDetails: currentDetails.join(', '),
                             // Moving the baseDate forward by 30 days to mark THIS month as "accrued"
                             // This ensures next time the effect runs, it won't accrue again until ANOTHER 30 days pass
-                            lastPaymentDate: new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                            lastPaymentDate: accrualDate.toISOString()
                         }
                     });
                 }

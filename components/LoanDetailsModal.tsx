@@ -75,6 +75,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                 amount: loan.amount, // Also sync amount property
                 remainingCapital: loan.remainingCapital,
                 pendingInterest: loan.pendingInterest || 0,
+                pendingInterestDetails: loan.pendingInterestDetails || '',
                 term: loan.term,
                 interestRate: loan.interestRate,
                 startDate: new Date(loan.startDate).toISOString().split('T')[0],
@@ -302,6 +303,9 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                         <div className={`bg-slate-800 p-4 rounded-xl border ${pendingInterestDisplay > 0 ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'}`}>
                                             <p className="text-xs text-red-400 font-bold uppercase">Interés Vencido</p>
                                             <p className={`text-lg font-bold mt-1 ${pendingInterestDisplay > 0 ? 'text-red-400' : 'text-slate-500'}`}>{formatCurrency(pendingInterestDisplay)}</p>
+                                            {loan.pendingInterestDetails && (
+                                                <p className="text-[10px] text-slate-500 leading-tight mt-1">({loan.pendingInterestDetails})</p>
+                                            )}
                                         </div>
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                                             <p className="text-xs text-slate-400 uppercase">Interés Generado</p>
@@ -532,16 +536,29 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                 </div>
 
                                                 {/* Pending Interest Adjustment */}
-                                                <div className="relative">
-                                                    <InputField 
-                                                        label="Interés Vencido (€)" 
-                                                        name="pendingInterest" 
-                                                        type="number" 
-                                                        value={String(loanFormData.pendingInterest || 0)} 
-                                                        onChange={(e) => setLoanFormData({...loanFormData, pendingInterest: Number(e.target.value)})} 
-                                                        step="0.01" 
-                                                    />
-                                                    <p className="text-[10px] text-slate-500 mt-1">Ajuste directo del interés acumulado no pagado.</p>
+                                                <div className="space-y-4">
+                                                    <div className="relative">
+                                                        <InputField 
+                                                            label="Interés Vencido (€)" 
+                                                            name="pendingInterest" 
+                                                            type="number" 
+                                                            value={String(loanFormData.pendingInterest || 0)} 
+                                                            onChange={(e) => setLoanFormData({...loanFormData, pendingInterest: Number(e.target.value)})} 
+                                                            step="0.01" 
+                                                        />
+                                                        <p className="text-[10px] text-slate-500 mt-1">Ajuste directo del interés acumulado no pagado.</p>
+                                                    </div>
+                                                    <div className="relative">
+                                                        <InputField 
+                                                            label="Detalle de Meses Vencidos" 
+                                                            name="pendingInterestDetails" 
+                                                            type="text" 
+                                                            value={String(loanFormData.pendingInterestDetails || '')} 
+                                                            onChange={(e) => setLoanFormData({...loanFormData, pendingInterestDetails: e.target.value})} 
+                                                            placeholder="Ej: marzo de 2026, abril de 2026"
+                                                        />
+                                                        <p className="text-[10px] text-slate-500 mt-1">Meses que corresponden a la deuda de interés.</p>
+                                                    </div>
                                                 </div>
 
                                                 {showCorrectionInput && (
