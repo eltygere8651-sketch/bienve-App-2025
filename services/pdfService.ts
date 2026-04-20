@@ -1,7 +1,7 @@
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { Loan, Client, LoanRequest } from '../types';
+import { Loan, Client, LoanRequest, PaymentRecord, ReinvestmentRecord, PersonalFund } from '../types';
 import { LOCAL_STORAGE_KEYS } from '../constants';
 import { formatCurrency } from './utils';
 import { INTEREST_RATE_CONFIG } from '../config';
@@ -141,31 +141,209 @@ export const generateContractPDF = async (data: ContractData, signatureImage: st
     return doc.output('blob');
 };
 
-export const downloadPdf = async (pdfBlob: Blob, filename: string) => {
-    if (navigator.share) {
-        try {
-            const file = new File([pdfBlob], filename, { type: 'application/pdf' });
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    title: filename,
-                    text: 'Documento generado por B.M Contigo',
-                    files: [file]
-                });
-                return;
-            }
-        } catch (error) {
-            console.log('Error al compartir o usuario canceló, descargando en su lugar...', error);
+export const generateMasterBackupPDF = (
+    clients: Client[], 
+    loans: Loan[], 
+    payments: PaymentRecord[], 
+    reinvestments: ReinvestmentRecord[], 
+    funds: PersonalFund[],
+    requests: LoanRequest[],
+    mode: 'download' | 'share' = 'download'
+) => {
+    const doc = new jsPDF();
+    const activeLoans = loans.filter(l => l.status !== 'Pagado');
+    const totalOutstanding = activeLoans.reduce((acc, l) => acc + l.remainingCapital, 0);
+
+    // Header section with styling
+    doc.setFillColor(15, 23, 42); // Slate 900
+    doc.rect(0, 0, 210, 45, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont("helvetica", "bold");
+    doc.text("COPIA DE SEGURIDAD MAESTRA", 14, 25);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("Resumen Diario y Directorio de Activos", 14, 34);
+    doc.text(`Generado el: ${new Date().toLocaleString()}`, 195, 25, { align: 'right' });
+    doc.text(`Total Cartera Activa: ${formatCurrency(totalOutstanding)}`, 195, 34, { align: 'right' });
+
+    // 1. ACTIVE LOANS TABLE
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Deudas Activas y Préstamos Vigentes", 14, 60);
+
+    const loanRows = activeLoans.map(l => [
+        l.clientName,
+        new Date(l.startDate).toLocaleDateString(),
+        formatCurrency(l.initialCapital || l.amount),
+        formatCurrency(l.remainingCapital),
+        l.status,
+        l.lastPaymentDate ? new Date(l.lastPaymentDate).toLocaleDateString() : 'Sin pagos'
+    ]);
+
+    (doc as any).autoTable({
+        startY: 65,
+        head: [['Cliente', 'Fecha Inicio', 'Monto Inicial', 'Pendiente', 'Estado', 'Últ. Pago']],
+        body: loanRows,
+        theme: 'striped',
+        headStyles: { fillColor: [79, 70, 229], textColor: 255 },
+        styles: { fontSize: 8 },
+        columnStyles: {
+            3: { fontStyle: 'bold', textColor: [185, 28, 28] }, // Red for balance
+            5: { fontStyle: 'italic' }
         }
+    });
+
+    // 2. REINVESTMENTS
+    let lastY = (doc as any).lastAutoTable.finalY + 15;
+    if (lastY > 260) { doc.addPage(); lastY = 20; }
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Reinversiones de Cartera", 14, lastY);
+
+    const reinvestRows = reinvestments.map(r => [
+        new Date(r.date).toLocaleDateString(),
+        formatCurrency(r.amount),
+        r.source,
+        r.notes || '-'
+    ]);
+
+    (doc as any).autoTable({
+        startY: lastY + 5,
+        head: [['Fecha', 'Monto', 'Fuente', 'Notas']],
+        body: reinvestRows,
+        theme: 'striped',
+        headStyles: { fillColor: [245, 158, 11], textColor: 255 },
+        styles: { fontSize: 8 }
+    });
+
+    // 3. PERSONAL FUNDS (START ON NEW PAGE AS REQUESTED)
+    doc.addPage();
+    lastY = 20;
+    
+    // Section Header for Personal Finances
+    doc.setFillColor(14, 165, 233); // Sky 500
+    doc.rect(0, lastY, 210, 12, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("ANEXO: GESTIÓN DE FINANZAS PERSONALES Y TESORERÍA", 105, lastY + 7.5, { align: 'center' });
+    
+    lastY += 22;
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(14);
+    doc.text("Estado de Cajas y Fondos de Ahorro", 14, lastY);
+
+    const fundRows = funds.map(f => [
+        f.name,
+        f.bankName,
+        formatCurrency(f.currentAmount),
+        formatCurrency(f.goal),
+        new Date(f.lastUpdated).toLocaleDateString()
+    ]);
+
+    (doc as any).autoTable({
+        startY: lastY + 5,
+        head: [['Nombre Gasto/Fondo', 'Banco/Ubicación', 'Saldo Actual', 'Meta', 'Últ. Act.']],
+        body: fundRows,
+        theme: 'grid',
+        headStyles: { fillColor: [14, 165, 233], textColor: 255 },
+        styles: { fontSize: 8 }
+    });
+
+    // 4. CLIENT DIRECTORY (START ON NEW PAGE TO ENSURE TOTAL SEPARATION)
+    // We force a new page again here to ensure personal data is isolated on its own page(s)
+    doc.addPage();
+    lastY = 20;
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Directorio Unificado de Clientes", 14, lastY);
+
+    const clientRows = clients.map(c => [
+        c.name,
+        c.idNumber || '-',
+        c.phone || '-',
+        c.email || '-',
+        c.address || '-',
+        new Date(c.joinDate).toLocaleDateString()
+    ]);
+
+    (doc as any).autoTable({
+        startY: lastY + 5,
+        head: [['Nombre Completo', 'ID/DNI', 'Teléfono', 'Email', 'Dirección', 'Alta']],
+        body: clientRows,
+        theme: 'grid',
+        headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+        styles: { 
+            fontSize: 7.5,
+            cellPadding: 2,
+            overflow: 'linebreak',
+            rowPageBreak: 'avoid' // Prevents a single client row from splitting across pages
+        },
+        columnStyles: {
+            0: { cellWidth: 40, fontStyle: 'bold' }, // Name
+            1: { cellWidth: 22 }, // ID
+            2: { cellWidth: 25 }, // Phone
+            3: { cellWidth: 35 }, // Email
+            4: { cellWidth: 'auto' }, // Address
+            5: { cellWidth: 20, halign: 'center' } // Join Date
+        },
+        margin: { left: 14, right: 14, bottom: 20 },
+        pageBreak: 'auto',
+        didDrawPage: (data: any) => {
+            // This ensures we have space for page numbers at bottom if autoTable spans multiple pages
+        }
+    });
+
+    // Page numbers
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Copia Maestra B.M Contigo - Seguridad Blindada - Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
     }
 
+    downloadPdf(doc.output('blob'), `Backup_Maestro_${new Date().toISOString().split('T')[0]}.pdf`, mode === 'share');
+};
+
+export const downloadPdf = (pdfBlob: Blob, filename: string, shouldShare: boolean = false) => {
+    // If sharing is requested and supported, try sharing first
+    if (shouldShare && navigator.share) {
+        const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+        navigator.share({
+            files: [file],
+            title: filename,
+            text: 'Copia de seguridad maestra de B.M Contigo'
+        }).catch(err => {
+            console.error("Error sharing:", err);
+            // Fallback to download if sharing fails/cancelled
+            triggerDownload(pdfBlob, filename);
+        });
+        return;
+    }
+
+    triggerDownload(pdfBlob, filename);
+};
+
+const triggerDownload = (pdfBlob: Blob, filename: string) => {
     const url = URL.createObjectURL(pdfBlob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    
+    // Cleanup
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 100);
 };
 
 // --- CLIENT REPORTS ---

@@ -10,10 +10,9 @@ interface NavItemProps {
     currentView?: AppView;
     isSidebarOpen: boolean;
     badge?: number;
-    isTestButton?: boolean;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, view, currentView, onClick, isSidebarOpen, badge, isTestButton }) => {
+const NavItem: React.FC<NavItemProps> = React.memo(({ icon, label, view, currentView, onClick, isSidebarOpen, badge }) => {
     const isActive = currentView === view;
 
     return (
@@ -21,11 +20,9 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, view, currentView, onCli
             <button
                 onClick={() => onClick(view)}
                 className={`w-full flex items-center justify-between p-3 my-1.5 rounded-xl cursor-pointer transition-all duration-200 text-left group border border-transparent outline-none focus:ring-2 focus:ring-primary-500/50 ${
-                    isActive && !isTestButton
+                    isActive
                         ? 'bg-primary-600/10 text-primary-300 border-primary-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]'
-                        : isTestButton 
-                        ? 'text-amber-400 hover:bg-amber-500/10 hover:text-amber-300' 
-                        :'text-slate-400 hover:bg-white/5 hover:text-slate-100'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                 }`}
                 title={label}
             >
@@ -54,6 +51,6 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, view, currentView, onCli
             </button>
         </li>
     );
-};
+});
 
 export default NavItem;

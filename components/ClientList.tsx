@@ -42,7 +42,7 @@ interface ClientCardProps {
     onArchive: (client: Client) => void;
 }
 
-const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetails, onQuickPay, onArchive }) => {
+const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, onViewDetails, onQuickPay, onArchive }) => {
     const loans = client.loans || [];
     const activeLoan = loans.find(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
     const hasActiveLoan = !!activeLoan;
@@ -252,7 +252,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ client, onAddLoan, onViewDetail
             )}
         </div>
     );
-};
+});
 
 const ClientList: React.FC = () => {
     const { clientLoanData, refreshAllData, handleArchiveClient } = useDataContext(); 

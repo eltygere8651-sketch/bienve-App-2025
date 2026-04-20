@@ -1220,19 +1220,15 @@ const Accounting: React.FC = () => {
     };
 
     const handleRecalculate = async () => {
-        if(confirm("Esta acción escaneará todo el historial de préstamos (excluyendo clientes de prueba) y reescribirá el saldo actual con la suma exacta. ¿Continuar?")) {
+        if(confirm("Esta acción escaneará todo el historial de préstamos y reescribirá el saldo actual con la suma exacta. ¿Continuar?")) {
             await recalculateTreasury();
             setIsEditingTreasury(false);
         }
     };
 
-    // Filter ALL LOANS to EXCLUDE test clients from accounting stats
+    // Aggregate all loans for accounting stats
     const allLoans = useMemo(() => {
-        const raw = [...loans, ...archivedLoans];
-        return raw.filter(l => {
-            const name = l.clientName.toLowerCase();
-            return !name.includes('prueba') && !name.includes('test');
-        });
+        return [...loans, ...archivedLoans];
     }, [loans, archivedLoans]);
 
     const stats = useMemo(() => {

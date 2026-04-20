@@ -3,6 +3,7 @@
 export const LOCAL_STORAGE_KEYS = {
     FINANCIAL_TIP: 'financialTip',
     CONTRACT_TEMPLATE: 'bmContigoContractTemplate',
+    LAST_BACKUP_DATE: 'bmContigoLastBackupDate',
 };
 
 export const TABLE_NAMES = {

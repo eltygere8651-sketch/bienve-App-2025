@@ -15,7 +15,8 @@ import {
     query,
     getCollection
 } from '../services/firebaseService';
-import { TABLE_NAMES } from '../constants';
+import { generateMasterBackupPDF } from '../services/pdfService';
+import { LOCAL_STORAGE_KEYS, TABLE_NAMES } from '../constants';
 import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData, ReinvestmentRecord, LoanStatus, PaymentRecord, PersonalFund, WithdrawalRecord } from '../types';
 import { calculateMonthlyInterest } from '../config';
 
@@ -834,87 +835,6 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         }
     }, [funds, handleRegisterFundTransaction, showToast]);
 
-    const handleGenerateTestClient = useCallback(async () => {
-        await handleAddClientAndLoan({
-            name: 'Cliente Prueba',
-            idNumber: 'TEST12345',
-            phone: '600000000',
-            address: 'Calle Test 123',
-            email: 'test@test.com'
-        }, {
-            amount: 1000,
-            term: 12
-        });
-    }, [handleAddClientAndLoan]);
-
-    const handleDeleteTestData = useCallback(async () => {
-        try {
-            // 1. Delete Test Clients and their Loans
-            const testClients = clients.filter(c => 
-                c.name.toLowerCase().includes('prueba') || 
-                c.name.toLowerCase().includes('test') ||
-                c.idNumber.toLowerCase().includes('test')
-            );
-
-            let deletedClientsCount = 0;
-            let deletedLoansCount = 0;
-
-            for (const client of testClients) {
-                // Delete client
-                await deleteDocument(TABLE_NAMES.CLIENTS, client.id);
-                deletedClientsCount++;
-
-                // Delete associated loans
-                const clientLoans = loans.filter(l => l.clientId === client.id);
-                for (const loan of clientLoans) {
-                    await deleteDocument(TABLE_NAMES.LOANS, loan.id);
-                    deletedLoansCount++;
-                }
-            }
-
-            // 2. Delete Test Requests
-            const testRequests = requests.filter(r => 
-                r.fullName.toLowerCase().includes('prueba') || 
-                r.fullName.toLowerCase().includes('test') ||
-                r.idNumber.toLowerCase().includes('test')
-            );
-
-            let deletedRequestsCount = 0;
-            for (const request of testRequests) {
-                await deleteDocument(TABLE_NAMES.REQUESTS, request.id);
-                deletedRequestsCount++;
-            }
-
-            showToast(`Datos de prueba eliminados: ${deletedClientsCount} clientes, ${deletedLoansCount} préstamos, ${deletedRequestsCount} solicitudes.`, 'success');
-        } catch (err: any) {
-            console.error(err);
-            showToast('Error al eliminar datos de prueba: ' + err.message, 'error');
-        }
-    }, [clients, loans, requests, showToast]);
-
-    const handleGenerateTestRequest = useCallback(async () => {
-        // Implementation for generating a test request if needed
-    }, []); 
-
-    const handleDeleteTestRequests = useCallback(async () => {
-         try {
-            const testRequests = requests.filter(r => 
-                r.fullName.toLowerCase().includes('prueba') || 
-                r.fullName.toLowerCase().includes('test') ||
-                r.idNumber.toLowerCase().includes('test')
-            );
-
-            let deletedRequestsCount = 0;
-            for (const request of testRequests) {
-                await deleteDocument(TABLE_NAMES.REQUESTS, request.id);
-                deletedRequestsCount++;
-            }
-            showToast(`${deletedRequestsCount} solicitudes de prueba eliminadas.`, 'success');
-        } catch (err: any) {
-            showToast('Error: ' + err.message, 'error');
-        }
-    }, [requests, showToast]);
-
     const reloadRequests = useCallback(async () => {}, []);
     const refreshAllData = useCallback(async () => {}, []);
     const recalculateTreasury = useCallback(async () => {
@@ -923,6 +843,40 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         // Just a placeholder or simple logic.
         showToast('Recálculo no implementado en esta versión.', 'info');
     }, [showToast]);
+
+    const triggerMasterBackup = useCallback((mode: 'download' | 'share' = 'download') => {
+        // Collect all payments from all active and archived loans
+        const allPayments: PaymentRecord[] = [
+            ...loans.flatMap(l => l.paymentHistory || []),
+            ...archivedLoans.flatMap(l => l.paymentHistory || [])
+        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        generateMasterBackupPDF(clients, loans, allPayments, reinvestments, funds, requests, mode);
+        localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_BACKUP_DATE, new Date().toISOString());
+    }, [clients, loans, archivedLoans, reinvestments, funds, requests]);
+
+    // Automatic backup check effect (every 15 days)
+    useEffect(() => {
+        if (isLoading || clients.length === 0 || !user) return;
+        
+        const lastBackupStr = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_BACKUP_DATE);
+        const now = new Date();
+        
+        if (!lastBackupStr) {
+            // First time - set initial date but don't force immediate download 
+            // unless we want to. Let's do it to be safe.
+            triggerMasterBackup();
+            return;
+        }
+
+        const lastBackup = new Date(lastBackupStr);
+        const diffInDays = Math.floor((now.getTime() - lastBackup.getTime()) / (1000 * 3600 * 24));
+        
+        if (diffInDays >= 15) {
+            showToast('Generando copia de seguridad automática quincenal...', 'info');
+            triggerMasterBackup();
+        }
+    }, [isLoading, clients.length, triggerMasterBackup, showToast, user]);
 
     // Computed clientLoanData
     const clientLoanData = useMemo(() => {
@@ -958,10 +912,6 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         handleBalanceCorrection,
         handleAddClientAndLoan,
         handleAddLoan,
-        handleGenerateTestRequest,
-        handleGenerateTestClient,
-        handleDeleteTestData,
-        handleDeleteTestRequests,
         handleUpdateLoan,
         handleUpdateClient,
         handleDeleteLoan,
@@ -981,5 +931,6 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         reloadRequests,
         refreshAllData,
         recalculateTreasury,
+        triggerMasterBackup,
     };
 };

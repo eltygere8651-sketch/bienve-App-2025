@@ -1,136 +1,113 @@
 
 import React, { useState } from 'react';
-import { DatabaseBackup, Download, Loader2, ShieldCheck, Zap, PlusCircle, Trash2 } from 'lucide-react';
+import { DatabaseBackup, ShieldCheck, FileText, FileDown, Loader2, Share2 } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
 
 const DataManagement: React.FC = () => {
     const { showToast } = useAppContext();
-    const { clients, archivedClients, loans, archivedLoans, requests, reinvestments, funds, withdrawals, handleGenerateTestClient, handleDeleteTestData } = useDataContext();
-    const [isExporting, setIsExporting] = useState(false);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
+    const { triggerMasterBackup } = useDataContext();
+    const [isGenerating, setIsGenerating] = useState<false | 'download' | 'share'>(false);
 
-    const handleExportBackup = async () => {
-        setIsExporting(true);
+    const handleAction = async (mode: 'download' | 'share') => {
+        setIsGenerating(mode);
         try {
-            const data = {
-                clients,
-                archivedClients,
-                loans,
-                archivedLoans,
-                requests,
-                reinvestments,
-                funds,
-                withdrawals
-            };
-
-            const backupData = {
-                timestamp: new Date().toISOString(),
-                version: '3.1 (Cloud Data)',
-                app: 'B.M Contigo',
-                data: data
-            };
-
-            const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `bm_contigo_backup_${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            showToast(`Copia de seguridad descargada. (${clients.length} Clientes, ${loans.length} Préstamos)`, 'success');
-
+            // Use a small timeout to allow UI to show loading state if process is heavy
+            setTimeout(() => {
+                triggerMasterBackup(mode);
+                setIsGenerating(false);
+                const actionMsg = mode === 'share' ? 'lista para compartir' : 'descargada con éxito';
+                showToast(`Copia maestra PDF ${actionMsg}.`, 'success');
+            }, 500);
         } catch (error: any) {
-            console.error("Backup error:", error);
-            showToast(`Error al crear la copia de seguridad: ${error.message || 'Error desconocido'}`, 'error');
-        } finally {
-            setIsExporting(false);
-        }
-    };
-
-    const handleGenerateClick = async () => {
-        setIsGenerating(true);
-        await handleGenerateTestClient();
-        setIsGenerating(false);
-    };
-
-    const handleDeleteClick = async () => {
-        if (window.confirm('¿Estás seguro de que quieres eliminar todos los datos de prueba? Esta acción no se puede deshacer.')) {
-            setIsDeleting(true);
-            await handleDeleteTestData();
-            setIsDeleting(false);
+            console.error("PDF Backup error:", error);
+            showToast(`Error al gestionar copia maestra: ${error.message || 'Error desconocido'}`, 'error');
+            setIsGenerating(false);
         }
     };
 
     return (
         <div className="space-y-6">
             <div className="flex items-center">
-                <DatabaseBackup className="h-8 w-8 mr-3 text-primary-400" />
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Gestión de Datos</h1>
+                <DatabaseBackup className="h-8 w-8 mr-3 text-rose-400" />
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Seguridad de Datos</h1>
             </div>
 
-            <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
-                <div className="flex items-start sm:items-center">
-                    <ShieldCheck className="h-10 w-10 text-primary-400 mr-4 flex-shrink-0" />
+            {/* PDF Master Backup - ONLY BACKUP OPTION NOW */}
+            <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                    <ShieldCheck size={120} />
+                </div>
+                
+                <div className="flex items-start sm:items-center relative z-10">
+                    <div className="p-4 bg-rose-500/10 rounded-2xl text-rose-400 mr-5 border border-rose-500/20">
+                        <FileText className="h-10 w-10" />
+                    </div>
                     <div>
-                        <h2 className="text-xl font-bold text-slate-100">Copia de Seguridad</h2>
-                        <p className="text-slate-300 mt-1">
-                            Descarga una copia local de todos tus datos (clientes, préstamos y solicitudes) almacenados en la nube.
+                        <h2 className="text-xl font-bold text-slate-100">Copia Maestra Unificada (PDF)</h2>
+                        <p className="text-slate-300 mt-2 max-w-2xl text-sm leading-relaxed">
+                            Este es el sistema central de respaldo de B.M Contigo. Genera un documento PDF blindado que incluye:
                         </p>
+                        <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-400">
+                            <li className="flex items-center gap-2">
+                                <div className="w-1 h-1 bg-rose-500 rounded-full" /> Directorio Detallado de Clientes
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <div className="w-1 h-1 bg-rose-500 rounded-full" /> Cartera de Deudas Activas
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <div className="w-1 h-1 bg-rose-500 rounded-full" /> Historial de 50 Últimos Pagos
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <div className="w-1 h-1 bg-rose-500 rounded-full" /> Solicitudes de Préstamo
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <div className="w-1 h-1 bg-rose-500 rounded-full" /> Reinversiones y Fondos Personales
+                            </li>
+                        </ul>
                     </div>
                 </div>
-                <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <p className="text-sm text-slate-400">
-                        El archivo descargado contiene toda la base de datos en formato JSON para tu seguridad.
-                    </p>
-                    <button
-                        onClick={handleExportBackup}
-                        disabled={isExporting}
-                        className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-bold rounded-lg shadow-md hover:bg-primary-700 disabled:bg-primary-400 transition-all hover:scale-105"
-                    >
-                        {isExporting ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Download size={18} className="mr-2" />}
-                        {isExporting ? 'Exportando...' : 'Descargar Copia Completa'}
-                    </button>
+
+                <div className="mt-8 pt-6 border-t border-slate-700/50 flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
+                    <div className="flex flex-col text-center md:text-left">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Frecuencia Automática</p>
+                        <p className="text-sm text-slate-300">Cada 15 días te recordaremos descargar esta copia.</p>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                        <button
+                            onClick={() => handleAction('download')}
+                            disabled={!!isGenerating}
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center px-6 py-4 bg-rose-600 text-white font-bold rounded-xl shadow-lg shadow-rose-900/20 hover:bg-rose-500 transition-all hover:scale-105 active:scale-95 border-t border-white/10 disabled:opacity-70"
+                        >
+                            {isGenerating === 'download' ? (
+                                <Loader2 size={18} className="mr-2 animate-spin" />
+                            ) : (
+                                <FileDown size={18} className="mr-2" />
+                            )}
+                            Descargar
+                        </button>
+                        
+                        <button
+                            onClick={() => handleAction('share')}
+                            disabled={!!isGenerating}
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center px-6 py-4 bg-slate-700 text-white font-bold rounded-xl shadow-lg shadow-slate-900/20 hover:bg-slate-600 transition-all hover:scale-105 active:scale-95 border-t border-white/10 disabled:opacity-70"
+                        >
+                            {isGenerating === 'share' ? (
+                                <Loader2 size={18} className="mr-2 animate-spin" />
+                            ) : (
+                                <Share2 size={18} className="mr-2" />
+                            )}
+                            Compartir
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div className="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
-                <div className="flex items-start sm:items-center">
-                    <Zap className="h-10 w-10 text-amber-400 mr-4 flex-shrink-0" />
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-100">Zona de Pruebas</h2>
-                        <p className="text-slate-300 mt-1">
-                            Genera datos ficticios para probar la generación de recibos y el flujo de la aplicación.
-                        </p>
-                    </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <p className="text-sm text-slate-400">
-                        Se creará un cliente con un préstamo activo de 1.000€ para que puedas emitir recibos de prueba.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                        <button
-                            onClick={handleGenerateClick}
-                            disabled={isGenerating}
-                            className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-amber-600/20 text-amber-400 hover:bg-amber-600/30 border border-amber-600/50 font-bold rounded-lg transition-all hover:scale-105"
-                        >
-                            {isGenerating ? <Loader2 size={18} className="mr-2 animate-spin" /> : <PlusCircle size={18} className="mr-2" />}
-                            Generar Cliente Test
-                        </button>
-                        <button
-                            onClick={handleDeleteClick}
-                            disabled={isDeleting}
-                            className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-600/50 font-bold rounded-lg transition-all hover:scale-105"
-                        >
-                            {isDeleting ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Trash2 size={18} className="mr-2" />}
-                            Limpiar Datos Test
-                        </button>
-                    </div>
-                </div>
+            <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700 flex items-start gap-4">
+                <ShieldCheck className="text-emerald-400 h-5 w-5 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-slate-400 leading-relaxed">
+                    <span className="text-slate-200 font-bold">Privacidad Total:</span> Esta copia de seguridad se genera directamente en tu navegador. Tus datos críticos están a salvo en este documento maestro incluso si pierdes acceso a la nube.
+                </p>
             </div>
         </div>
     );
