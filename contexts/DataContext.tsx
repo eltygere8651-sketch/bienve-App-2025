@@ -31,6 +31,7 @@ interface DataContextType {
     handleUpdateRequestStatus: (requestId: string, status: RequestStatus) => Promise<void>;
     handleRegisterPayment: (loanId: string, amount: number, date: string, notes: string, paymentMethod?: 'Efectivo' | 'Banco') => Promise<void>;
     handleUpdatePayment: (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => Promise<void>; 
+    handleDeletePayment: (loanId: string, paymentId: string) => Promise<void>;
     handleBalanceCorrection: (loanId: string, newBalance: number, notes: string) => Promise<void>; 
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
     handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => Promise<void>;

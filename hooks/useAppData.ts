@@ -213,19 +213,25 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         const loan = loans.find(l => l.id === loanId);
         if (!loan) throw new Error("Loan not found");
 
+        const monthlyInterest = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest;
         const pendingInt = loan.pendingInterest || 0;
         
-        // Priority 1: Pay off PENDING (accumulated) interest from previous missed months only
+        // Priority 1: Pay off PENDING (accumulated) interest from previous missed months
         const payOffPending = Math.min(amount, pendingInt);
-        const remainingAfterPending = amount - payOffPending;
+        const amountAfterPending = amount - payOffPending;
         const newPendingInterest = pendingInt - payOffPending;
+
+        // Priority 2: Pay current month's regular interest
+        const payOffRegular = Math.min(amountAfterPending, monthlyInterest);
+        const amountAfterRegular = amountAfterPending - payOffRegular;
+        
+        const totalInterestPaid = payOffPending + payOffRegular;
 
         let newPendingInterestDetails = loan.pendingInterestDetails || '';
         if (newPendingInterest <= 0) {
             newPendingInterestDetails = '';
         } else if (payOffPending > 0) {
             // If they paid exactly one or more months, try to remove them from details
-            const monthlyInterest = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest;
             const monthsCovered = Math.floor(payOffPending / monthlyInterest);
             if (monthsCovered > 0) {
                 const detailsArray = newPendingInterestDetails.split(', ');
@@ -233,25 +239,32 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             }
         }
 
-        // Priority 2: ALL remaining amount goes DIRECTLY to capital
-        // (Current month's interest is only accrued after 30 days of inactivity)
-        const capitalPart = Math.max(0, remainingAfterPending);
+        // Priority 3: The rest goes to Capital
+        const capitalPart = Math.max(0, amountAfterRegular);
         const remainingCapitalAfter = Math.max(0, loan.remainingCapital - capitalPart);
+
+        let notesPrefix = '';
+        if (payOffPending > 0) {
+            notesPrefix += `(Saldó ${payOffPending.toFixed(2)} vencido) `;
+        }
+        if (payOffRegular > 0) {
+            notesPrefix += `(Mes actual: ${payOffRegular.toFixed(2)}) `;
+        }
 
         const newPayment: PaymentRecord = {
             id: Date.now().toString(),
             date,
             amount,
-            interestPaid: payOffPending, // Only pay what was already vencido
+            interestPaid: totalInterestPaid,
             capitalPaid: capitalPart,
             remainingCapitalAfter,
-            notes: payOffPending > 0 ? `(Saldó ${payOffPending} de intereses vencidos) ${notes}` : notes,
+            notes: (notesPrefix + notes).trim(),
             paymentMethod
         };
 
         const updatedHistory = [...(loan.paymentHistory || []), newPayment];
         const totalCapitalPaid = updatedHistory.reduce((acc, p) => acc + p.capitalPaid, 0);
-        const totalInterestPaid = updatedHistory.reduce((acc, p) => acc + p.interestPaid, 0);
+        const totalInterestPaidForLoan = updatedHistory.reduce((acc, p) => acc + p.interestPaid, 0);
         
         let newStatus = loan.status;
         if (remainingCapitalAfter <= 0) newStatus = LoanStatus.PAID;
@@ -267,7 +280,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             pendingInterestDetails: newPendingInterestDetails,
             paymentHistory: updatedHistory,
             totalCapitalPaid,
-            totalInterestPaid,
+            totalInterestPaid: totalInterestPaidForLoan,
             status: newStatus,
             paymentsMade: updatedHistory.length,
             lastPaymentDate: date
@@ -375,6 +388,39 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
         showToast('Pago actualizado y saldos recalculados.', 'success');
     }, [loans, showToast]);
+
+    const handleDeletePayment = useCallback(async (loanId: string, paymentId: string) => {
+        const loan = loans.find(l => l.id === loanId);
+        if (!loan) return;
+
+        const paymentToDelete = loan.paymentHistory.find(p => p.id === paymentId);
+        if (!paymentToDelete) return;
+
+        const updatedHistory = loan.paymentHistory.filter(p => p.id !== paymentId);
+
+        const totalCapitalPaid = updatedHistory.reduce((acc, p) => acc + p.capitalPaid, 0);
+        const totalInterestPaid = updatedHistory.reduce((acc, p) => acc + p.interestPaid, 0);
+        const initialCap = loan.initialCapital || loan.amount;
+        const remainingCapital = Math.max(0, initialCap - totalCapitalPaid);
+
+        let newStatus = loan.status;
+        if (remainingCapital <= 0) newStatus = LoanStatus.PAID;
+        else if (newStatus === LoanStatus.PAID) newStatus = LoanStatus.PENDING;
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+            paymentHistory: updatedHistory,
+            totalCapitalPaid,
+            totalInterestPaid,
+            remainingCapital,
+            status: newStatus,
+            paymentsMade: updatedHistory.length
+        });
+
+        // Revert the treasury balance
+        await _updateTreasuryBalance(paymentToDelete.amount, 'outflow', paymentToDelete.paymentMethod || 'Efectivo');
+
+        showToast('Pago eliminado y saldo del tesoro revertido.', 'success');
+    }, [loans, showToast, _updateTreasuryBalance]);
 
     const handleBalanceCorrection = useCallback(async (loanId: string, newBalance: number, notes: string) => {
         const loan = loans.find(l => l.id === loanId);
@@ -846,6 +892,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         handleUpdateRequestStatus,
         handleRegisterPayment,
         handleUpdatePayment,
+        handleDeletePayment,
         handleBalanceCorrection,
         handleAddClientAndLoan,
         handleAddLoan,

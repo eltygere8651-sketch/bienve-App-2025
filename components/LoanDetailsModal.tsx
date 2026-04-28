@@ -103,18 +103,26 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         const amount = parseFloat(paymentAmount);
         if (isNaN(amount) || amount <= 0) return null;
         
+        const monthlyInterest = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest;
         const pendingInt = loan.pendingInterest || 0;
 
-        // Only pay off accrued PENDING interest
+        // Priority 1: Pay off accrued PENDING interest
         const payOffPending = Math.min(amount, pendingInt);
-        const remainingAfterPending = amount - payOffPending;
+        const amountAfterPending = amount - payOffPending;
+
+        // Priority 2: Pay current month's Regular interest
+        const payOffRegular = Math.min(amountAfterPending, monthlyInterest);
+        const amountAfterRegular = amountAfterPending - payOffRegular;
+
+        const totalInterestPaid = payOffPending + payOffRegular;
 
         // Everything else goes to Capital
-        const capitalPart = Math.max(0, remainingAfterPending);
+        const capitalPart = Math.max(0, amountAfterRegular);
         const newBalance = Math.max(0, loan.remainingCapital - capitalPart);
 
         return { 
-            interestPart: payOffPending, 
+            interestPart: totalInterestPaid,
+            regularInterestPaid: payOffRegular,
             capitalPart, 
             newBalance, 
             pendingInterestPaid: payOffPending 
@@ -428,6 +436,12 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                         <div className="flex justify-between text-red-400 font-bold bg-red-400/5 px-2 py-1 rounded">
                                                             <span>Saldar Interés Vencido:</span>
                                                             <span className="font-mono">-{formatCurrency(paymentPreview.pendingInterestPaid)}</span>
+                                                        </div>
+                                                    )}
+                                                    {paymentPreview.regularInterestPaid > 0 && (
+                                                        <div className="flex justify-between text-amber-400 font-bold bg-amber-400/5 px-2 py-1 rounded">
+                                                            <span>Cobro Interés Mensual (8%):</span>
+                                                            <span className="font-mono">-{formatCurrency(paymentPreview.regularInterestPaid)}</span>
                                                         </div>
                                                     )}
                                                     <div className="flex justify-between text-slate-400">

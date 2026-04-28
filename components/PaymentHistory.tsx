@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Loan, PaymentRecord } from '../types';
 import { formatCurrency } from '../services/utils';
-import { Calendar, Info, ArrowUp, Edit, Save, X, Loader2, FileText, CheckCircle2, TrendingDown, Clock } from 'lucide-react';
+import { Calendar, Info, ArrowUp, Edit, Save, X, Loader2, FileText, CheckCircle2, TrendingDown, Clock, Trash2 } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { generatePaymentReceipt } from '../services/pdfService';
 
@@ -11,7 +11,7 @@ interface PaymentHistoryProps {
 }
 
 const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
-    const { handleUpdatePayment } = useDataContext();
+    const { handleUpdatePayment, handleDeletePayment } = useDataContext();
     const history = loan.paymentHistory || [];
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
@@ -79,6 +79,16 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
             console.error(e);
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const confirmDelete = async (paymentId: string) => {
+        if (window.confirm('¿Está seguro de eliminar este pago? Esto recalculará el saldo del préstamo y registrará la salida correspondiente en el tesoro.')) {
+            try {
+                await handleDeletePayment(loan.id, paymentId);
+            } catch (e) {
+                console.error(e);
+            }
         }
     };
 
@@ -246,6 +256,13 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
                                                     title="Corregir Pago"
                                                 >
                                                     <Edit size={14} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => confirmDelete(record.id)} 
+                                                    className="p-1.5 hover:bg-slate-700 rounded text-slate-500 hover:text-red-400 transition-colors"
+                                                    title="Eliminar Pago"
+                                                >
+                                                    <Trash2 size={14} />
                                                 </button>
                                             </td>
                                         </>
