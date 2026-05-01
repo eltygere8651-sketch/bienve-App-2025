@@ -302,7 +302,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
                 if (loan.status === LoanStatus.PAID || loan.archived) return;
 
                 const baseDate = loan.lastPaymentDate ? new Date(loan.lastPaymentDate) : new Date(loan.startDate);
-                const diffTime = Math.abs(today.getTime() - baseDate.getTime());
+                const diffTime = today.getTime() - baseDate.getTime();
+                if (diffTime < 0) return; // Si la fecha base está en el futuro, no está vencido
                 const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
                 // Rule: For every full 30-day block without payment, accrue interest
