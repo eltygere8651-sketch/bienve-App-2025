@@ -480,6 +480,7 @@ interface ReceiptData {
     newBalance: number;
     interestPaid?: number; // Optional: Desglose explícito de interés
     capitalPaid?: number;  // Optional: Desglose explícito de capital
+    showInterestCovered?: boolean;
 }
 
 export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: string) => {
@@ -535,7 +536,7 @@ export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: strin
     // Añadir desglose si existe (para recibos "inteligentes")
     if (data.interestPaid !== undefined && data.capitalPaid !== undefined) {
         tableBody.push(['(+) Pago Total Recibido:', amountString]);
-        tableBody.push(['(-) Intereses Cubiertos:', data.interestPaid.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })]);
+        tableBody.push(['(-) Intereses:', data.showInterestCovered ? 'Interés Cubierto' : data.interestPaid.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })]);
         tableBody.push(['(-) Capital Amortizado:', data.capitalPaid.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })]);
     } else {
         tableBody.push(['Monto del Pago:', amountString]);
@@ -758,10 +759,12 @@ export const generateIdDocumentsPDF = async (request: LoanRequest) => {
     }
 };
 
-export const generateLoanHistoryPDF = (loan: Loan) => {
+export const generateLoanHistoryPDF = (loan: Loan, showInterestCovered: boolean = false) => {
     const doc = new jsPDF();
 
     // Header
+    const headerTitle = showInterestCovered ? "Historial de Pagos (Interés Cubierto)" : "Historial de Pagos";
+    
     doc.setFillColor(30, 41, 59); // Slate 800
     doc.rect(0, 0, 210, 30, 'F');
     doc.setTextColor(255, 255, 255);
@@ -770,7 +773,7 @@ export const generateLoanHistoryPDF = (loan: Loan) => {
     doc.text("B.M CONTIGO", 14, 18);
     doc.setFontSize(12);
     doc.setFont("helvetica", "normal");
-    doc.text("Historial de Pagos", 195, 18, { align: 'right' });
+    doc.text(headerTitle, 195, 18, { align: 'right' });
 
     // Loan Info
     doc.setTextColor(0, 0, 0);
@@ -780,7 +783,7 @@ export const generateLoanHistoryPDF = (loan: Loan) => {
     doc.text(`Fecha Inicio: ${new Date(loan.startDate).toLocaleDateString()}`, 14, 52);
     
     doc.text(`Monto Inicial: ${formatCurrency(loan.initialCapital || loan.amount)}`, 130, 40);
-    doc.text(`Total Interés Pagado: ${formatCurrency(loan.totalInterestPaid)}`, 130, 46);
+    doc.text(`Total Interés Pagado: ${showInterestCovered ? 'Interés Cubierto' : formatCurrency(loan.totalInterestPaid)}`, 130, 46);
     doc.setFont("helvetica", "bold");
     doc.text(`Saldo Pendiente: ${formatCurrency(loan.remainingCapital)}`, 130, 52);
 
@@ -793,7 +796,7 @@ export const generateLoanHistoryPDF = (loan: Loan) => {
         body: history.map(p => [
             new Date(p.date).toLocaleDateString(),
             formatCurrency(p.amount),
-            formatCurrency(p.interestPaid),
+            showInterestCovered ? 'Interés Cubierto' : formatCurrency(p.interestPaid),
             formatCurrency(p.capitalPaid),
             formatCurrency(p.remainingCapitalAfter),
             p.notes || '-'

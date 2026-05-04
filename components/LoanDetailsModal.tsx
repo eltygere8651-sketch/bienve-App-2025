@@ -67,6 +67,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
     const [paymentNotes, setPaymentNotes] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Banco'>('Efectivo');
+    const [showInterestCovered, setShowInterestCovered] = useState(false);
 
     useEffect(() => {
         if (loan && client) {
@@ -474,11 +475,26 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
 
                             {activeTab === 'history' && (
                                 <div className="space-y-4 animate-fade-in">
-                                    <div className="flex justify-between items-center mb-2">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
                                         <h3 className="font-bold text-slate-200">Historial de Transacciones</h3>
-                                        <button onClick={() => generateLoanHistoryPDF(loan)} className="text-xs flex items-center gap-1 bg-slate-700 px-3 py-1.5 rounded hover:bg-slate-600 text-white transition-colors">
-                                            <FileDown size={14} /> Exportar PDF
-                                        </button>
+                                        <div className="flex items-center gap-3">
+                                            <button 
+                                                onClick={() => setShowInterestCovered(!showInterestCovered)}
+                                                className={`flex items-center gap-2 px-3 py-1.5 rounded bg-slate-800 border transition-all ${
+                                                    showInterestCovered 
+                                                    ? 'border-amber-500/50 text-amber-400' 
+                                                    : 'border-slate-700 text-slate-400 hover:border-slate-600'
+                                                }`}
+                                            >
+                                                <div className={`w-8 h-4 rounded-full relative transition-colors ${showInterestCovered ? 'bg-amber-500' : 'bg-slate-600'}`}>
+                                                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${showInterestCovered ? 'left-4.5' : 'left-0.5'}`} />
+                                                </div>
+                                                <span className="text-[10px] font-bold uppercase">Interés Cubierto</span>
+                                            </button>
+                                            <button onClick={() => generateLoanHistoryPDF(loan, showInterestCovered)} className="text-xs flex items-center gap-1 bg-slate-700 px-3 py-1.5 rounded hover:bg-slate-600 text-white transition-colors">
+                                                <FileDown size={14} /> Exportar PDF
+                                            </button>
+                                        </div>
                                     </div>
                                     <PaymentHistory loan={loan} />
                                 </div>

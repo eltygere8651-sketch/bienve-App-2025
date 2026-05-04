@@ -15,6 +15,7 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
     const history = loan.paymentHistory || [];
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [showInterestCovered, setShowInterestCovered] = useState(false);
 
     // Edit Form State
     const [editForm, setEditForm] = useState({
@@ -105,7 +106,8 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
             previousBalance: previousBalance,
             newBalance: record.remainingCapitalAfter,
             interestPaid: record.interestPaid,
-            capitalPaid: record.capitalPaid
+            capitalPaid: record.capitalPaid,
+            showInterestCovered: showInterestCovered
         });
     };
 
@@ -120,6 +122,23 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
 
     return (
         <div className="space-y-6">
+            {/* Options Toggle */}
+            <div className="flex justify-end">
+                <button 
+                    onClick={() => setShowInterestCovered(!showInterestCovered)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                        showInterestCovered 
+                        ? 'bg-amber-500/10 border-amber-500/50 text-amber-400' 
+                        : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:border-slate-600'
+                    }`}
+                >
+                    <div className={`w-8 h-4 rounded-full relative transition-colors ${showInterestCovered ? 'bg-amber-500' : 'bg-slate-600'}`}>
+                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${showInterestCovered ? 'left-4.5' : 'left-0.5'}`} />
+                    </div>
+                    <span className="text-xs font-medium">Interés Cubierto en Recibo</span>
+                </button>
+            </div>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
