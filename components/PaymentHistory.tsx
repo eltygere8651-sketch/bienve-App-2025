@@ -2,9 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { Loan, PaymentRecord } from '../types';
 import { formatCurrency } from '../services/utils';
-import { Calendar, Info, ArrowUp, Edit, Save, X, Loader2, FileText, CheckCircle2, TrendingDown, Clock, Trash2 } from 'lucide-react';
+import { Calendar, Info, ArrowUp, Edit, Save, X, Loader2, FileText, CheckCircle2, TrendingDown, Clock, Trash2, Share2, Download } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
-import { generatePaymentReceipt } from '../services/pdfService';
+import { generatePaymentReceiptPdf, sharePdf, downloadPdf } from '../services/pdfService';
+import { jsPDF } from 'jspdf';
 
 interface PaymentHistoryProps {
     loan: Loan;
@@ -93,10 +94,10 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
         }
     };
 
-    const handleExportReceipt = (record: PaymentRecord) => {
+    const handleExportReceipt = (record: PaymentRecord, method: 'download' | 'share') => {
         const previousBalance = record.remainingCapitalAfter + record.capitalPaid;
         
-        generatePaymentReceipt({
+        const receiptPayload = {
             clientName: loan.clientName,
             loanId: loan.id,
             paymentAmount: record.amount,
@@ -108,7 +109,17 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
             interestPaid: record.interestPaid,
             capitalPaid: record.capitalPaid,
             showInterestCovered: showInterestCovered
-        });
+        };
+
+        const doc = generatePaymentReceiptPdf(receiptPayload);
+        const fileName = `Recibo_${loan.clientName.replace(/\s/g, '_')}_${new Date(record.date).toISOString().split('T')[0]}.pdf`;
+        const blob = doc.output('blob');
+
+        if (method === 'share') {
+            sharePdf(blob, fileName);
+        } else {
+            downloadPdf(blob, fileName);
+        }
     };
 
     if (sortedHistory.length === 0) {
@@ -256,6 +267,20 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
                                                     {new Date(record.date).toLocaleDateString('es-ES')}
                                                 </div>
                                                 {record.notes && <p className="text-[10px] text-slate-500 mt-1 truncate max-w-[120px]">{record.notes}</p>}
+                                                {((record.payOffPending && record.payOffPending > 0) || (record.payOffRegular && record.payOffRegular > 0)) && (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {record.payOffPending && record.payOffPending > 0 && (
+                                                            <span className="text-[9px] bg-amber-500/10 text-amber-500 px-1 rounded border border-amber-500/20 whitespace-nowrap">
+                                                                Venc: {formatCurrency(record.payOffPending)}
+                                                            </span>
+                                                        )}
+                                                        {record.payOffRegular && record.payOffRegular > 0 && (
+                                                            <span className="text-[9px] bg-emerald-500/10 text-emerald-500 px-1 rounded border border-emerald-500/20 whitespace-nowrap">
+                                                                Reg: {formatCurrency(record.payOffRegular)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3 font-bold text-slate-100">{formatCurrency(record.amount)}</td>
                                             <td className="px-4 py-3 text-green-400">{formatCurrency(record.interestPaid)}</td>
@@ -263,11 +288,18 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
                                             <td className="px-4 py-3 font-mono text-amber-400">{formatCurrency(record.remainingCapitalAfter)}</td>
                                             <td className="px-4 py-3 text-right flex justify-end gap-2">
                                                 <button 
-                                                    onClick={() => handleExportReceipt(record)} 
+                                                    onClick={() => handleExportReceipt(record, 'share')} 
+                                                    className="p-1.5 hover:bg-indigo-500/10 rounded text-indigo-400 transition-colors"
+                                                    title="Compartir Recibo"
+                                                >
+                                                    <Share2 size={14} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleExportReceipt(record, 'download')} 
                                                     className="p-1.5 hover:bg-slate-700 rounded text-slate-500 hover:text-blue-400 transition-colors"
                                                     title="Descargar Recibo"
                                                 >
-                                                    <FileText size={14} />
+                                                    <Download size={14} />
                                                 </button>
                                                 <button 
                                                     onClick={() => startEditing(record)} 

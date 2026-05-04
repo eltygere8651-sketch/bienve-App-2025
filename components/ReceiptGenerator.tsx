@@ -1,13 +1,14 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { ReceiptText, Download, Calculator, AlertCircle, Info, Loader2, ArrowRight, Banknote, CreditCard, Eye, EyeOff } from 'lucide-react';
-import { generatePaymentReceipt } from '../services/pdfService';
+import { ReceiptText, Download, Calculator, AlertCircle, Info, Loader2, ArrowRight, Banknote, CreditCard, Share2 } from 'lucide-react';
+import { generatePaymentReceiptPdf, sharePdf, downloadPdf } from '../services/pdfService';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 import { useAppContext } from '../contexts/AppContext';
 import { useDataContext } from '../contexts/DataContext';
 import { Loan, LoanStatus } from '../types';
 import { formatCurrency } from '../services/utils';
 import { calculateMonthlyInterest } from '../config';
+import { jsPDF } from 'jspdf';
 
 const ReceiptGenerator: React.FC = () => {
     const { showToast } = useAppContext();
@@ -20,13 +21,13 @@ const ReceiptGenerator: React.FC = () => {
     const [notes, setNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState<'Efectivo' | 'Banco'>('Efectivo');
-    const [showBreakdown, setShowBreakdown] = useState(true); // Control de visibilidad del desglose
+    const [showBreakdown, setShowBreakdown] = useState(true); 
     
+    const signaturePadRef = useRef<SignaturePadRef>(null);
+
     // Manual overrides
     const [manualClientName, setManualClientName] = useState('');
     const [manualPreviousBalance, setManualPreviousBalance] = useState('');
-
-    const signaturePadRef = useRef<SignaturePadRef>(null);
 
     // Filtrar préstamos activos
     const activeLoans = useMemo(() => {
@@ -125,9 +126,8 @@ const ReceiptGenerator: React.FC = () => {
                 );
             }
 
-            // Aquí se aplica la lógica del switch:
-            // Si showBreakdown es FALSE, enviamos undefined para que pdfService NO pinte las filas de interés/capital.
-            generatePaymentReceipt({
+            // Generar PDF para previsualización
+            const receiptPayload = {
                 clientName: clientName,
                 loanId: loanIdRef,
                 paymentAmount: parseFloat(paymentAmount),
@@ -138,9 +138,20 @@ const ReceiptGenerator: React.FC = () => {
                 newBalance: calculations.newBalance,
                 interestPaid: showBreakdown ? calculations.interestPart : undefined,
                 capitalPaid: showBreakdown ? calculations.capitalPart : undefined
-            }, signatureImage);
+            };
 
-            showToast('Recibo generado y pago registrado correctamente.', 'success');
+            const doc = generatePaymentReceiptPdf(receiptPayload, signatureImage);
+            const pdfBlob = doc.output('blob');
+            const filename = `Recibo_${clientName.replace(/\s/g, '_')}_${new Date(paymentDate).toISOString().split('T')[0]}.pdf`;
+
+            // En móviles solemos preferir compartir, en desktop descargar es más estable
+            if (navigator.share) {
+                await sharePdf(pdfBlob, filename);
+            } else {
+                downloadPdf(pdfBlob, filename);
+            }
+            
+            showToast('Pago registrado y recibo generado.', 'success');
             resetForm();
         } catch (error) {
             console.error(error);
@@ -327,7 +338,7 @@ const ReceiptGenerator: React.FC = () => {
 
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">Firma del Prestamista (Opcional)</label>
-                    <div className="border border-slate-600 rounded-md overflow-hidden">
+                    <div className="border border-slate-600 rounded-md overflow-hidden bg-slate-900/50">
                         <SignaturePad ref={signaturePadRef} />
                     </div>
                 </div>

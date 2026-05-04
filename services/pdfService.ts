@@ -258,26 +258,7 @@ export const generateMasterBackupPDF = (
     downloadPdf(doc.output('blob'), `Backup_Maestro_${new Date().toISOString().split('T')[0]}.pdf`, mode === 'share');
 };
 
-export const downloadPdf = (pdfBlob: Blob, filename: string, shouldShare: boolean = false) => {
-    // If sharing is requested and supported, try sharing first
-    if (shouldShare && navigator.share) {
-        const file = new File([pdfBlob], filename, { type: 'application/pdf' });
-        navigator.share({
-            files: [file],
-            title: filename,
-            text: 'Copia de seguridad maestra de B.M Contigo'
-        }).catch(err => {
-            console.error("Error sharing:", err);
-            // Fallback to download if sharing fails/cancelled
-            triggerDownload(pdfBlob, filename);
-        });
-        return;
-    }
-
-    triggerDownload(pdfBlob, filename);
-};
-
-const triggerDownload = (pdfBlob: Blob, filename: string) => {
+export const triggerDownload = (pdfBlob: Blob, filename: string) => {
     const url = URL.createObjectURL(pdfBlob);
     const a = document.createElement('a');
     a.href = url;
@@ -285,11 +266,33 @@ const triggerDownload = (pdfBlob: Blob, filename: string) => {
     document.body.appendChild(a);
     a.click();
     
-    // Cleanup
     setTimeout(() => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }, 100);
+};
+
+export const downloadPdf = (pdfBlob: Blob, filename: string) => {
+    triggerDownload(pdfBlob, filename);
+};
+
+export const sharePdf = async (pdfBlob: Blob, filename: string) => {
+    if (navigator.share) {
+        const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+        try {
+            await navigator.share({
+                files: [file],
+                title: 'Recibo Oficial - B.M CONTIGO',
+                text: 'Adjunto envío el recibo de pago oficial.'
+            });
+        } catch (error) {
+            console.error('Error al compartir:', error);
+            // Fallback to download if shared failed or cancelled
+            downloadPdf(pdfBlob, filename);
+        }
+    } else {
+        downloadPdf(pdfBlob, filename);
+    }
 };
 
 // --- CLIENT REPORTS ---
@@ -483,122 +486,173 @@ interface ReceiptData {
     showInterestCovered?: boolean;
 }
 
-export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: string) => {
-    const doc = new jsPDF();
-    const receiptId = `BM-${Date.now()}`;
-    const generationDate = new Date().toLocaleString('es-ES');
-    const amountString = data.paymentAmount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+export const generatePaymentReceiptPdf = (data: ReceiptData, signatureImage?: string): jsPDF => {
+    const doc = new jsPDF({
+        orientation: 'l',
+        unit: 'mm',
+        format: 'a5'
+    });
 
+    const generationDate = new Date().toLocaleDateString('es-ES');
+    const amountString = formatCurrency(data.paymentAmount);
 
-    // Header
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('B.M Contigo', 105, 20, { align: 'center' });
+    // Deep clean notes - removing any trace of automated messages
+    let displayNotes = data.notes || '';
+    displayNotes = displayNotes
+        .replace(/\(Mes actual:.*?\)/g, '')
+        .replace(/\(Saldó.*?vencido\)/g, '')
+        .replace(/Mes actual:\s*[0-9.]+/gi, '')
+        .replace(/Saldó.*?vencido/gi, '')
+        .trim();
+
+    // --- background ---
+    doc.setFillColor(252, 251, 255); 
+    doc.rect(0, 0, 210, 148, 'F');
+
+    // --- 1. HEADER (Indigo Premium) ---
+    doc.setFillColor(79, 70, 229); 
+    doc.rect(0, 0, 210, 32, 'F');
+    doc.setFillColor(67, 56, 202); 
+    doc.rect(0, 30, 210, 2, 'F');
     
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('B.M CONTIGO', 15, 20);
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(199, 210, 254);
+    doc.text('Garantía de Confianza y Transparencia', 15, 26);
+
+    doc.setTextColor(255, 255, 255);
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('Recibo de Pago', 105, 34, { align: 'center' });
-
-    doc.setLineWidth(0.5);
-    doc.line(15, 38, 195, 38);
-
-    // Receipt Info
-    doc.setFontSize(10);
-    doc.text(`Fecha de Emisión: ${generationDate}`, 195, 45, { align: 'right' });
-    doc.text(`Nº de Recibo: ${receiptId}`, 15, 45);
-
-    // Body
-    doc.setFontSize(12);
-    doc.text('Recibí de:', 15, 60);
-    doc.setFont('helvetica', 'bold');
-    doc.text(data.clientName, 40, 60);
-
-    doc.setFont('helvetica', 'normal');
-    doc.text('La cantidad de:', 15, 70);
-    doc.setFont('helvetica', 'bold');
-    doc.text(amountString, 45, 70);
-
-    doc.setFont('helvetica', 'normal');
-    doc.text('Por concepto de:', 15, 80);
-    doc.setFont('helvetica', 'bold');
-    doc.text(data.paymentType, 48, 80);
-
-    doc.setLineWidth(0.2);
-    doc.line(15, 90, 195, 90);
+    doc.text('RECIBO DE PAGO', 195, 22, { align: 'right' });
     
-    // Details Table
+    // --- 2. INFO AREA ---
+    doc.setTextColor(99, 102, 241);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FECHA DE EMISIÓN', 15, 42);
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(11);
+    doc.text(generationDate, 15, 48);
+
+    doc.setDrawColor(224, 231, 255);
+    doc.setLineWidth(0.2);
+    doc.line(15, 52, 195, 52);
+
+    // Client
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('CLIENTE', 15, 62);
+    doc.setFontSize(18);
+    doc.setTextColor(79, 70, 229);
+    doc.setFont('helvetica', 'bold');
+    doc.text(data.clientName.toUpperCase(), 15, 71);
+
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('CONCEPTO DE PAGO', 15, 81);
+    doc.setFontSize(10);
+    doc.setTextColor(30, 41, 59);
+    doc.text(data.paymentType, 15, 87);
+
+    // --- 3. AMOUNT CARD ---
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(79, 70, 229);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(140, 58, 55, 28, 3, 3, 'FD');
+    
+    doc.setTextColor(79, 70, 229);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL ABONADO', 167.5, 66, { align: 'center' });
+    
+    doc.setFontSize(20);
+    doc.text(amountString, 167.5, 78, { align: 'center' });
+
+    // --- 4. DETAILS TABLE ---
     const tableBody = [
-        ['ID Préstamo / Referencia:', data.loanId],
-        ['Fecha del Pago Aplicado:', new Date(data.paymentDate).toLocaleDateString('es-ES')],
-        ['Saldo Anterior:', data.previousBalance.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })],
+        ['SALDO ANTERIOR', formatCurrency(data.previousBalance)],
     ];
 
-    // Añadir desglose si existe (para recibos "inteligentes")
     if (data.interestPaid !== undefined && data.capitalPaid !== undefined) {
-        tableBody.push(['(+) Pago Total Recibido:', amountString]);
-        tableBody.push(['(-) Intereses:', data.showInterestCovered ? 'Interés Cubierto' : data.interestPaid.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })]);
-        tableBody.push(['(-) Capital Amortizado:', data.capitalPaid.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })]);
-    } else {
-        tableBody.push(['Monto del Pago:', amountString]);
+        tableBody.push(['PAGO DE INTERESES', data.showInterestCovered ? 'CUBIERTO' : formatCurrency(data.interestPaid)]);
+        tableBody.push(['AMORTIZACIÓN CAPITAL', formatCurrency(data.capitalPaid)]);
     }
 
-    tableBody.push(['(=) Nuevo Saldo Pendiente:', data.newBalance.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })]);
-    
-    if (data.notes) {
-        tableBody.push(['Notas Adicionales:', data.notes]);
-    }
+    tableBody.push(['SALDO PENDIENTE', formatCurrency(data.newBalance)]);
 
     (doc as any).autoTable({
-        startY: 95,
+        startY: 92,
+        margin: { left: 15, right: 15 },
         body: tableBody,
         theme: 'plain',
-        styles: { fontSize: 11, cellPadding: 2 },
-        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 80 } }, // Ajustar ancho columna etiquetas
-        didParseCell: function(cellData: any) {
-            const rowIdx = cellData.row.index;
-            const label = cellData.row.cells[0].raw; // Obtener texto de la etiqueta
-            
-            // Negrita para saldos
-            if (label.includes('Saldo')) {
-                cellData.cell.styles.fontStyle = 'bold';
-            }
-            // Colores para el desglose
-            if (label.includes('Pago Total') || label.includes('Monto del Pago')) {
-                 cellData.cell.styles.textColor = [0, 100, 0]; // Dark Green
-                 cellData.cell.styles.fontStyle = 'bold';
-            }
-            if (label.includes('Capital Amortizado')) {
-                 cellData.cell.styles.textColor = [0, 0, 200]; // Dark Blue
+        tableWidth: 105, 
+        styles: { 
+            fontSize: 9, 
+            cellPadding: 2.5, 
+            textColor: [71, 85, 105],
+            font: 'helvetica'
+        },
+        columnStyles: { 
+            0: { cellWidth: 45 },
+            1: { fontStyle: 'bold', halign: 'right', textColor: [30, 41, 59] } 
+        },
+        didParseCell: (d: any) => {
+            if (d.row.cells[0].raw === 'SALDO PENDIENTE') {
+                d.cell.styles.fillColor = [240, 242, 255];
+                d.cell.styles.textColor = [79, 70, 229];
+                d.cell.styles.fontStyle = 'bold';
+                d.cell.styles.fontSize = 10;
             }
         }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY;
+    const finalY = (doc as any).lastAutoTable.finalY + 5;
 
+    // Signature Area
     if (signatureImage) {
-        doc.addImage(signatureImage, 'PNG', 75, finalY + 15, 60, 30);
-    } else {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        doc.setTextColor(200, 200, 200); // Marca de agua gris claro
-        doc.text('B.M CONTIGO', 105, finalY + 30, { align: 'center' });
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text('Recibo Generado Digitalmente', 105, finalY + 35, { align: 'center' });
-        doc.setTextColor(0, 0, 0); // Reset a negro
+        doc.addImage(signatureImage, 'PNG', 140, finalY - 5, 50, 20);
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        doc.text('Firma Digital Autorizada', 165, finalY + 15, { align: 'center' });
     }
 
-    // Footer
-    doc.line(15, 280, 195, 280);
-    doc.setFontSize(9);
-    doc.text('Gracias por su confianza.', 105, 285, { align: 'center' });
-    doc.text('Este es un recibo generado por sistema.', 105, 290, { align: 'center' });
+    // --- 5. FOOTER & NOTES ---
+    if (displayNotes) {
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(148, 163, 184);
+        const sn = doc.splitTextToSize(`Nota: ${displayNotes}`, 80);
+        doc.text(sn, 15, finalY);
+    }
 
+    doc.setFontSize(10);
+    doc.setTextColor(79, 70, 229);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Gracias por su confianza.', 195, 132, { align: 'right' });
+    
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(148, 163, 184);
+    doc.text('Este es un recibo generado por sistema.', 195, 137, { align: 'right' });
 
-    downloadPdf(doc.output('blob'), `Recibo_${data.clientName.replace(/\s/g, '_')}_${new Date(data.paymentDate).toISOString().split('T')[0]}.pdf`);
+    doc.setFillColor(79, 70, 229);
+    doc.rect(0, 145, 210, 3, 'F');
+
+    return doc;
 };
+
+export const generatePaymentReceipt = (data: ReceiptData, signatureImage?: string) => {
+    const doc = generatePaymentReceiptPdf(data, signatureImage);
+    const filename = `Recibo_${data.clientName.replace(/\s/g, '_')}_${new Date(data.paymentDate).toISOString().split('T')[0]}.pdf`;
+    downloadPdf(doc.output('blob'), filename);
+};
+
 
 export const generateRequestSummaryPDF = (request: LoanRequest) => {
     const doc = new jsPDF();

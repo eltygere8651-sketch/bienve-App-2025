@@ -20,6 +20,8 @@ export interface PaymentRecord {
     capitalPaid: number;
     remainingCapitalAfter: number;
     notes?: string;
+    payOffPending?: number; // Detalle técnico: cuanto fue a intereses vencidos
+    payOffRegular?: number; // Detalle técnico: cuanto fue a interés mes actual
     daysElapsed?: number; // Nuevo: Para registro histórico
     paymentMethod?: 'Efectivo' | 'Banco'; // Nuevo: Desglose de tesorería
 }

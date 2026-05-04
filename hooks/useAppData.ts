@@ -243,14 +243,6 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         const capitalPart = Math.max(0, amountAfterRegular);
         const remainingCapitalAfter = Math.max(0, loan.remainingCapital - capitalPart);
 
-        let notesPrefix = '';
-        if (payOffPending > 0) {
-            notesPrefix += `(Saldó ${payOffPending.toFixed(2)} vencido) `;
-        }
-        if (payOffRegular > 0) {
-            notesPrefix += `(Mes actual: ${payOffRegular.toFixed(2)}) `;
-        }
-
         const newPayment: PaymentRecord = {
             id: Date.now().toString(),
             date,
@@ -258,7 +250,9 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             interestPaid: totalInterestPaid,
             capitalPaid: capitalPart,
             remainingCapitalAfter,
-            notes: (notesPrefix + notes).trim(),
+            notes: notes.trim(),
+            payOffPending,
+            payOffRegular,
             paymentMethod
         };
 
