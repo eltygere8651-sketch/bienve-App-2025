@@ -97,62 +97,111 @@ export const generateMasterBackupPDF = (
     mode: 'download' | 'share' = 'download'
 ) => {
     const doc = new jsPDF();
-    const activeLoans = loans.filter(l => l.status !== 'Pagado');
+    const activeLoans = loans.filter(l => l.status !== 'Pagado' && !l.archived);
     const totalOutstanding = activeLoans.reduce((acc, l) => acc + l.remainingCapital, 0);
+    const generationDate = new Date().toLocaleString('es-ES', { 
+        day: 'numeric', month: 'numeric', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
 
-    // Header section with styling
+    // --- PAGE 1: CLIENT DIRECTORY ---
     doc.setFillColor(15, 23, 42); // Slate 900
-    doc.rect(0, 0, 210, 45, 'F');
+    doc.rect(0, 0, 210, 42, 'F');
     
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
+    doc.setFontSize(28);
     doc.setFont("helvetica", "bold");
-    doc.text("COPIA DE SEGURIDAD MAESTRA", 14, 25);
+    doc.text("COPIA DE SEGURIDAD MAESTRA", 14, 22);
+    
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text("Resumen Diario y Directorio de Activos", 14, 32);
     
     doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("Resumen Diario y Directorio de Activos", 14, 34);
-    doc.text(`Generado el: ${new Date().toLocaleString()}`, 195, 25, { align: 'right' });
-    doc.text(`Total Cartera Activa: ${formatCurrency(totalOutstanding)}`, 195, 34, { align: 'right' });
-
-    // 1. ACTIVE LOANS TABLE
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(14);
+    doc.setTextColor(200, 200, 200);
+    doc.text(`Generado el: ${generationDate}`, 196, 22, { align: 'right' });
+    
+    doc.setFontSize(12);
+    doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
-    doc.text("Deudas Activas y Préstamos Vigentes", 14, 60);
+    doc.text(`Total Cartera Activa: ${formatCurrency(totalOutstanding)}`, 196, 32, { align: 'right' });
 
-    const loanRows = activeLoans.map(l => [
-        l.clientName,
-        new Date(l.startDate).toLocaleDateString(),
-        formatCurrency(l.initialCapital || l.amount),
-        formatCurrency(l.remainingCapital),
-        l.status,
-        l.lastPaymentDate ? new Date(l.lastPaymentDate).toLocaleDateString() : 'Sin pagos'
+    // 1. CLIENT DIRECTORY (Now Page 1)
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(15);
+    doc.setFont("helvetica", "bold");
+    doc.text("Directorio Unificado de Clientes", 14, 55);
+
+    const clientRows = clients.filter(c => !c.archived).sort((a, b) => a.name.localeCompare(b.name)).map(c => [
+        c.name.toUpperCase(),
+        c.idNumber || '-',
+        c.phone || '-',
+        c.email || '-',
+        c.address || '-',
+        new Date(c.joinDate).toLocaleDateString('es-ES')
     ]);
 
     (doc as any).autoTable({
-        startY: 65,
+        startY: 60,
+        head: [['Nombre Completo', 'ID/DNI', 'Teléfono', 'Email', 'Dirección', 'Alta']],
+        body: clientRows,
+        theme: 'grid',
+        headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+        styles: { 
+            fontSize: 8,
+            cellPadding: 3,
+            overflow: 'linebreak',
+            rowPageBreak: 'avoid'
+        },
+        columnStyles: {
+            0: { cellWidth: 40, fontStyle: 'bold' },
+            5: { halign: 'center' }
+        },
+        margin: { left: 14, right: 14, bottom: 25 }
+    });
+
+    // --- PAGE 2: ACTIVE LOANS & REINVESTMENTS ---
+    doc.addPage();
+    let lastY = 20;
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Deudas Activas y Préstamos Vigentes", 14, lastY);
+
+    const loanRows = activeLoans.map(l => [
+        l.clientName.toUpperCase(),
+        new Date(l.startDate).toLocaleDateString('es-ES'),
+        formatCurrency(l.initialCapital || l.amount),
+        formatCurrency(l.remainingCapital),
+        'Pendiente',
+        l.lastPaymentDate ? new Date(l.lastPaymentDate).toLocaleDateString('es-ES') : 'N/A'
+    ]);
+
+    (doc as any).autoTable({
+        startY: lastY + 5,
         head: [['Cliente', 'Fecha Inicio', 'Monto Inicial', 'Pendiente', 'Estado', 'Últ. Pago']],
         body: loanRows,
         theme: 'striped',
-        headStyles: { fillColor: [79, 70, 229], textColor: 255 },
-        styles: { fontSize: 8 },
+        headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+        styles: { fontSize: 8.5, cellPadding: 2.5 },
         columnStyles: {
             3: { fontStyle: 'bold', textColor: [185, 28, 28] }, // Red for balance
-            5: { fontStyle: 'italic' }
+            5: { halign: 'center' }
         }
     });
 
-    // 2. REINVESTMENTS
-    let lastY = (doc as any).lastAutoTable.finalY + 15;
-    if (lastY > 260) { doc.addPage(); lastY = 20; }
+    // REINVESTMENTS (Follows Active Loans)
+    lastY = (doc as any).lastAutoTable.finalY + 15;
+    if (lastY > 230) { doc.addPage(); lastY = 20; }
 
+    doc.setTextColor(15, 23, 42);
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text("Reinversiones de Cartera", 14, lastY);
 
-    const reinvestRows = reinvestments.map(r => [
-        new Date(r.date).toLocaleDateString(),
+    const reinvestRows = reinvestments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(r => [
+        new Date(r.date).toLocaleDateString('es-ES'),
         formatCurrency(r.amount),
         r.source,
         r.notes || '-'
@@ -163,25 +212,26 @@ export const generateMasterBackupPDF = (
         head: [['Fecha', 'Monto', 'Fuente', 'Notas']],
         body: reinvestRows,
         theme: 'striped',
-        headStyles: { fillColor: [245, 158, 11], textColor: 255 },
-        styles: { fontSize: 8 }
+        headStyles: { fillColor: [245, 158, 11], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+        styles: { fontSize: 8.5, cellPadding: 2.5 }
     });
 
-    // 3. PERSONAL FUNDS (START ON NEW PAGE AS REQUESTED)
+    // --- PAGE 3: PERSONAL FUNDS ---
     doc.addPage();
     lastY = 20;
     
-    // Section Header for Personal Finances
+    // ANEXO Header
     doc.setFillColor(14, 165, 233); // Sky 500
-    doc.rect(0, lastY, 210, 12, 'F');
+    doc.rect(0, 0, 210, 15, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text("ANEXO: GESTIÓN DE FINANZAS PERSONALES Y TESORERÍA", 105, lastY + 7.5, { align: 'center' });
+    doc.text("ANEXO: GESTIÓN DE FINANZAS PERSONALES Y TESORERÍA", 105, 10, { align: 'center' });
     
-    lastY += 22;
-    doc.setTextColor(0, 0, 0);
+    lastY = 30;
+    doc.setTextColor(15, 23, 42);
     doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
     doc.text("Estado de Cajas y Fondos de Ahorro", 14, lastY);
 
     const fundRows = funds.map(f => [
@@ -189,74 +239,45 @@ export const generateMasterBackupPDF = (
         f.bankName,
         formatCurrency(f.currentAmount),
         formatCurrency(f.goal),
-        new Date(f.lastUpdated).toLocaleDateString()
+        new Date(f.lastUpdated).toLocaleDateString('es-ES')
     ]);
 
     (doc as any).autoTable({
         startY: lastY + 5,
         head: [['Nombre Gasto/Fondo', 'Banco/Ubicación', 'Saldo Actual', 'Meta', 'Últ. Act.']],
         body: fundRows,
-        theme: 'grid',
-        headStyles: { fillColor: [14, 165, 233], textColor: 255 },
-        styles: { fontSize: 8 }
+        theme: 'striped',
+        headStyles: { fillColor: [14, 165, 233], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+        styles: { fontSize: 8.5, cellPadding: 2.5 }
     });
 
-    // 4. CLIENT DIRECTORY (START ON NEW PAGE TO ENSURE TOTAL SEPARATION)
-    // We force a new page again here to ensure personal data is isolated on its own page(s)
-    doc.addPage();
-    lastY = 20;
-
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Directorio Unificado de Clientes", 14, lastY);
-
-    const clientRows = clients.map(c => [
-        c.name,
-        c.idNumber || '-',
-        c.phone || '-',
-        c.email || '-',
-        c.address || '-',
-        new Date(c.joinDate).toLocaleDateString()
-    ]);
-
-    (doc as any).autoTable({
-        startY: lastY + 5,
-        head: [['Nombre Completo', 'ID/DNI', 'Teléfono', 'Email', 'Dirección', 'Alta']],
-        body: clientRows,
-        theme: 'grid',
-        headStyles: { fillColor: [30, 41, 59], textColor: 255 },
-        styles: { 
-            fontSize: 7.5,
-            cellPadding: 2,
-            overflow: 'linebreak',
-            rowPageBreak: 'avoid' // Prevents a single client row from splitting across pages
-        },
-        columnStyles: {
-            0: { cellWidth: 40, fontStyle: 'bold' }, // Name
-            1: { cellWidth: 22 }, // ID
-            2: { cellWidth: 25 }, // Phone
-            3: { cellWidth: 35 }, // Email
-            4: { cellWidth: 'auto' }, // Address
-            5: { cellWidth: 20, halign: 'center' } // Join Date
-        },
-        margin: { left: 14, right: 14, bottom: 20 },
-        pageBreak: 'auto',
-        didDrawPage: (data: any) => {
-            // This ensures we have space for page numbers at bottom if autoTable spans multiple pages
-        }
-    });
-
-    // Page numbers
+    // Global Footer with Page Numbers
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text(`Copia Maestra B.M Contigo - Seguridad Blindada - Página ${i} de ${pageCount}`, 105, 290, { align: 'center' });
+        
+        // Footer Bar
+        doc.setFillColor(30, 41, 59);   // Dark for page 1 (Directory)
+        if (i === 2) doc.setFillColor(79, 70, 229); // Indigo for page 2 (Loans)
+        if (i === 3) doc.setFillColor(14, 165, 233); // Sky for page 3 (Funds)
+        doc.rect(0, 292, 210, 5, 'F');
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Copia Maestra B.M Contigo - Seguridad Blindada - Página ${i} de ${pageCount}`, 105, 287, { align: 'center' });
     }
 
-    downloadPdf(doc.output('blob'), `Backup_Maestro_${new Date().toISOString().split('T')[0]}.pdf`, mode === 'share');
+    const filename = `Backup_Maestro_${new Date().toISOString().split('T')[0]}.pdf`;
+    const blob = doc.output('blob');
+
+    if (mode === 'share') {
+        sharePdf(blob, filename);
+    } else {
+        downloadPdf(blob, filename);
+    }
 };
+
 
 export const triggerDownload = (pdfBlob: Blob, filename: string) => {
     const url = URL.createObjectURL(pdfBlob);

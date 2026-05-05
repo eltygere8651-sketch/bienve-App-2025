@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { ReceiptText, Download, Calculator, AlertCircle, Info, Loader2, ArrowRight, Banknote, CreditCard, Share2 } from 'lucide-react';
+import { ReceiptText, Download, Calculator, AlertCircle, Info, Loader2, ArrowRight, Banknote, CreditCard, Share2, Eye, EyeOff } from 'lucide-react';
 import { generatePaymentReceiptPdf, sharePdf, downloadPdf } from '../services/pdfService';
 import SignaturePad, { SignaturePadRef } from './SignaturePad';
 import { useAppContext } from '../contexts/AppContext';
