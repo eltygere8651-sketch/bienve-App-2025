@@ -68,6 +68,16 @@ export interface PersonalFund {
     transactions?: PersonalTransaction[];
 }
 
+export interface OverdueMonth {
+    id: string;
+    monthName: string;
+    amount: number;
+    year: number;
+    status: 'pendiente' | 'reclamado' | 'anulado';
+    createdAt?: string;
+    notes?: string;
+}
+
 export interface Loan {
     id: string;
     clientId: string;
@@ -87,11 +97,14 @@ export interface Loan {
     totalCapitalPaid: number;
     paymentHistory: PaymentRecord[];
     signature?: string;
+    fundingSource?: 'Banco' | 'Efectivo';
     contractPdfUrl?: string;
     notes?: string;
     archived?: boolean; // Nuevo: Flag para historial
-    pendingInterest?: number; // Nuevo: Intereses acumulados no pagados
-    pendingInterestDetails?: string; // Nuevo: Detalle de los meses/periodos vencidos
+    pendingInterest?: number; // Informativo: Intereses acumulados no pagados
+    pendingInterestDetails?: string; // Informativo: Detalle de los meses/periodos vencidos
+    overdueHistory?: OverdueMonth[]; // Nuevo: Historial detallado e informativo
+    source?: 'Banco' | 'Efectivo'; // Alias for fundingSource used in some components
 }
 
 export interface Client {
@@ -133,6 +146,7 @@ export type NewLoanData = { amount: number; term: number };
 export interface DashboardStats {
     totalLoaned: number;
     totalOutstanding: number;
+    totalOverdueInterest?: number;
     activeLoans: number;
     counts: {
         [key in LoanStatus]?: number;

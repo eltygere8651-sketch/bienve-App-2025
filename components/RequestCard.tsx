@@ -48,6 +48,7 @@ const RequestCard: React.FC<RequestCardProps> = ({ request, forceExpand = false 
     const [isExpanded, setIsExpanded] = useState(forceExpand);
     const [amount, setAmount] = useState(request.loanAmount || 500);
     const [term, setTerm] = useState(12);
+    const [fundingSource, setFundingSource] = useState<'Banco' | 'Efectivo'>('Banco');
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
     const [isDownloadingDniPdf, setIsDownloadingDniPdf] = useState(false);
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -57,7 +58,7 @@ const RequestCard: React.FC<RequestCardProps> = ({ request, forceExpand = false 
     }, [forceExpand]);
 
     const approveAction = async () => {
-        await handleApproveRequest(request, amount, term);
+        await handleApproveRequest(request, amount, term, fundingSource);
     };
     
     const rejectAction = async () => {
@@ -250,7 +251,7 @@ const RequestCard: React.FC<RequestCardProps> = ({ request, forceExpand = false 
 
                                     {/* Approval Form */}
                                     <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto items-end sm:items-center bg-slate-900/50 p-3 rounded-lg border border-slate-700">
-                                        <div className="flex gap-4 w-full sm:w-auto">
+                                        <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
                                             <div className="w-full sm:w-32">
                                                 <label className="block text-xs font-bold text-slate-500 mb-1">Monto (€)</label>
                                                 <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full px-2 py-1.5 text-sm border border-slate-600 rounded bg-slate-800 text-white font-bold text-right" />
@@ -258,6 +259,25 @@ const RequestCard: React.FC<RequestCardProps> = ({ request, forceExpand = false 
                                             <div className="w-full sm:w-24">
                                                 <label className="block text-xs font-bold text-slate-500 mb-1">Meses</label>
                                                 <input type="number" value={term} onChange={e => setTerm(Number(e.target.value))} className="w-full px-2 py-1.5 text-sm border border-slate-600 rounded bg-slate-800 text-white font-bold text-right" />
+                                            </div>
+                                            <div className="w-full sm:w-40">
+                                                <label className="block text-xs font-bold text-slate-500 mb-1">Origen</label>
+                                                <div className="flex gap-1 bg-slate-800 p-1 rounded border border-slate-600">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFundingSource('Efectivo')}
+                                                        className={`flex-1 py-1 px-2 rounded text-[10px] font-bold transition-all ${fundingSource === 'Efectivo' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                                                    >
+                                                        Efecto.
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFundingSource('Banco')}
+                                                        className={`flex-1 py-1 px-2 rounded text-[10px] font-bold transition-all ${fundingSource === 'Banco' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                                                    >
+                                                        Banco
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                         

@@ -26,6 +26,7 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
         startDate: new Date().toISOString().split('T')[0],
         notes: ''
     });
+    const [fundingSource, setFundingSource] = useState<'Banco' | 'Efectivo'>('Efectivo');
 
     const calculations = useMemo(() => {
         const amount = parseFloat(loanData.amount);
@@ -52,7 +53,8 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                 term: isIndefinite ? 0 : parseInt(loanData.term),
                 interestRate: parseFloat(loanData.interestRate),
                 startDate: loanData.startDate,
-                notes: loanData.notes
+                notes: loanData.notes,
+                source: fundingSource
             });
             onClose();
             // Reset form for next time
@@ -126,6 +128,26 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                             <p className="text-[10px] text-primary-400 mt-1 absolute bottom-[-18px]">Fijo: 8% Mensual</p>
                         </div>
                         <InputField label="Fecha Inicio" name="startDate" type="date" value={loanData.startDate} onChange={handleInputChange as any} required />
+                    </div>
+
+                    <div className="mt-4">
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Fondo de Origen</label>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setFundingSource('Efectivo')}
+                                className={`flex-1 py-2 px-3 rounded-lg border text-sm font-bold transition-all ${fundingSource === 'Efectivo' ? 'bg-primary-600 border-primary-500 text-white shadow-lg' : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700'}`}
+                            >
+                                Efectivo
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFundingSource('Banco')}
+                                className={`flex-1 py-2 px-3 rounded-lg border text-sm font-bold transition-all ${fundingSource === 'Banco' ? 'bg-primary-600 border-primary-500 text-white shadow-lg' : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700'}`}
+                            >
+                                Banco
+                            </button>
+                        </div>
                     </div>
 
                     <div className="mt-4">

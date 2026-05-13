@@ -1,19 +1,22 @@
 
-import React, { useState, useMemo } from 'react';
-import { UserPlus, ArrowLeft, Loader2, Banknote, AlertCircle, Infinity as InfinityIcon, User, ChevronRight, Check } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { UserPlus, ArrowLeft, Loader2, Banknote, AlertCircle, Infinity as InfinityIcon, User, ChevronRight, Check, Scan, Camera } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField } from './FormFields';
-import { formatCurrency, isValidDNI, isValidPhone, formatDNI, formatPhone } from '../services/utils';
+import { formatCurrency, isValidDNI, isValidPhone, formatDNI, formatPhone, compressImage } from '../services/utils';
 import { DEFAULT_ANNUAL_INTEREST_RATE, calculateLoanParameters } from '../config';
+import { GoogleGenAI, Type } from "@google/genai";
 
 const NewClientForm: React.FC = () => {
     const { handleAddClientAndLoan } = useDataContext();
     const { setCurrentView } = useAppContext();
     const [step, setStep] = useState<1 | 2>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
     const [isIndefinite, setIsIndefinite] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [clientData, setClientData] = useState({
         name: '',
@@ -23,10 +26,72 @@ const NewClientForm: React.FC = () => {
         email: '',
     });
 
+    const handleScanClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsScanning(true);
+        setFormError(null);
+
+        try {
+            const compressedBase64 = await compressImage(file, 1600, 0.9); // Increased resolution and quality for better OCR
+            const base64Data = compressedBase64.split(',')[1];
+
+            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+            const response = await ai.models.generateContent({
+                model: "gemini-3-flash-preview",
+                contents: [
+                    {
+                        inlineData: {
+                            mimeType: "image/jpeg",
+                            data: base64Data
+                        }
+                    },
+                    {
+                        text: "Extract information from this identity document. Return ONLY a JSON object with: name, idNumber, address. \n\nIMPORTANT FOR ADDRESS:\n- Look for 'Domicilio', 'Dirección' or similar fields.\n- If it's a Spanish DNI/NIE, the address is usually on the BACK. Remind the user if needed, but extract if visible.\n- Include street, number, city, and zip code in the address field if found.\n- If no address is found, return an empty string for that field.\n- Return the name in Title Case.\n- Return the idNumber in UPPERCASE without spaces or dashes."
+                    }
+                ],
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING },
+                            idNumber: { type: Type.STRING },
+                            address: { type: Type.STRING },
+                        },
+                        required: ["name", "idNumber", "address"]
+                    }
+                }
+            });
+
+            if (response.text) {
+                const data = JSON.parse(response.text);
+                setClientData(prev => ({
+                    ...prev,
+                    name: data.name || prev.name,
+                    idNumber: (data.idNumber || '').toUpperCase().replace(/[^A-Z0-9]/g, ''),
+                    address: data.address || prev.address,
+                }));
+            }
+        } catch (error) {
+            console.error("Scanning error:", error);
+            setFormError("No se pudo extraer la información del documento. Por favor, rellena los datos manualmente.");
+        } finally {
+            setIsScanning(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
     const [loanData, setLoanData] = useState({
         amount: '1000',
         term: '12',
     });
+    const [fundingSource, setFundingSource] = useState<'Banco' | 'Efectivo'>('Efectivo');
 
     const loanCalculations = useMemo(() => {
         const amount = parseFloat(loanData.amount);
@@ -92,7 +157,8 @@ const NewClientForm: React.FC = () => {
                 },
                 {
                     amount: parseFloat(loanData.amount),
-                    term: isIndefinite ? 0 : parseInt(loanData.term, 10)
+                    term: isIndefinite ? 0 : parseInt(loanData.term, 10),
+                    source: fundingSource
                 }
             );
             
@@ -143,16 +209,49 @@ const NewClientForm: React.FC = () => {
 
                 {step === 1 && (
                     <div className="animate-fade-in space-y-6">
-                        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-700">
-                             <User className="text-primary-400" size={20} />
-                             <h2 className="text-lg font-bold text-slate-200">Ficha del Cliente</h2>
+                        <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
+                             <div className="flex items-center gap-2">
+                                <User className="text-primary-400" size={20} />
+                                <h2 className="text-lg font-bold text-slate-200">Ficha del Cliente</h2>
+                             </div>
+                             
+                             <div>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileChange}
+                                    accept="image/*"
+                                    className="hidden"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleScanClick}
+                                    disabled={isScanning}
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-bold transition-all border border-slate-600 disabled:opacity-50"
+                                >
+                                    {isScanning ? (
+                                        <>
+                                            <Loader2 size={14} className="animate-spin text-primary-400" />
+                                            Escaneando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Scan size={14} className="text-primary-400" />
+                                            Escanear Documento (Opcional)
+                                        </>
+                                    )}
+                                </button>
+                                <p className="text-[10px] text-slate-500 mt-1 text-right">
+                                    Nota: En DNI/NIE, la dirección suele estar en el <b>reverso</b>.
+                                </p>
+                             </div>
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div className="md:col-span-2">
                                 <InputField label="Nombre Completo" name="name" type="text" value={clientData.name} onChange={handleClientChange} required />
                             </div>
-                            <InputField label="DNI / NIE" name="idNumber" type="text" value={clientData.idNumber} onChange={handleClientChange} required />
+                            <InputField label="DNI / NIE / Pasaporte" name="idNumber" type="text" value={clientData.idNumber} onChange={handleClientChange} required />
                             <InputField label="Teléfono" name="phone" type="tel" value={clientData.phone} onChange={handleClientChange} required />
                             <div className="md:col-span-2">
                                 <InputField label="Dirección Completa" name="address" type="text" value={clientData.address} onChange={handleClientChange} required />
@@ -205,6 +304,26 @@ const NewClientForm: React.FC = () => {
                                     {!isIndefinite && (
                                         <InputField label="Plazo (Meses)" name="term" type="number" value={loanData.term} onChange={handleLoanChange} required min="1" />
                                     )}
+                                </div>
+
+                                <div className="space-y-2 pt-2">
+                                    <label className="block text-sm font-medium text-slate-300">Fondo de Origen</label>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFundingSource('Efectivo')}
+                                            className={`flex-1 py-2 px-3 rounded-lg border text-sm font-bold transition-all ${fundingSource === 'Efectivo' ? 'bg-primary-600 border-primary-500 text-white shadow-lg' : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700'}`}
+                                        >
+                                            Efectivo
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFundingSource('Banco')}
+                                            className={`flex-1 py-2 px-3 rounded-lg border text-sm font-bold transition-all ${fundingSource === 'Banco' ? 'bg-primary-600 border-primary-500 text-white shadow-lg' : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700'}`}
+                                        >
+                                            Banco
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 

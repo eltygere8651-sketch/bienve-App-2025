@@ -200,10 +200,10 @@ const LoanRequestForm: React.FC = () => {
                     </div>
 
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Identificación Oficial</h2>
+                        <h2 className="text-lg font-semibold text-slate-200 mb-4 border-b border-slate-700 pb-2">Identificación Oficial (DNI / NIE / Pasaporte)</h2>
                         <div className="mb-4 flex items-start gap-3 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg text-blue-300 text-sm">
                             <Info className="flex-shrink-0 h-5 w-5 mt-0.5" />
-                            <p>Para procesar tu solicitud, necesitamos una imagen clara de tu <strong>DNI o NIE</strong>. Puedes tomar una foto directamente con tu móvil.</p>
+                            <p>Para procesar tu solicitud, necesitamos una imagen clara de tu <strong>DNI, NIE o Pasaporte</strong>. Puedes tomar una foto directamente con tu móvil.</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <FileUploadField label="Anverso del Documento (Frontal)" id="front-id-upload" onChange={(e) => handleFileChange(e, 'front')} previewUrl={frontIdPreview} fileName={frontId?.name} />

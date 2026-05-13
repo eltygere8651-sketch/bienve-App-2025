@@ -34,7 +34,14 @@ interface DataContextType {
     handleDeletePayment: (loanId: string, paymentId: string) => Promise<void>;
     handleBalanceCorrection: (loanId: string, newBalance: number, notes: string) => Promise<void>; 
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
-    handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => Promise<void>;
+    handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; source?: 'Banco' | 'Efectivo' }) => Promise<void>;
+    handleCleanDeleteClient: (clientId: string) => Promise<void>;
+    handleConfirmOverdue: (loanId: string, suggestion: { monthName: string, amount: number, accrualDate: string }) => Promise<void>;
+    suggestedOverdues: { loanId: string, monthName: string, amount: number, accrualDate: string }[];
+    handleManualAddOverdue: (loanId: string, monthName: string, year: number, amount: number) => Promise<void>;
+    handleDeleteOverdueMonth: (loanId: string, overdueId: string) => Promise<void>;
+    handleClearOverdueHistory: (loanId: string) => Promise<void>;
+    handleToggleOverdueStatus: (loanId: string, overdueId: string, newStatus: 'pendiente' | 'reclamado' | 'anulado') => Promise<void>;
     handleUpdateLoan: (loanId: string, updatedData: Partial<Loan>) => Promise<void>;
     handleUpdateClient: (clientId: string, updatedData: Partial<Client>) => Promise<void>;
     handleDeleteLoan: (loanId: string, clientName: string) => Promise<void>;

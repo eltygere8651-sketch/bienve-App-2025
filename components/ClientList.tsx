@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2, Clock, Trash2 } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
 import NewLoanModal from './NewLoanModal';
@@ -40,9 +40,10 @@ interface ClientCardProps {
     onViewDetails: (loan: Loan) => void;
     onQuickPay: (loan: Loan) => void;
     onArchive: (client: Client) => void;
+    onCleanDelete: (client: Client) => void;
 }
 
-const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, onViewDetails, onQuickPay, onArchive }) => {
+const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, onViewDetails, onQuickPay, onArchive, onCleanDelete }) => {
     const loans = client.loans || [];
     const activeLoan = loans.find(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
     const hasActiveLoan = !!activeLoan;
@@ -139,14 +140,23 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
                     </div>
                 </div>
                 
-                {/* PDF Button */}
-                <button 
-                    onClick={handleDownloadReport}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-slate-700 hover:border-slate-600 shadow-sm z-20 active:scale-90"
-                    title="Descargar Ficha PDF"
-                >
-                    <FileDown size={18} />
-                </button>
+                {/* PDF & Clean Buttons */}
+                <div className="flex gap-2 z-20">
+                    <button 
+                        onClick={(e) => handleActionClick(e, () => onCleanDelete(client))}
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-red-900/20 text-slate-500 hover:text-red-400 transition-all border border-slate-700 hover:border-red-500/20 shadow-sm active:scale-90"
+                        title="Borrado Clean (Pruebas)"
+                    >
+                        <Trash2 size={18} />
+                    </button>
+                    <button 
+                        onClick={handleDownloadReport}
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-slate-700 hover:border-slate-600 shadow-sm active:scale-90"
+                        title="Descargar Ficha PDF"
+                    >
+                        <FileDown size={18} />
+                    </button>
+                </div>
             </div>
 
             {/* Content Body */}
@@ -255,7 +265,7 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
 });
 
 const ClientList: React.FC = () => {
-    const { clientLoanData, refreshAllData, handleArchiveClient } = useDataContext(); 
+    const { clientLoanData, refreshAllData, handleArchiveClient, handleCleanDeleteClient } = useDataContext(); 
     const { setCurrentView, showToast, showConfirmModal } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -353,6 +363,17 @@ const ClientList: React.FC = () => {
                 await handleArchiveClient(client.id);
             },
             type: 'info'
+        });
+    };
+
+    const confirmCleanDelete = (client: Client) => {
+        showConfirmModal({
+            title: 'Borrado "Clean" (Pruebas)',
+            message: `ATENCIÓN: Este borrado eliminará a ${client.name} y TODOS sus préstamos. Además, REVERTIRÁ los movimientos contables (reintegrará los capitales prestados y restará los cobros realizados). Usa esto SOLAMENTE si el registro fue una prueba.`,
+            onConfirm: async () => {
+                await handleCleanDeleteClient(client.id);
+            },
+            type: 'danger'
         });
     };
 
@@ -462,6 +483,7 @@ const ClientList: React.FC = () => {
                                         onViewDetails={handleViewDetails}
                                         onQuickPay={handleQuickPay}
                                         onArchive={confirmArchive}
+                                        onCleanDelete={confirmCleanDelete}
                                     />
                                 ))}
                             </div>

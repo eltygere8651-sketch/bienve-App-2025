@@ -48,14 +48,34 @@ const InfoRow = ({ icon: Icon, label, value, onCopy }: { icon: any, label: strin
 };
 
 const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, loan, client, initialTab = 'details' }) => {
-    const { handleUpdateLoan, handleUpdateClient, handleDeleteLoan, handleRegisterPayment, handleBalanceCorrection } = useDataContext();
+    const { 
+        handleUpdateLoan, 
+        handleUpdateClient, 
+        handleDeleteLoan, 
+        handleRegisterPayment, 
+        handleBalanceCorrection, 
+        handleToggleOverdueStatus,
+        suggestedOverdues,
+        handleConfirmOverdue,
+        handleManualAddOverdue,
+        handleDeleteOverdueMonth,
+        handleClearOverdueHistory
+    } = useDataContext();
     const { showConfirmModal, showToast } = useAppContext();
     const [activeTab, setActiveTab] = useState(initialTab);
+    
+    const currentSuggestion = suggestedOverdues.find(s => s.loanId === loan.id);
     
     // States for Edit Forms
     const [loanFormData, setLoanFormData] = useState<Partial<Loan>>({});
     const [clientFormData, setClientFormData] = useState<Partial<Client>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Overdue Manual Entry State
+    const [showManualOverdue, setShowManualOverdue] = useState(false);
+    const [manualOverdueMonth, setManualOverdueMonth] = useState('');
+    const [manualOverdueYear, setManualOverdueYear] = useState(new Date().getFullYear());
+    const [manualOverdueAmount, setManualOverdueAmount] = useState('');
     
     // Balance Correction State
     const [showCorrectionInput, setShowCorrectionInput] = useState(false);
@@ -303,18 +323,19 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                                             <p className="text-xs text-slate-400 uppercase">Capital Inicial</p>
                                             <p className="text-lg font-bold text-white mt-1">{formatCurrency(loan.initialCapital)}</p>
+                                            {loan.source && (
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">Origen: {loan.source}</p>
+                                            )}
                                         </div>
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 relative overflow-hidden">
                                             <div className="absolute right-0 top-0 p-2 opacity-10"><Banknote size={40}/></div>
                                             <p className="text-xs text-primary-400 font-bold uppercase">Capital Pendiente</p>
                                             <p className="text-2xl font-bold text-white mt-1">{formatCurrency(loan.remainingCapital)}</p>
                                         </div>
-                                        <div className={`bg-slate-800 p-4 rounded-xl border ${pendingInterestDisplay > 0 ? 'border-red-500/50 bg-red-500/5' : 'border-slate-700'}`}>
-                                            <p className="text-xs text-red-400 font-bold uppercase">Interés Vencido</p>
-                                            <p className={`text-lg font-bold mt-1 ${pendingInterestDisplay > 0 ? 'text-red-400' : 'text-slate-500'}`}>{formatCurrency(pendingInterestDisplay)}</p>
-                                            {loan.pendingInterestDetails && (
-                                                <p className="text-[10px] text-slate-500 leading-tight mt-1">({loan.pendingInterestDetails})</p>
-                                            )}
+                                        <div className={`bg-slate-800 p-4 rounded-xl border border-slate-700`}>
+                                            <p className="text-xs text-slate-400 font-bold uppercase">Meses en Mora</p>
+                                            <p className={`text-lg font-bold mt-1 text-slate-200`}>{(loan.overdueHistory || []).filter(h => h.status === 'pendiente').length}</p>
+                                            <p className="text-[10px] text-slate-500 leading-tight mt-1">Registros pendientes de cobro informativo</p>
                                         </div>
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                                             <p className="text-xs text-slate-400 uppercase">Interés Generado</p>
@@ -336,12 +357,12 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                 <Check size={20}/> Liquidación Total
                                             </h4>
                                             <p className="text-sm text-slate-400 mt-1">
-                                                Monto total para cancelar la deuda (Capital + Interés vencido).
+                                                Monto total para cancelar la deuda de Capital.
                                             </p>
                                         </div>
                                         <div className="text-left sm:text-right w-full sm:w-auto bg-slate-900/50 sm:bg-transparent p-3 sm:p-0 rounded-lg border border-slate-700/50 sm:border-none">
                                             <p className="text-xs text-slate-500 uppercase font-bold mb-1 sm:hidden">Total a Pagar</p>
-                                            <p className="text-3xl font-bold text-white font-mono">{formatCurrency(loan.remainingCapital + pendingInterestDisplay)}</p>
+                                            <p className="text-3xl font-bold text-white font-mono">{formatCurrency(loan.remainingCapital)}</p>
                                             <button 
                                                 onClick={() => { setActiveTab('payment'); setQuickAmount('full'); }} 
                                                 className="mt-2 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-lg shadow-indigo-900/20"
@@ -349,6 +370,178 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                 Liquidar Préstamo
                                             </button>
                                         </div>
+                                    </div>
+
+                                    {/* Nueva Sección: Historial de Mora Informativo */}
+                                    <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                                            <div>
+                                                <h4 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                                                    <Clock size={16} className="text-amber-400" /> Historial de Mora Informativo
+                                                </h4>
+                                                <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">
+                                                    Registro de meses no abonados (No afecta saldo contable)
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-2 w-full sm:w-auto">
+                                                <button 
+                                                    onClick={() => setShowManualOverdue(!showManualOverdue)}
+                                                    className="flex-1 sm:flex-none px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold rounded uppercase border border-slate-600 transition-colors"
+                                                >
+                                                    {showManualOverdue ? 'Cerrar' : '+ Añadir Registro'}
+                                                </button>
+                                                {loan.overdueHistory && loan.overdueHistory.length > 0 && (
+                                                    <button 
+                                                        onClick={() => {
+                                                            showConfirmModal({
+                                                                title: 'Limpiar Historial de Mora',
+                                                                message: '¿Estás seguro de que deseas borrar TODO el historial informativo de mora? Esta acción no se puede deshacer.',
+                                                                onConfirm: () => handleClearOverdueHistory(loan.id),
+                                                                type: 'danger'
+                                                            });
+                                                        }}
+                                                        className="flex-1 sm:flex-none px-3 py-1.5 bg-red-900/20 hover:bg-red-900/40 text-red-400 text-[10px] font-bold rounded uppercase border border-red-500/30 transition-colors"
+                                                    >
+                                                        Limpiar Todo
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {showManualOverdue && (
+                                            <div className="mb-6 p-4 bg-slate-900/50 border border-slate-700 rounded-xl space-y-4 animate-fade-in-down">
+                                                <h5 className="text-xs font-bold text-slate-300 uppercase">Registrar interés vencido manualmente</h5>
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                    <InputField 
+                                                        label="Mes" 
+                                                        name="month" 
+                                                        placeholder="Ej: Mayo" 
+                                                        value={manualOverdueMonth} 
+                                                        onChange={e => setManualOverdueMonth(e.target.value)} 
+                                                    />
+                                                    <InputField 
+                                                        label="Año" 
+                                                        name="year" 
+                                                        type="number"
+                                                        value={String(manualOverdueYear)} 
+                                                        onChange={e => setManualOverdueYear(parseInt(e.target.value))} 
+                                                    />
+                                                    <InputField 
+                                                        label="Monto (€)" 
+                                                        name="amount" 
+                                                        type="number"
+                                                        value={manualOverdueAmount} 
+                                                        onChange={e => setManualOverdueAmount(e.target.value)} 
+                                                    />
+                                                </div>
+                                                <button 
+                                                    onClick={async () => {
+                                                        const amount = parseFloat(manualOverdueAmount);
+                                                        if (!manualOverdueMonth || isNaN(amount)) {
+                                                            showToast('Complete los campos correctamente', 'error');
+                                                            return;
+                                                        }
+                                                        await handleManualAddOverdue(loan.id, manualOverdueMonth, manualOverdueYear, amount);
+                                                        setManualOverdueMonth('');
+                                                        setManualOverdueAmount('');
+                                                        setShowManualOverdue(false);
+                                                    }}
+                                                    className="w-full bg-primary-600 hover:bg-primary-500 text-white text-[10px] font-bold py-2 rounded uppercase transition-colors"
+                                                >
+                                                    Confirmar registro manual
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {currentSuggestion && (
+                                            <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl animate-pulse-slow">
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <div className="p-2 bg-amber-500/20 rounded-full text-amber-500">
+                                                        <AlertTriangle size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h5 className="text-sm font-bold text-amber-200">Mora detectada (+35 días)</h5>
+                                                        <p className="text-xs text-amber-400/80">Periodo sugerido: {currentSuggestion.monthName}</p>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleConfirmOverdue(loan.id, currentSuggestion)}
+                                                    className="w-full bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
+                                                >
+                                                    <Check size={16} /> Confirmar Interés Vencido Informativo
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {(!loan.overdueHistory || loan.overdueHistory.length === 0) ? (
+                                            <div className="text-center py-6 bg-slate-900/30 rounded-lg border border-dashed border-slate-700">
+                                                <p className="text-xs text-slate-500 italic">No hay registros de mora para este préstamo.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {loan.overdueHistory.map((item) => (
+                                                    <div key={item.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors group">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`p-1.5 rounded-full ${
+                                                                item.status === 'pendiente' ? 'bg-red-500/10 text-red-500' :
+                                                                item.status === 'reclamado' ? 'bg-emerald-500/10 text-emerald-500' :
+                                                                'bg-slate-700 text-slate-400'
+                                                            }`}>
+                                                                {item.status === 'pendiente' ? <AlertTriangle size={14} /> : 
+                                                                 item.status === 'reclamado' ? <Check size={14} /> : 
+                                                                 <X size={14} />}
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className="text-sm font-bold text-slate-200">{item.monthName} {item.year}</p>
+                                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                                                                        item.status === 'pendiente' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                                                                        item.status === 'reclamado' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                                                        'bg-slate-700/50 text-slate-500 border border-slate-600'
+                                                                    }`}>
+                                                                        {item.status}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[10px] text-slate-500">Interés: {formatCurrency(item.amount)}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 group-hover:opacity-100 transition-opacity">
+                                                            <button 
+                                                                onClick={() => handleToggleOverdueStatus(loan.id, item.id, 'pendiente')}
+                                                                className={`p-1.5 rounded text-[10px] font-bold uppercase transition-colors ${item.status === 'pendiente' ? 'bg-red-500 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
+                                                            >
+                                                                Mora
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleToggleOverdueStatus(loan.id, item.id, 'reclamado')}
+                                                                className={`p-1.5 rounded text-[10px] font-bold uppercase transition-colors ${item.status === 'reclamado' ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
+                                                            >
+                                                                Pago
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleToggleOverdueStatus(loan.id, item.id, 'anulado')}
+                                                                className={`p-1.5 rounded text-[10px] font-bold uppercase transition-colors ${item.status === 'anulado' ? 'bg-slate-500 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
+                                                            >
+                                                                X
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => {
+                                                                    showConfirmModal({
+                                                                        title: 'Eliminar Registro de Mora',
+                                                                        message: `¿Eliminar el registro de ${item.monthName} ${item.year}?`,
+                                                                        onConfirm: () => handleDeleteOverdueMonth(loan.id, item.id),
+                                                                        type: 'warning'
+                                                                    });
+                                                                }}
+                                                                className="p-1.5 rounded bg-red-900/20 text-red-400 hover:bg-red-900/40 transition-colors"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -385,11 +578,11 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                         </h3>
                                         
                                         <div className="flex gap-2 mb-6">
-                                            <button onClick={() => setQuickAmount('interest')} className="flex-1 py-3 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 transition-colors border border-slate-600">
-                                                Cobrar Interés Vencido ({formatCurrency(pendingInterestDisplay)})
+                                            <button onClick={() => setPaymentAmount(calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest.toFixed(2))} className="flex-1 py-3 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 transition-colors border border-slate-600">
+                                                Cobrar Interés Mensual ({formatCurrency(calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest)})
                                             </button>
                                             <button onClick={() => setQuickAmount('full')} className="flex-1 py-3 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 transition-colors border border-slate-600">
-                                                Liquidar Todo
+                                                Liquidar Capital
                                             </button>
                                         </div>
 
@@ -429,19 +622,13 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                 <p className="text-lg font-bold text-white font-mono">
                                                     {formatCurrency(paymentPreview?.newBalance || loan.remainingCapital)}
                                                 </p>
-                                            </div>
+                                             </div>
 
-                                            {paymentPreview && (
+                                             {paymentPreview && (
                                                 <div className="text-xs space-y-1 px-2">
-                                                    {paymentPreview.pendingInterestPaid > 0 && (
-                                                        <div className="flex justify-between text-red-400 font-bold bg-red-400/5 px-2 py-1 rounded">
-                                                            <span>Saldar Interés Vencido:</span>
-                                                            <span className="font-mono">-{formatCurrency(paymentPreview.pendingInterestPaid)}</span>
-                                                        </div>
-                                                    )}
                                                     {paymentPreview.regularInterestPaid > 0 && (
                                                         <div className="flex justify-between text-amber-400 font-bold bg-amber-400/5 px-2 py-1 rounded">
-                                                            <span>Cobro Interés Mensual (8%):</span>
+                                                            <span>Cobro Interés Mensual ({loan.interestRate}%):</span>
                                                             <span className="font-mono">-{formatCurrency(paymentPreview.regularInterestPaid)}</span>
                                                         </div>
                                                     )}
@@ -565,31 +752,6 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                     </div>
                                                 </div>
 
-                                                {/* Pending Interest Adjustment */}
-                                                <div className="space-y-4">
-                                                    <div className="relative">
-                                                        <InputField 
-                                                            label="Interés Vencido (€)" 
-                                                            name="pendingInterest" 
-                                                            type="number" 
-                                                            value={String(loanFormData.pendingInterest || 0)} 
-                                                            onChange={(e) => setLoanFormData({...loanFormData, pendingInterest: Number(e.target.value)})} 
-                                                            step="0.01" 
-                                                        />
-                                                        <p className="text-[10px] text-slate-500 mt-1">Ajuste directo del interés acumulado no pagado.</p>
-                                                    </div>
-                                                    <div className="relative">
-                                                        <InputField 
-                                                            label="Detalle de Meses Vencidos" 
-                                                            name="pendingInterestDetails" 
-                                                            type="text" 
-                                                            value={String(loanFormData.pendingInterestDetails || '')} 
-                                                            onChange={(e) => setLoanFormData({...loanFormData, pendingInterestDetails: e.target.value})} 
-                                                            placeholder="Ej: marzo de 2026, abril de 2026"
-                                                        />
-                                                        <p className="text-[10px] text-slate-500 mt-1">Meses que corresponden a la deuda de interés.</p>
-                                                    </div>
-                                                </div>
 
                                                 {showCorrectionInput && (
                                                     <div className="sm:col-span-2 bg-slate-900/50 p-4 rounded-lg border border-slate-600 animate-fade-in-down">

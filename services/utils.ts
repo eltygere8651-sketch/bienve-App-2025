@@ -78,10 +78,15 @@ export const exportLoanToCSV = (loan: Loan) => {
 
 // --- NUEVAS VALIDACIONES Y FORMATEADORES ---
 
-export const isValidDNI = (dni: string): boolean => {
-    if (!dni) return false;
+export const isValidDNI = (id: string): boolean => {
+    if (!id) return false;
+    const cleanId = id.trim().toUpperCase();
+    // DNI/NIE standard
     const dniRegex = /^[XYZ]?\d{5,8}[A-Z]$/i;
-    return dniRegex.test(dni.trim());
+    // Passport or general ID (alphanumeric, at least 5 chars)
+    const generalIdRegex = /^[A-Z0-9]{5,20}$/i;
+    
+    return dniRegex.test(cleanId) || generalIdRegex.test(cleanId);
 };
 
 export const formatDNI = (value: string): string => {

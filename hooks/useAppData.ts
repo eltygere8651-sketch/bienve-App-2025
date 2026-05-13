@@ -141,7 +141,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         }
     }, [showToast]);
 
-    const handleApproveRequest = useCallback(async (request: LoanRequest, loanAmount: number, loanTerm: number) => {
+    const handleApproveRequest = useCallback(async (request: LoanRequest, loanAmount: number, loanTerm: number, source: 'Banco' | 'Efectivo' = 'Banco') => {
         try {
             // 1. Create Client
             const newClient = await addDocument(TABLE_NAMES.CLIENTS, {
@@ -173,14 +173,15 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
                 totalInterestPaid: 0,
                 totalCapitalPaid: 0,
                 paymentHistory: [],
-                signature: request.signature
+                signature: request.signature,
+                fundingSource: source // Store the source
             });
 
             // 3. Update Request Status (or delete?)
             await updateDocument(TABLE_NAMES.REQUESTS, request.id, { status: RequestStatus.APPROVED });
             
             // 4. Update Treasury (Deduct loan amount)
-            await _updateTreasuryBalance(loanAmount, 'outflow', 'Banco');
+            await _updateTreasuryBalance(loanAmount, 'outflow', source);
 
             showToast(`Préstamo aprobado para ${request.fullName}.`, 'success');
         } catch (err: any) {
@@ -213,33 +214,14 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         const loan = loans.find(l => l.id === loanId);
         if (!loan) throw new Error("Loan not found");
 
-        const monthlyInterest = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest;
-        const pendingInt = loan.pendingInterest || 0;
+        const { interest: monthlyInterest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
         
-        // Priority 1: Pay off PENDING (accumulated) interest from previous missed months
-        const payOffPending = Math.min(amount, pendingInt);
-        const amountAfterPending = amount - payOffPending;
-        const newPendingInterest = pendingInt - payOffPending;
-
-        // Priority 2: Pay current month's regular interest
-        const payOffRegular = Math.min(amountAfterPending, monthlyInterest);
-        const amountAfterRegular = amountAfterPending - payOffRegular;
+        // Priority 1: Pay current month's regular interest
+        const payOffRegular = Math.min(amount, monthlyInterest);
+        const amountAfterRegular = amount - payOffRegular;
         
-        const totalInterestPaid = payOffPending + payOffRegular;
-
-        let newPendingInterestDetails = loan.pendingInterestDetails || '';
-        if (newPendingInterest <= 0) {
-            newPendingInterestDetails = '';
-        } else if (payOffPending > 0) {
-            // If they paid exactly one or more months, try to remove them from details
-            const monthsCovered = Math.floor(payOffPending / monthlyInterest);
-            if (monthsCovered > 0) {
-                const detailsArray = newPendingInterestDetails.split(', ');
-                newPendingInterestDetails = detailsArray.slice(monthsCovered).join(', ');
-            }
-        }
-
-        // Priority 3: The rest goes to Capital
+        // Priority 2: Everything else goes to Capital (Accounting logic)
+        // Note: Overdue interest is ignored in the accounting calculation per user request
         const capitalPart = Math.max(0, amountAfterRegular);
         const remainingCapitalAfter = Math.max(0, loan.remainingCapital - capitalPart);
 
@@ -247,11 +229,10 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             id: Date.now().toString(),
             date,
             amount,
-            interestPaid: totalInterestPaid,
+            interestPaid: payOffRegular,
             capitalPaid: capitalPart,
             remainingCapitalAfter,
             notes: notes.trim(),
-            payOffPending,
             payOffRegular,
             paymentMethod
         };
@@ -262,16 +243,12 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         
         let newStatus = loan.status;
         if (remainingCapitalAfter <= 0) newStatus = LoanStatus.PAID;
-        // Logic for OVERDUE -> PENDING if they pay something and are caught up? 
-        // For now, if they pay anything and remaining debt exists, we go to PENDING
         if (remainingCapitalAfter > 0) {
             newStatus = LoanStatus.PENDING;
         }
 
         await updateDocument(TABLE_NAMES.LOANS, loanId, {
             remainingCapital: remainingCapitalAfter,
-            pendingInterest: newPendingInterest,
-            pendingInterestDetails: newPendingInterestDetails,
             paymentHistory: updatedHistory,
             totalCapitalPaid,
             totalInterestPaid: totalInterestPaidForLoan,
@@ -284,59 +261,180 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         await _updateTreasuryBalance(amount, 'inflow', paymentMethod);
     }, [loans, _updateTreasuryBalance]);
 
-    // NEW: Background check for overdue loans (Runs when app loads or loans update)
+    // Background check for overdue loans (Runs when app loads or loans update)
+    // Background check for potential overdue loans (Informative only)
+    const [suggestedOverdues, setSuggestedOverdues] = useState<{ loanId: string, monthName: string, amount: number, accrualDate: string }[]>([]);
+
     useEffect(() => {
-        const detectOverdue = async () => {
+        const checkPotentialOverdue = () => {
             if (!loans.length || isLoading) return;
-            
+
             const today = new Date();
-            const loansToUpdate: {id: string, data: any}[] = [];
+            const suggestions: { loanId: string, monthName: string, amount: number, accrualDate: string }[] = [];
 
             loans.forEach(loan => {
                 if (loan.status === LoanStatus.PAID || loan.archived) return;
 
                 const baseDate = loan.lastPaymentDate ? new Date(loan.lastPaymentDate) : new Date(loan.startDate);
                 const diffTime = today.getTime() - baseDate.getTime();
-                if (diffTime < 0) return; // Si la fecha base está en el futuro, no está vencido
+                if (diffTime < 0) return; 
                 const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-                // Rule: For every full 30-day block without payment, accrue interest
-                const monthsMissed = Math.floor(diffDays / 30);
-                
-                // If it's been more than 30 days since last payment/accrual
-                if (monthsMissed >= 1) {
-                    const accrualDate = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000);
-                    const monthName = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(accrualDate);
+                // Requirement: 35 days threshold
+                if (diffDays >= 35) {
+                    const accrualDate = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000); // We still count by 30 day periods for the amount
+                    const monthDate = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(accrualDate);
                     
-                    const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
+                    const overdueHistory = loan.overdueHistory || [];
+                    const alreadyExists = overdueHistory.some(m => m.monthName.toLowerCase() === monthDate.split(' ')[0].toLowerCase());
                     
-                    const currentDetails = loan.pendingInterestDetails ? loan.pendingInterestDetails.split(', ') : [];
-                    if (!currentDetails.includes(monthName)) {
-                        currentDetails.push(monthName);
+                    if (!alreadyExists) {
+                        const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
+                        suggestions.push({
+                            loanId: loan.id,
+                            monthName: monthDate,
+                            amount: interest,
+                            accrualDate: accrualDate.toISOString()
+                        });
                     }
+                }
+            });
 
-                    // We accrue for ONE month at a time to keep it incremental and safe with the baseDate update
-                    loansToUpdate.push({
+            setSuggestedOverdues(suggestions);
+        };
+        
+        checkPotentialOverdue();
+    }, [loans, isLoading]);
+
+    const handleConfirmOverdue = useCallback(async (loanId: string, suggestion: { monthName: string, amount: number, accrualDate: string }) => {
+        const loan = loans.find(l => l.id === loanId);
+        if (!loan) return;
+
+        const parts = suggestion.monthName.split(' ');
+        const monthName = parts[0] || '';
+        const year = parseInt(parts[parts.length - 1] || new Date().getFullYear().toString());
+
+        const overdueHistory = [...(loan.overdueHistory || [])];
+        overdueHistory.push({
+            id: `OVERDUE-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            monthName: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+            year: year,
+            amount: suggestion.amount,
+            status: 'pendiente',
+            createdAt: new Date().toISOString()
+        });
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+            status: LoanStatus.OVERDUE,
+            overdueHistory,
+            pendingInterest: (loan.pendingInterest || 0) + suggestion.amount,
+            // We advance the lastPaymentDate (virtually) so it doesn't suggest the same month again immediately
+            lastPaymentDate: suggestion.accrualDate
+        });
+
+        showToast(`Mora de ${suggestion.monthName} registrada correctamente.`, 'success');
+    }, [loans, showToast]);
+
+    const handleManualAddOverdue = useCallback(async (loanId: string, monthName: string, year: number, amount: number) => {
+        const loan = loans.find(l => l.id === loanId);
+        if (!loan) return;
+
+        const overdueHistory = [...(loan.overdueHistory || [])];
+        overdueHistory.push({
+            id: `OVERDUE-MAN-${Date.now()}`,
+            monthName: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+            year: year,
+            amount: amount,
+            status: 'pendiente',
+            createdAt: new Date().toISOString()
+        });
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+            status: LoanStatus.OVERDUE,
+            overdueHistory,
+            pendingInterest: (loan.pendingInterest || 0) + amount
+        });
+
+        showToast(`Interés vencido de ${monthName} ${year} registrado manualmente.`, 'success');
+    }, [loans, showToast]);
+
+    const handleDeleteOverdueMonth = useCallback(async (loanId: string, overdueId: string) => {
+        const loan = loans.find(l => l.id === loanId);
+        if (!loan || !loan.overdueHistory) return;
+
+        const itemToDelete = loan.overdueHistory.find(m => m.id === overdueId);
+        if (!itemToDelete) return;
+
+        const updatedHistory = loan.overdueHistory.filter(m => m.id !== overdueId);
+        
+        // Recalculate pendingInterest
+        const newTotalPending = updatedHistory
+            .filter(m => m.status === 'pendiente')
+            .reduce((acc, m) => acc + m.amount, 0);
+
+        const newStatus = (newTotalPending > 0) ? LoanStatus.OVERDUE : LoanStatus.PENDING;
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+            overdueHistory: updatedHistory,
+            pendingInterest: newTotalPending,
+            status: loan.remainingCapital > 0 ? newStatus : LoanStatus.PAID
+        });
+
+        showToast(`Registro de mora eliminado.`, 'info');
+    }, [loans, showToast]);
+
+    const handleClearOverdueHistory = useCallback(async (loanId: string) => {
+        const loan = loans.find(l => l.id === loanId);
+        if (!loan) return;
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+            overdueHistory: [],
+            pendingInterest: 0,
+            pendingInterestDetails: '',
+            status: loan.remainingCapital > 0 ? LoanStatus.PENDING : LoanStatus.PAID
+        });
+
+        showToast(`Historial de mora de ${loan.clientName} limpiado por completo.`, 'success');
+    }, [loans, showToast]);
+
+    // One-time cleanup for specific clients as requested by user
+    useEffect(() => {
+        const cleanupSpecificClients = async () => {
+            if (!loans.length || isLoading) return;
+            
+            const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            const targetNames = ['monica', 'nurys', 'ines'].map(normalize);
+            const loansToFix: {id: string, data: any}[] = [];
+            
+            loans.forEach(loan => {
+                const clientNameNormalized = normalize(loan.clientName || '');
+                const isTarget = targetNames.some(name => clientNameNormalized.includes(name));
+                
+                if (isTarget && (loan.status === LoanStatus.OVERDUE || (loan.pendingInterest || 0) > 0 || (loan.overdueHistory && loan.overdueHistory.length > 0))) {
+                    loansToFix.push({
                         id: loan.id,
                         data: {
-                            status: LoanStatus.OVERDUE,
-                            pendingInterest: (loan.pendingInterest || 0) + interest,
-                            pendingInterestDetails: currentDetails.join(', '),
-                            // Moving the baseDate forward by 30 days to mark THIS month as "accrued"
-                            // This ensures next time the effect runs, it won't accrue again until ANOTHER 30 days pass
-                            lastPaymentDate: accrualDate.toISOString()
+                            status: LoanStatus.PENDING,
+                            pendingInterest: 0,
+                            pendingInterestDetails: '',
+                            overdueHistory: [],
+                            // Also update lastPaymentDate to now so they don't get suggested for mora immediately
+                            lastPaymentDate: new Date().toISOString()
                         }
                     });
                 }
             });
 
-            for (const batch of loansToUpdate) {
-                await updateDocument(TABLE_NAMES.LOANS, batch.id, batch.data);
+            if (loansToFix.length > 0) {
+                console.log(`Fixing ${loansToFix.length} loans for Monica/Nurys/Ines`);
+                for (const batch of loansToFix) {
+                    await updateDocument(TABLE_NAMES.LOANS, batch.id, batch.data);
+                }
+                showToast(`Se han corregido los préstamos de Mónica, Nurys e Inés.`, 'success');
             }
         };
-
-        detectOverdue();
-    }, [loans.length, isLoading]);
+        cleanupSpecificClients();
+    }, [loans, isLoading, showToast]);
 
     const handleUpdatePayment = useCallback(async (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => {
         const loan = loans.find(l => l.id === loanId);
@@ -449,7 +547,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         showToast('Saldo corregido exitosamente.', 'success');
     }, [loans, showToast]);
 
-    const handleAddClientAndLoan = useCallback(async (clientData: NewClientData, loanData: NewLoanData) => {
+    const handleAddClientAndLoan = useCallback(async (clientData: NewClientData, loanData: NewLoanData & { source?: 'Banco' | 'Efectivo' }) => {
         // 1. Client
         const newClient = await addDocument(TABLE_NAMES.CLIENTS, {
             ...clientData,
@@ -458,6 +556,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
 
         // 2. Loan
         const { monthlyPayment, totalRepayment, monthlyRatePercentage } = calculateLoanParameters(loanData.amount, loanData.term);
+        const source = loanData.source || 'Efectivo';
 
         await addDocument(TABLE_NAMES.LOANS, {
             clientId: newClient.id,
@@ -474,17 +573,18 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             paymentsMade: 0,
             totalInterestPaid: 0,
             totalCapitalPaid: 0,
-            paymentHistory: []
+            paymentHistory: [],
+            fundingSource: source
         });
 
-        // 3. Treasury Deduction (Default to Cash for manual creation)
-        await _updateTreasuryBalance(loanData.amount, 'outflow', 'Efectivo');
+        // 3. Treasury Deduction
+        await _updateTreasuryBalance(loanData.amount, 'outflow', source);
 
         showToast('Cliente y préstamo registrados.', 'success');
     }, [showToast, _updateTreasuryBalance]);
 
-    const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string }) => {
-        const { amount, term, interestRate, startDate, notes } = loanData;
+    const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; source?: 'Banco' | 'Efectivo' }) => {
+        const { amount, term, interestRate, startDate, notes, source = 'Efectivo' } = loanData;
         const { monthlyPayment, totalRepayment } = calculateLoanParameters(amount, term, interestRate);
 
         await addDocument(TABLE_NAMES.LOANS, {
@@ -503,14 +603,70 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             paymentsMade: 0,
             totalInterestPaid: 0,
             totalCapitalPaid: 0,
-            paymentHistory: []
+            paymentHistory: [],
+            fundingSource: source
         });
 
         // Treasury Deduction
-        await _updateTreasuryBalance(amount, 'outflow', 'Efectivo');
+        await _updateTreasuryBalance(amount, 'outflow', source);
 
         showToast('Nuevo préstamo añadido.', 'success');
     }, [showToast, _updateTreasuryBalance]);
+
+    const handleCleanDeleteClient = useCallback(async (clientId: string) => {
+        try {
+            // 1. Get all loans for this client
+            const clientLoans = loans.filter(l => l.clientId === clientId);
+
+            for (const loan of clientLoans) {
+                // 2. Revert Initial Capital Outflow
+                // If we lent 1000, we must put it back into the treasury
+                const fundingSource = (loan as any).fundingSource || 'Efectivo';
+                await _updateTreasuryBalance(loan.initialCapital, 'inflow', fundingSource);
+
+                // 3. Revert all payments (Inflow Reversal)
+                // If the client paid us money, we must take it out of the treasury to leave it as it was
+                if (loan.paymentHistory && loan.paymentHistory.length > 0) {
+                    for (const payment of loan.paymentHistory) {
+                        const method = payment.paymentMethod || 'Efectivo';
+                        await _updateTreasuryBalance(payment.amount, 'outflow', method);
+                    }
+                }
+
+                // 4. Delete individual loan
+                await deleteDocument(TABLE_NAMES.LOANS, loan.id);
+            }
+
+            // 5. Delete Client
+            await deleteDocument(TABLE_NAMES.CLIENTS, clientId);
+
+            showToast('Eliminación "Clean" completada. Fondos restaurados.', 'success');
+        } catch (err: any) {
+            console.error("Clean delete error:", err);
+            showToast('Error al realizar el borrado clean.', 'error');
+        }
+    }, [loans, _updateTreasuryBalance, showToast]);
+
+    const handleToggleOverdueStatus = useCallback(async (loanId: string, overdueId: string, newStatus: 'pendiente' | 'reclamado' | 'anulado') => {
+        const loan = loans.find(l => l.id === loanId);
+        if (!loan || !loan.overdueHistory) return;
+
+        const updatedHistory = loan.overdueHistory.map(m => 
+            m.id === overdueId ? { ...m, status: newStatus } : m
+        );
+
+        // Optional: Update pendingInterest based on remaining 'pendiente' items
+        const newTotalPending = updatedHistory
+            .filter(m => m.status === 'pendiente')
+            .reduce((acc, m) => acc + m.amount, 0);
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+            overdueHistory: updatedHistory,
+            pendingInterest: newTotalPending
+        });
+        
+        showToast(`Estado de interés actualizado (${newStatus})`, 'success');
+    }, [loans, showToast]);
 
     const handleUpdateLoan = useCallback(async (loanId: string, updatedData: Partial<Loan>) => {
         await updateDocument(TABLE_NAMES.LOANS, loanId, updatedData);
@@ -891,6 +1047,13 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         handleBalanceCorrection,
         handleAddClientAndLoan,
         handleAddLoan,
+        handleCleanDeleteClient,
+        handleToggleOverdueStatus,
+        handleConfirmOverdue,
+        handleManualAddOverdue,
+        handleDeleteOverdueMonth,
+        handleClearOverdueHistory,
+        suggestedOverdues,
         handleUpdateLoan,
         handleUpdateClient,
         handleDeleteLoan,

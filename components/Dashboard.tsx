@@ -2,7 +2,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, FilterStatus, DashboardStats } from '../types';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Banknote, Clock, FileWarning, CloudCheck, CloudOff, Wallet } from 'lucide-react';
+import { Banknote, Clock, FileWarning, CloudCheck, CloudOff, Wallet, AlertTriangle } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCurrency } from '../services/utils';
@@ -10,7 +11,13 @@ import LoanDetailsModal from './LoanDetailsModal';
 import { StatCard, StatusBadge } from './DashboardComponents';
 
 const Dashboard: React.FC = () => {
-    const { loans, clients } = useDataContext();
+    const { 
+        loans, 
+        clients, 
+        clientLoanData, 
+        suggestedOverdues, 
+        handleConfirmOverdue 
+    } = useDataContext();
     const { showToast, isOnline } = useAppContext();
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('Todos');
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -37,8 +44,11 @@ const Dashboard: React.FC = () => {
 
     const detailedStats = useMemo((): DashboardStats => {
         const totalLoaned = loans.reduce((acc, loan) => acc + (loan.initialCapital || loan.amount), 0);
-        // Total Outstanding now includes both remaining capital AND accumulated interest
-        const totalOutstanding = loans.reduce((acc, loan) => acc + loan.remainingCapital + (loan.pendingInterest || 0), 0);
+        // Capital Pendiente is ONLY the remaining principal
+        const totalCapitalPending = loans.reduce((acc, loan) => acc + loan.remainingCapital, 0);
+        // Informative overdue interest is tracked separately
+        const totalOverdueInterest = loans.reduce((acc, loan) => acc + (loan.pendingInterest || 0), 0);
+        
         const activeLoans = loans.filter(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE).length;
         
         const counts = loans.reduce((acc, loan) => {
@@ -48,7 +58,8 @@ const Dashboard: React.FC = () => {
 
         return {
             totalLoaned,
-            totalOutstanding,
+            totalOutstanding: totalCapitalPending, // For compatibility, we map totalOutstanding to Capital Pending
+            totalOverdueInterest, // We'll add this to the UI
             activeLoans,
             counts: {
                 [LoanStatus.PAID]: counts[LoanStatus.PAID] || 0,
@@ -128,6 +139,50 @@ const Dashboard: React.FC = () => {
                     </div>
                 )}
 
+                {/* Overdue Alerts Section */}
+                {suggestedOverdues.length > 0 && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-8"
+                    >
+                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                                <Clock size={80} className="text-amber-500" />
+                            </div>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <AlertTriangle className="text-amber-500" size={20} />
+                                    <h3 className="text-lg font-bold text-amber-200">Alertas de Mora (+35 días)</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {suggestedOverdues.slice(0, 6).map((suggestion, idx) => {
+                                        const loan = loans.find(l => l.id === suggestion.loanId);
+                                        const client = clients.find(c => c.id === loan?.clientId);
+                                        return (
+                                            <div key={`${suggestion.loanId}-${idx}`} className="bg-slate-900/60 rounded-xl p-4 border border-amber-500/20 backdrop-blur-sm">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <p className="text-[10px] font-bold text-amber-500 uppercase">{suggestion.monthName}</p>
+                                                        <p className="text-sm font-bold text-white truncate max-w-[150px]">{client?.name || 'Cliente'}</p>
+                                                    </div>
+                                                    <p className="text-sm font-mono text-white font-bold">{formatCurrency(suggestion.amount)}</p>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleConfirmOverdue(suggestion.loanId, suggestion)}
+                                                    className="w-full mt-4 bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white text-[10px] font-bold py-2 rounded-lg transition-all border border-amber-500/30"
+                                                >
+                                                    Ingresar interés vencido
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <h1 className="text-3xl font-heading font-bold text-white">Panel Contable</h1>
                     {isOnline ? (
@@ -143,9 +198,10 @@ const Dashboard: React.FC = () => {
                     )}
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatCard title="Total Prestado (Capital)" value={formatCurrency(detailedStats.totalLoaned)} icon={<Banknote />} />
                     <StatCard title="Capital Pendiente" value={formatCurrency(detailedStats.totalOutstanding)} icon={<Clock />} />
+                    <StatCard title="Interés Mora (Informativo)" value={formatCurrency(detailedStats.totalOverdueInterest || 0)} icon={<AlertTriangle />} />
                     <StatCard title="Préstamos Activos" value={detailedStats.activeLoans.toString()} icon={<FileWarning />} />
                 </div>
 
