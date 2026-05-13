@@ -8,6 +8,7 @@ import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { formatCurrency } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
+import OverdueBreakdownModal from './OverdueBreakdownModal';
 import { StatCard, StatusBadge } from './DashboardComponents';
 
 const Dashboard: React.FC = () => {
@@ -22,6 +23,7 @@ const Dashboard: React.FC = () => {
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('Todos');
     const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
     const [initialTab, setInitialTab] = useState<'details' | 'payment'>('details');
+    const [showOverdueBreakdown, setShowOverdueBreakdown] = useState(false);
     const [showPermissionBanner, setShowPermissionBanner] = useState(false);
 
     useEffect(() => {
@@ -126,6 +128,11 @@ const Dashboard: React.FC = () => {
                 client={selectedClient}
                 initialTab={initialTab}
             />
+            <OverdueBreakdownModal 
+                isOpen={showOverdueBreakdown}
+                onClose={() => setShowOverdueBreakdown(false)}
+                loans={loans}
+            />
             <div className="space-y-8 animate-fade-in">
                  {showPermissionBanner && (
                     <div className="bg-primary-900/30 border border-primary-500/30 text-primary-100 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-4 animate-fade-in-down backdrop-blur-sm">
@@ -201,7 +208,12 @@ const Dashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <StatCard title="Total Prestado (Capital)" value={formatCurrency(detailedStats.totalLoaned)} icon={<Banknote />} />
                     <StatCard title="Capital Pendiente" value={formatCurrency(detailedStats.totalOutstanding)} icon={<Clock />} />
-                    <StatCard title="Interés Mora (Informativo)" value={formatCurrency(detailedStats.totalOverdueInterest || 0)} icon={<AlertTriangle />} />
+                    <StatCard 
+                        title="Interés Mora (Informativo)" 
+                        value={formatCurrency(detailedStats.totalOverdueInterest || 0)} 
+                        icon={<AlertTriangle />} 
+                        onClick={() => setShowOverdueBreakdown(true)}
+                    />
                     <StatCard title="Préstamos Activos" value={detailedStats.activeLoans.toString()} icon={<FileWarning />} />
                 </div>
 

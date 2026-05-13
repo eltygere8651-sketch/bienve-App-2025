@@ -3,8 +3,18 @@ import React from 'react';
 import { ThumbsUp, Clock, AlertTriangle } from 'lucide-react';
 import { LoanStatus } from '../types';
 
-export const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; change?: string; changeType?: 'increase' | 'decrease' }> = ({ title, value, icon, change, changeType }) => (
-    <div className="glass-card p-6 rounded-2xl relative overflow-hidden group transition-all hover:-translate-y-1 bg-slate-800/60 border border-white/5">
+export const StatCard: React.FC<{ 
+    title: string; 
+    value: string; 
+    icon: React.ReactNode; 
+    change?: string; 
+    changeType?: 'increase' | 'decrease';
+    onClick?: () => void;
+}> = ({ title, value, icon, change, changeType, onClick }) => (
+    <div 
+        onClick={onClick}
+        className={`glass-card p-6 rounded-2xl relative overflow-hidden group transition-all bg-slate-800/60 border border-white/5 ${onClick ? 'cursor-pointer hover:-translate-y-1 hover:bg-slate-700/60' : ''}`}
+    >
         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity scale-150 transform translate-x-2 -translate-y-2">
             {icon}
         </div>

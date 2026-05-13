@@ -59,10 +59,11 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         handleConfirmOverdue,
         handleManualAddOverdue,
         handleDeleteOverdueMonth,
-        handleClearOverdueHistory
+        handleClearOverdueHistory,
+        handleCleanDeleteClient
     } = useDataContext();
     const { showConfirmModal, showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState(initialTab);
+    const [activeTab, setActiveTab] = useState<'details' | 'payment' | 'history' | 'edit' | 'security'>(initialTab as any);
     
     const currentSuggestion = suggestedOverdues.find(s => s.loanId === loan.id);
     
@@ -70,6 +71,8 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     const [loanFormData, setLoanFormData] = useState<Partial<Loan>>({});
     const [clientFormData, setClientFormData] = useState<Partial<Client>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showCleanDeleteConfirm, setShowCleanDeleteConfirm] = useState(false);
+    const [cleanDeletePassword, setCleanDeletePassword] = useState('');
 
     // Overdue Manual Entry State
     const [showManualOverdue, setShowManualOverdue] = useState(false);
@@ -235,6 +238,24 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         });
     };
 
+    const onCleanDelete = async () => {
+        if (cleanDeletePassword !== 'bn8237') {
+            showToast('Contraseña incorrecta', 'error');
+            return;
+        }
+
+        showConfirmModal({
+            title: 'Borrado "Clean" (Pruebas)',
+            message: `ATENCIÓN: Este borrado eliminará a ${client.name} y TODOS sus préstamos. Además, REVERTIRÁ los movimientos contables (reintegrará los capitales prestados y restará los cobros realizados). Usa esto SOLAMENTE si el registro fue una prueba.`,
+            onConfirm: async () => {
+                await handleCleanDeleteClient(client.id);
+                onClose();
+                showToast('Cliente y préstamos eliminados (Movimientos revertidos)', 'success');
+            },
+            type: 'danger'
+        });
+    };
+
     const setQuickAmount = (type: 'interest' | 'full') => {
         if (type === 'interest') setPaymentAmount(pendingInterestDisplay.toFixed(2));
         if (type === 'full') setPaymentAmount((loan.remainingCapital + pendingInterestDisplay).toFixed(2));
@@ -297,6 +318,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                             <button onClick={() => setActiveTab('payment')} className={`flex-1 min-w-[90px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'payment' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Cobrar</button>
                             <button onClick={() => setActiveTab('history')} className={`flex-1 min-w-[90px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'history' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Historial</button>
                             <button onClick={() => setActiveTab('edit')} className={`flex-1 min-w-[90px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'edit' ? 'border-primary-500 text-primary-400 bg-primary-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Editar</button>
+                            <button onClick={() => setActiveTab('security')} className={`flex-1 min-w-[90px] py-3 border-b-2 font-medium transition-colors ${activeTab === 'security' ? 'border-primary-500 text-red-400 bg-red-500/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}>Seguridad</button>
                         </div>
 
                         {/* Scrollable Container with Fixes */}
@@ -384,6 +406,20 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                 </p>
                                             </div>
                                             <div className="flex gap-2 w-full sm:w-auto">
+                                                <button 
+                                                    onClick={() => {
+                                                        const nextStatus = loan.status === LoanStatus.OVERDUE ? LoanStatus.PENDING : LoanStatus.OVERDUE;
+                                                        handleUpdateLoan(loan.id, { status: nextStatus });
+                                                        showToast(`Estado del préstamo cambiado a ${nextStatus}`, 'info');
+                                                    }}
+                                                    className={`flex-1 sm:flex-none px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all border ${
+                                                        loan.status === LoanStatus.OVERDUE 
+                                                        ? 'bg-emerald-900/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-900/40' 
+                                                        : 'bg-amber-900/20 text-amber-400 border-amber-500/30 hover:bg-amber-900/40'
+                                                    }`}
+                                                >
+                                                    {loan.status === LoanStatus.OVERDUE ? 'Quitar Vencido' : 'Marcar Vencido'}
+                                                </button>
                                                 <button 
                                                     onClick={() => setShowManualOverdue(!showManualOverdue)}
                                                     className="flex-1 sm:flex-none px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold rounded uppercase border border-slate-600 transition-colors"
@@ -849,6 +885,76 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                             </div>
                                         </div>
                                     </form>
+                                </div>
+                            )}
+
+                            {/* TAB: SEGURIDAD (Zona de Peligro) */}
+                            {activeTab === 'security' && (
+                                <div className="space-y-6 animate-fade-in p-2">
+                                    <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                                        <h3 className="text-xl font-bold text-white flex items-center gap-2 mb-4">
+                                            <Lock size={24} className="text-red-500" />
+                                            Seguridad y Borrado Crítico
+                                        </h3>
+                                        
+                                        <div className="p-6 bg-red-950/20 border border-red-500/20 rounded-2xl">
+                                            <div className="flex items-start gap-4 mb-6">
+                                                <div className="p-3 bg-red-500/20 text-red-500 rounded-xl">
+                                                    <Trash2 size={24} />
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-red-400 font-bold uppercase tracking-widest text-sm mb-1">Borrado Clean</h4>
+                                                    <p className="text-xs text-slate-400 leading-relaxed">
+                                                        Opción restringida con contraseña (<span className="font-mono text-white select-all">bn8237</span>). 
+                                                        Elimina al cliente y revierte todos sus préstamos y pagos de la contabilidad global.
+                                                        Úsalo solo para registros de prueba.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            
+                                            {showCleanDeleteConfirm ? (
+                                                <div className="space-y-4 animate-fade-in-down py-4 border-t border-red-500/10">
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2">Contraseña de Seguridad</label>
+                                                        <div className="relative">
+                                                            <input 
+                                                                type="password" 
+                                                                placeholder="Ingrese la contraseña"
+                                                                value={cleanDeletePassword}
+                                                                onChange={(e) => setCleanDeletePassword(e.target.value)}
+                                                                className="w-full bg-slate-900 border border-red-500/30 rounded-xl px-4 py-3 text-sm text-white focus:ring-2 focus:ring-red-500 outline-none"
+                                                                autoFocus
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-3">
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => { setShowCleanDeleteConfirm(false); setCleanDeletePassword(''); }}
+                                                            className="flex-1 py-3 text-xs font-bold text-slate-500 hover:text-slate-300 transition-colors uppercase"
+                                                        >
+                                                            Cancelar
+                                                        </button>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={onCleanDelete}
+                                                            className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition-colors uppercase shadow-lg shadow-red-900/40"
+                                                        >
+                                                            Confirmar Borrado
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setShowCleanDeleteConfirm(true)}
+                                                    className="w-full px-6 py-4 border border-red-500/30 text-red-500 hover:bg-red-500/10 rounded-2xl text-xs font-bold uppercase transition-all"
+                                                >
+                                                    Activar Borrado Clean
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>

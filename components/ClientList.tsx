@@ -140,15 +140,8 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
                     </div>
                 </div>
                 
-                {/* PDF & Clean Buttons */}
+                {/* PDF Button (Clean button removed to be reallocated) */}
                 <div className="flex gap-2 z-20">
-                    <button 
-                        onClick={(e) => handleActionClick(e, () => onCleanDelete(client))}
-                        className="p-2 rounded-xl bg-slate-800 hover:bg-red-900/20 text-slate-500 hover:text-red-400 transition-all border border-slate-700 hover:border-red-500/20 shadow-sm active:scale-90"
-                        title="Borrado Clean (Pruebas)"
-                    >
-                        <Trash2 size={18} />
-                    </button>
                     <button 
                         onClick={handleDownloadReport}
                         className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-slate-700 hover:border-slate-600 shadow-sm active:scale-90"

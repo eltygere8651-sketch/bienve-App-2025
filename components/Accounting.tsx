@@ -7,18 +7,30 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
     PieChart, Pie, Cell 
 } from 'recharts';
-import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square, LogOut, FileDown, Share2, ArrowDownCircle, ArrowUpCircle, Calculator, TrendingDown } from 'lucide-react';
+import { TrendingUp, PieChart as PieIcon, Wallet, BarChart3, Coins, ArrowRight, AlertTriangle, Info, Lock, ShieldCheck, Scale, Database, Plane, Palmtree, Edit2, Plus, Save, X, Umbrella, Car, Home, Laptop, Gift, Heart, Target, Trash2, ArrowLeft, Landmark, Calendar, Cloud, Loader2, CreditCard, Banknote, Edit3, ArrowDownRight, ArrowUpRight, RefreshCw, Sparkles, History, CheckSquare, Square, LogOut, FileDown, Share2, ArrowDownCircle, ArrowUpCircle, Calculator, TrendingDown, Clock } from 'lucide-react';
 import { subscribeToCollection, addDocument, updateDocument, deleteDocument, setDocument } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 import { ReinvestmentRecord, PersonalFund } from '../types';
 import { downloadPdf } from '../services/pdfService';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import OverdueBreakdownModal from './OverdueBreakdownModal';
 
 // --- COMPONENTS ---
 
-const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: any, color: string, isRisk?: boolean }> = ({ title, value, subtext, icon: Icon, color, isRisk }) => (
-    <div className={`bg-slate-800/60 border ${isRisk ? 'border-red-500/30 bg-red-900/10' : 'border-slate-700'} p-6 rounded-2xl flex flex-col justify-between backdrop-blur-md relative overflow-hidden group hover:-translate-y-1 transition-transform`}>
+const KPICard: React.FC<{ 
+    title: string, 
+    value: string, 
+    subtext?: string, 
+    icon: any, 
+    color: string, 
+    isRisk?: boolean,
+    onClick?: () => void 
+}> = ({ title, value, subtext, icon: Icon, color, isRisk, onClick }) => (
+    <div 
+        onClick={onClick}
+        className={`bg-slate-800/60 border ${isRisk ? 'border-red-500/30 bg-red-900/10' : 'border-slate-700'} p-6 rounded-2xl flex flex-col justify-between backdrop-blur-md relative overflow-hidden group hover:-translate-y-1 transition-all ${onClick ? 'cursor-pointer hover:border-primary-500/50' : ''}`}
+    >
         <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:scale-125 transition-transform duration-500 text-${color}-400`}>
             <Icon size={64} />
         </div>
@@ -33,15 +45,185 @@ const KPICard: React.FC<{ title: string, value: string, subtext?: string, icon: 
     </div>
 );
 
-// --- REINVESTMENT MANAGER COMPONENT ---
+// --- SUSTAINABLE PAYMENT ADVISOR ---
 
-const WithdrawalManager: React.FC = () => {
+type StrategyMode = 'conservative' | 'balanced' | 'aggressive';
+
+interface AdvisorProps {
+    interestEarned: number;
+    capitalRecovered: number;
+    defaultRate: number;
+    activeLoans: number;
+    onApplyAmount: (amount: number) => void;
+}
+
+const SustainablePaymentAdvisor: React.FC<AdvisorProps> = ({ 
+    interestEarned, 
+    capitalRecovered, 
+    defaultRate, 
+    activeLoans,
+    onApplyAmount
+}) => {
+    const [strategy, setStrategy] = useState<StrategyMode>('balanced');
+
+    // Lógica Avanzada de Sostenibilidad
+    const calculateStats = () => {
+        // 1. Porcentaje base según estrategia
+        const basePerc = strategy === 'conservative' ? 12 : strategy === 'balanced' ? 22 : 35;
+        
+        // 2. Factor de Riesgo (Mora) - Si la mora es alta, bloqueamos el retiro para proteger liquidez
+        // Umbral crítico: 15% de mora.
+        const riskImpact = Math.max(0.1, 1 - (defaultRate / 20)); 
+        
+        // 3. Factor de Volumen (Tiempo invertido)
+        // Cada préstamo consume gestión. Bonus por volumen de cartera.
+        const workBonus = Math.min(1.4, 1 + (activeLoans / 60));
+        
+        // 4. Provisión de Reserva (Fondo de Emergencia)
+        // Recomendamos guardar entre 5% y 15% del interés para cubrir futuros impagos
+        const reservePerc = Math.min(15, 5 + (defaultRate / 2));
+        const reserveAmount = interestEarned * (reservePerc / 100);
+
+        // 5. Cálculo Final
+        let finalPerc = basePerc * riskImpact * workBonus;
+        
+        // Capes de seguridad
+        if (strategy === 'conservative') finalPerc = Math.min(15, finalPerc);
+        if (strategy === 'aggressive') finalPerc = Math.max(30, Math.min(45, finalPerc));
+        if (strategy === 'balanced') finalPerc = Math.min(30, finalPerc);
+
+        const suggestedAmount = (interestEarned - reserveAmount) * (finalPerc / 100);
+        
+        return {
+            suggestedAmount,
+            suggestedPercentage: finalPerc,
+            reserveAmount,
+            reservePerc,
+            netInterest: interestEarned - reserveAmount,
+            riskImpact: (1 - riskImpact) * 100
+        };
+    };
+
+    const stats = calculateStats();
+
+    const getRecommendationMessage = () => {
+        if (defaultRate > 15) return "⚠️ ALERTA DE RIESGO: La morosidad es alta. El sistema prioriza la PROTECCIÓN DE CAPITAL. El sueldo sugerido es bajo para garantizar que el tesoro no se descapitalice.";
+        if (strategy === 'conservative') return "🛡️ MODO CRECIMIENTO: Estás retirando el mínimo para reinvertir la mayoría en nuevos préstamos. Esto acelerará tu interés compuesto.";
+        if (strategy === 'aggressive' && defaultRate < 5) return "💰 RECOMPENSA: La mora es baja y tienes buena cartera. Puedes permitirte un retiro agresivo por tu excelente gestión.";
+        return "⚖️ MODO EQUILIBRADO: Estás cubriendo tus gastos de tiempo y manteniendo una reserva saludable para el crecimiento constante.";
+    };
+
+    return (
+        <div className="bg-slate-900/80 border border-primary-500/30 rounded-2xl p-6 shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform text-primary-400">
+                <Sparkles size={80} />
+            </div>
+            
+            <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-primary-500/20 text-primary-400 rounded-lg">
+                            <TrendingUp size={20} />
+                        </div>
+                        <h3 className="text-lg font-bold text-white uppercase tracking-wider">Asesor Financiero Inteligente</h3>
+                    </div>
+
+                    <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+                        <button 
+                            onClick={() => setStrategy('conservative')}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${strategy === 'conservative' ? 'bg-primary-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            Crecimiento
+                        </button>
+                        <button 
+                            onClick={() => setStrategy('balanced')}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${strategy === 'balanced' ? 'bg-primary-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            Equilibrado
+                        </button>
+                        <button 
+                            onClick={() => setStrategy('aggressive')}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${strategy === 'aggressive' ? 'bg-primary-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            Retiro Max
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                        <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Interés Bruto</p>
+                        <p className="text-xl font-bold text-white">{formatCurrency(interestEarned)}</p>
+                    </div>
+
+                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                        <p className="text-[10px] text-rose-500 font-bold uppercase mb-1">Fondo Reserva (-{stats.reservePerc.toFixed(0)}%)</p>
+                        <p className="text-xl font-bold text-rose-400">-{formatCurrency(stats.reserveAmount)}</p>
+                    </div>
+
+                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                        <p className="text-[10px] text-emerald-500 font-bold uppercase mb-1">Interés Neto Disponible</p>
+                        <p className="text-xl font-bold text-emerald-400">{formatCurrency(stats.netInterest)}</p>
+                    </div>
+
+                    <div className="bg-primary-600/20 p-4 rounded-xl border border-primary-500/30 ring-1 ring-primary-500/20">
+                        <p className="text-[10px] text-primary-400 font-bold uppercase mb-1">Sueldo Sugerido ({stats.suggestedPercentage.toFixed(0)}%)</p>
+                        <p className="text-3xl font-heading font-bold text-white tracking-tighter">{formatCurrency(stats.suggestedAmount)}</p>
+                        <button 
+                            onClick={() => onApplyAmount(stats.suggestedAmount)}
+                            className="mt-2 w-full py-2 bg-primary-600 hover:bg-primary-500 text-white text-[10px] font-bold rounded-lg transition-all shadow-md uppercase"
+                        >
+                            Cobrar Gestión
+                        </button>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-slate-800/30 border border-slate-700 rounded-xl">
+                    <div className="flex items-start gap-3">
+                        <div className="p-1.5 bg-slate-700 rounded-lg shrink-0">
+                            <Info size={16} className="text-primary-400" />
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-300 font-bold leading-relaxed">
+                                {getRecommendationMessage()}
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-4 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                <span className={stats.riskImpact > 10 ? 'text-rose-400' : 'text-emerald-400'}>
+                                    Penalización Riesgo: -{stats.riskImpact.toFixed(1)}%
+                                </span>
+                                <span>
+                                    Factor Tiempo: {activeLoans} Op. activas
+                                </span>
+                                <span className="text-primary-400">
+                                    Reserva Seguridad: {formatCurrency(stats.reserveAmount)} apartados
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- WITHDRAWAL MANAGER COMPONENT ---
+
+const WithdrawalManager: React.FC<{
+    interestEarned: number;
+    defaultRate: number;
+    activeLoans: number;
+}> = ({ interestEarned, defaultRate, activeLoans }) => {
     const { handleRegisterWithdrawal, handleDeleteWithdrawal, withdrawals } = useDataContext();
     const [amount, setAmount] = useState('');
     const [source, setSource] = useState<'Banco' | 'Efectivo'>('Banco');
     const [notes, setNotes] = useState('');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleApplySuggested = (suggested: number) => {
+        setAmount(suggested.toFixed(2));
+        setNotes(`Cobro por Gestión Sugerido - ${new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -127,9 +309,19 @@ const WithdrawalManager: React.FC = () => {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in mb-8">
-            {/* Form */}
-            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
+        <div className="space-y-8 animate-fade-in mb-8">
+            {/* Intelligent Advisor */}
+            <SustainablePaymentAdvisor 
+                interestEarned={interestEarned}
+                capitalRecovered={0} 
+                defaultRate={defaultRate}
+                activeLoans={activeLoans}
+                onApplyAmount={handleApplySuggested}
+            />
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Form */}
+                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
                 <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
                     <LogOut size={20} className="text-rose-400" />
                     Registrar Pago / Retiro
@@ -271,7 +463,8 @@ const WithdrawalManager: React.FC = () => {
                 </div>
             </div>
         </div>
-    );
+    </div>
+);
 };
 
 const ReinvestmentManager: React.FC = () => {
@@ -1181,6 +1374,7 @@ const Accounting: React.FC = () => {
     const { showToast } = useAppContext();
     const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal' | 'reinvestments'>('global');
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+    const [showOverdueBreakdown, setShowOverdueBreakdown] = useState(false);
     
     // Treasury Config State
     const [treasurySettings, setTreasurySettings] = useState<TreasuryConfig>({
@@ -1238,7 +1432,8 @@ const Accounting: React.FC = () => {
 
         let totalInvested = 0; // Cumulative (Snapshot)
         let currentOutstanding = 0; // Snapshot
-        let overdueAmount = 0; // Snapshot
+        let overdueAmount = 0; // Snapshot (Capital)
+        let totalOverdueInterest = 0; // Snapshot (Interest)
         
         let periodRecoveredCapital = 0; // Flow (Filtered)
         let periodInterestEarned = 0; // Flow (Filtered)
@@ -1271,6 +1466,7 @@ const Accounting: React.FC = () => {
                     if (loan.status === 'Vencido') {
                         overdueAmount += loan.remainingCapital;
                     }
+                    totalOverdueInterest += (loan.pendingInterest || 0);
                 }
             }
             // Invested is always total historical for context
@@ -1333,7 +1529,9 @@ const Accounting: React.FC = () => {
             isBreakEvenReached,
             totalReinvested,
             periodReinvested,
-            netAvailableProfit
+            netAvailableProfit,
+            totalOverdueInterest,
+            activeLoansCount: allLoans.filter(l => !l.archived && l.status !== 'Pagado').length
         };
     }, [allLoans, timeRange, reinvestments]);
 
@@ -1396,6 +1594,11 @@ const Accounting: React.FC = () => {
 
     return (
         <div className="space-y-8 animate-fade-in pb-10">
+            <OverdueBreakdownModal 
+                isOpen={showOverdueBreakdown}
+                onClose={() => setShowOverdueBreakdown(false)}
+                loans={loans}
+            />
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-heading font-bold text-white flex items-center gap-3">
@@ -1480,7 +1683,11 @@ const Accounting: React.FC = () => {
 
             {activeTab === 'payments' && (
                 <div className="max-w-6xl mx-auto space-y-8">
-                    <WithdrawalManager />
+                    <WithdrawalManager 
+                        interestEarned={stats.periodInterestEarned}
+                        defaultRate={stats.defaultRate}
+                        activeLoans={stats.activeLoansCount}
+                    />
                 </div>
             )}
 
@@ -1544,17 +1751,18 @@ const Accounting: React.FC = () => {
                         <KPICard 
                             title="Tasa de Morosidad" 
                             value={`${stats.defaultRate.toFixed(1)}%`}
-                            subtext={`Vencido: ${formatCurrency(stats.overdueAmount)}`}
+                            subtext={`Capital en Mora: ${formatCurrency(stats.overdueAmount)}`}
                             icon={AlertTriangle} 
                             color={stats.defaultRate > 15 ? 'red' : 'amber'} 
                             isRisk={stats.defaultRate > 15}
                         />
                         <KPICard 
-                            title="Proyección Mes" 
-                            value={formatCurrency(stats.forecastedMonthlyIncome)} 
-                            subtext="Si todos pagan (8% s/ deuda)"
-                            icon={BarChart3} 
-                            color="indigo" 
+                            title="Interés en Mora" 
+                            value={formatCurrency(stats.totalOverdueInterest)} 
+                            subtext="Haz click para ver el detalle"
+                            icon={Clock} 
+                            color={stats.totalOverdueInterest > 0 ? 'amber' : 'emerald'} 
+                            onClick={() => setShowOverdueBreakdown(true)}
                         />
                     </div>
 
