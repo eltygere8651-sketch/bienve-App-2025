@@ -24,7 +24,6 @@ const NavItem: React.FC<NavItemProps> = React.memo(({ icon, label, view, current
                         ? 'bg-primary-600/10 text-primary-400 border-primary-500/30'
                         : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                 }`}
-                style={isActive ? { boxShadow: '0 0 15px rgba(var(--p-rgb), 0.15)' } : {}}
                 title={label}
             >
                 <div className="flex items-center flex-1 min-w-0"> 

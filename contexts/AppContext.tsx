@@ -46,8 +46,6 @@ interface AppContextType {
     initializationStatus: InitializationStatus;
     annualInterestRate: number;
     isOnline: boolean;
-    isRGBMode: boolean;
-    setIsRGBMode: (active: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -60,7 +58,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [hasAdminAccount, setHasAdminAccount] = useState(true); 
     const [isOnline, setIsOnline] = useState(navigator.onLine);
-    const [isRGBMode, setIsRGBMode] = useState(() => localStorage.getItem('isRGBMode') === 'true');
     
     const [confirmState, setConfirmState] = useState<ConfirmState>({
         isOpen: false,
@@ -147,53 +144,6 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     }, [isAuthenticated, currentView, initializationStatus]);
 
-    useEffect(() => {
-        localStorage.setItem('isRGBMode', isRGBMode.toString());
-        
-        let animationFrameId: number;
-        let hue = 239; // Start at Indigo hue
-
-        const animate = () => {
-            hue = (hue + 1.5) % 360; // Slightly faster
-            document.documentElement.style.setProperty('--p-h', hue.toString());
-            document.documentElement.style.setProperty('--p-s', '84%');
-            document.documentElement.style.setProperty('--p-l', '65%');
-            
-            // Calculate approximate RGB for shadows/glows
-            const s = 0.84, l = 0.65;
-            const c = (1 - Math.abs(2 * l - 1)) * s;
-            const x = c * (1 - Math.abs((hue / 60) % 2 - 1));
-            const m = l - c / 2;
-            let r = 0, g = 0, b = 0;
-            if (hue < 60) { r = c; g = x; b = 0; }
-            else if (hue < 120) { r = x; g = c; b = 0; }
-            else if (hue < 180) { r = 0; g = c; b = x; }
-            else if (hue < 240) { r = 0; g = x; b = c; }
-            else if (hue < 300) { r = x; g = 0; b = c; }
-            else { r = c; g = 0; b = x; }
-            
-            const r255 = Math.round((r + m) * 255);
-            const g255 = Math.round((g + m) * 255);
-            const b255 = Math.round((b + m) * 255);
-            document.documentElement.style.setProperty('--p-rgb', `${r255}, ${g255}, ${b255}`);
-
-            animationFrameId = requestAnimationFrame(animate);
-        };
-
-        if (isRGBMode) {
-            animate();
-        } else {
-            // Reset to default Indigo
-            document.documentElement.style.removeProperty('--p-h');
-            document.documentElement.style.removeProperty('--p-s');
-            document.documentElement.style.removeProperty('--p-l');
-        }
-
-        return () => {
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        };
-    }, [isRGBMode]);
-
     const registerAdmin = useCallback(async (email: string, password: string) => {
         try {
             await signUp(email, password);
@@ -263,12 +213,10 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         initializationStatus,
         annualInterestRate,
         isOnline,
-        isRGBMode,
-        setIsRGBMode,
     }), [
         toast, showToast, currentView, user, isAuthenticated, login, registerAdmin, logout, hasAdminAccount,
         isSidebarOpen, confirmState, showConfirmModal, hideConfirmModal,
-        initializationStatus, annualInterestRate, isOnline, isRGBMode
+        initializationStatus, annualInterestRate, isOnline
     ]);
 
     if (initializationStatus === 'not_configured') {

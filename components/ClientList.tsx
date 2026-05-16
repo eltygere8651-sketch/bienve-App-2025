@@ -262,6 +262,7 @@ const ClientList: React.FC = () => {
     const { setCurrentView, showToast, showConfirmModal } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+    const [selectedRoute, setSelectedRoute] = useState<string>('all');
     
     // Modal States
     const [selectedClientForNewLoan, setSelectedClientForNewLoan] = useState<Client | null>(null);
@@ -275,6 +276,13 @@ const ClientList: React.FC = () => {
     }, [searchTerm]);
 
     const filteredClients = useMemo(() => {
+        // 1. Filter by Route FIRST if not 'all'
+        let list = [...clientLoanData];
+        
+        if (selectedRoute !== 'all') {
+            list = list.filter(c => c.route === selectedRoute);
+        }
+
         // Sort logic: 
         // 1. Clients with UNPAID current month come first (BUT excluding those who started this month)
         // 2. Then clients with active loans (including new ones)
@@ -300,7 +308,7 @@ const ClientList: React.FC = () => {
             return !hasPaid;
         };
 
-        const sorted = [...clientLoanData].sort((a, b) => {
+        const sorted = list.sort((a, b) => {
             const aDue = isUnpaidAndDueThisMonth(a);
             const bDue = isUnpaidAndDueThisMonth(b);
             
@@ -322,7 +330,15 @@ const ClientList: React.FC = () => {
             c.name.toLowerCase().includes(term) || 
             (c.idNumber && c.idNumber.toLowerCase().includes(term))
         );
-    }, [clientLoanData, debouncedSearchTerm]);
+    }, [clientLoanData, debouncedSearchTerm, selectedRoute]);
+
+    // Unique routes for filter
+    const uniqueRoutes = useMemo(() => {
+        const routes = clientLoanData
+            .map(c => c.route)
+            .filter((r): r is string => !!r);
+        return Array.from(new Set(routes)).sort();
+    }, [clientLoanData]);
 
     // Stats for Dashboard
     const stats = useMemo(() => {
@@ -439,17 +455,34 @@ const ClientList: React.FC = () => {
                 </div>
 
                 {/* 3. Search & Filters */}
-                <div className="relative max-w-xl">
-                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-slate-400" />
-                     </div>
-                     <input
-                        type="text"
-                        placeholder="Buscar cliente por nombre, DNI o teléfono..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-4 py-4 bg-slate-800/80 border border-slate-700 rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-lg backdrop-blur-sm outline-none"
-                    />
+                <div className="flex flex-col md:flex-row gap-4">
+                    <div className="relative flex-1">
+                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <Search className="h-5 w-5 text-slate-400" />
+                         </div>
+                         <input
+                            type="text"
+                            placeholder="Buscar cliente por nombre, DNI o teléfono..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-12 pr-4 py-4 bg-slate-800/80 border border-slate-700 rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-lg backdrop-blur-sm outline-none"
+                        />
+                    </div>
+                    
+                    {uniqueRoutes.length > 0 && (
+                        <div className="w-full md:w-64">
+                            <select
+                                value={selectedRoute}
+                                onChange={(e) => setSelectedRoute(e.target.value)}
+                                className="w-full h-full bg-slate-800/80 border border-slate-700 rounded-2xl px-4 py-3 text-white focus:ring-2 focus:ring-primary-500 outline-none shadow-lg appearance-none cursor-pointer"
+                            >
+                                <option value="all">Todas las Rutas / Grupos</option>
+                                {uniqueRoutes.map(route => (
+                                    <option key={route} value={route}>{route}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </div>
 
                 {/* 4. Grid of Cards */}

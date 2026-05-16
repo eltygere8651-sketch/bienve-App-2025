@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loan, Client, LoanStatus } from '../types';
-import { X, Banknote, Calendar, Percent, Clock, AlertTriangle, Edit, Trash2, Save, Loader2, TrendingDown, Infinity as InfinityIcon, User, MapPin, Phone, Mail, FileText, Check, Copy, Lock, RotateCcw, FileDown, CreditCard } from 'lucide-react';
+import { X, Banknote, Calendar, Percent, Clock, AlertTriangle, Edit, Trash2, Save, Loader2, TrendingDown, Infinity as InfinityIcon, User, MapPin, Phone, Mail, FileText, Check, Copy, Lock, RotateCcw, FileDown, CreditCard, Share2, Send, MessageCircle } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import PaymentHistory from './PaymentHistory';
 import { useDataContext } from '../contexts/DataContext';
@@ -226,6 +226,25 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
             setPaymentNotes('');
             setPaymentMethod('Efectivo');
             showToast('Pago registrado exitosamente', 'success');
+
+            // MEJORA: Auto-detección de recuperación de mora
+            if (loan.status === LoanStatus.OVERDUE) {
+                setTimeout(() => {
+                    showConfirmModal({
+                        title: '¿Normalizar Estado?',
+                        message: 'Este préstamo estaba en mora. ¿Deseas cambiar su estado a "Pendiente/Al día" después de este pago para reducir el índice de morosidad global?',
+                        onConfirm: async () => {
+                            await handleUpdateLoan(loan.id, { status: LoanStatus.PENDING });
+                            showToast('Estado normalizado. La morosidad ha bajado.', 'success');
+                        },
+                        type: 'info',
+                        // @ts-ignore
+                        confirmText: 'Sí, normalizar',
+                        // @ts-ignore
+                        cancelText: 'Mantener mora'
+                    });
+                }, 500);
+            }
         } catch (e) { } finally { setIsSubmitting(false); }
     };
 
@@ -259,6 +278,56 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     const setQuickAmount = (type: 'interest' | 'full') => {
         if (type === 'interest') setPaymentAmount(pendingInterestDisplay.toFixed(2));
         if (type === 'full') setPaymentAmount((loan.remainingCapital + pendingInterestDisplay).toFixed(2));
+    };
+
+    const getShareMessage = () => {
+        if (!client || !loan) return "";
+
+        const overdueItems = (loan.overdueHistory || []).filter(h => h.status === 'pendiente');
+        const totalOverdue = overdueItems.reduce((acc, curr) => acc + curr.amount, 0);
+        
+        let message = `*B.M Contigo - Estado de Cuenta*\n\n`;
+        message += `Hola *${client.name}*,\n\n`;
+        message += `Te enviamos el resumen de tu préstamo actual:\n`;
+        message += `• *Capital Pendiente:* ${formatCurrency(loan.remainingCapital)}\n`;
+
+        if (overdueItems.length > 0) {
+            message += `\n*DETALLE DE MORA / INTERESES PENDIENTES:*\n`;
+            overdueItems.forEach(item => {
+                message += `• ${item.monthName} ${item.year}: ${formatCurrency(item.amount)}\n`;
+            });
+            message += `\n*Total intereses en mora:* ${formatCurrency(totalOverdue)}\n`;
+            message += `\n*TOTAL PARA LIQUIDAR TODO:* ${formatCurrency(loan.remainingCapital + totalOverdue)}\n`;
+        } else {
+            message += `\nTu cuenta se encuentra al día con los intereses informativos.\n`;
+        }
+
+        message += `\nPor favor, contacta con nosotros si tienes alguna duda. ¡Gracias!`;
+        return message;
+    };
+
+    const handleShareWhatsApp = () => {
+        const message = getShareMessage();
+        if (!message) return;
+        const encodedMessage = encodeURIComponent(message);
+        const phone = client.phone ? client.phone.replace(/\D/g, '') : '';
+        const whatsappUrl = `https://wa.me/${phone}?text=${encodedMessage}`;
+        window.open(whatsappUrl, '_blank');
+    };
+
+    const handleShareTelegram = () => {
+        const message = getShareMessage();
+        if (!message) return;
+        const encodedMessage = encodeURIComponent(message);
+        const telegramUrl = `https://t.me/share/url?url=&text=${encodedMessage}`;
+        window.open(telegramUrl, '_blank');
+    };
+
+    const handleCopyReport = () => {
+        const message = getShareMessage();
+        if (!message) return;
+        navigator.clipboard.writeText(message);
+        showToast('Reporte copiado al portapapeles', 'success');
     };
 
     return (
@@ -405,7 +474,28 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                     Registro de meses no abonados (No afecta saldo contable)
                                                 </p>
                                             </div>
-                                            <div className="flex gap-2 w-full sm:w-auto">
+                                            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                                                <button 
+                                                    onClick={handleShareWhatsApp}
+                                                    className="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded uppercase border border-emerald-500/30 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/20 active:scale-95"
+                                                    title="Compartir por WhatsApp"
+                                                >
+                                                    <MessageCircle size={12} /> WhatsApp
+                                                </button>
+                                                <button 
+                                                    onClick={handleShareTelegram}
+                                                    className="flex-1 sm:flex-none px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold rounded uppercase border border-sky-500/30 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-sky-900/20 active:scale-95"
+                                                    title="Compartir por Telegram"
+                                                >
+                                                    <Send size={12} /> Telegram
+                                                </button>
+                                                <button 
+                                                    onClick={handleCopyReport}
+                                                    className="flex-1 sm:flex-none px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-bold rounded uppercase border border-slate-600 transition-all flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
+                                                    title="Copiar Reporte"
+                                                >
+                                                    <Copy size={12} /> Copiar
+                                                </button>
                                                 <button 
                                                     onClick={() => {
                                                         const nextStatus = loan.status === LoanStatus.OVERDUE ? LoanStatus.PENDING : LoanStatus.OVERDUE;

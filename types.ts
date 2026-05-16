@@ -115,6 +115,7 @@ export interface Client {
     phone?: string;
     address?: string;
     email?: string;
+    route?: string; // Nuevo: Para escalabilidad por grupos/rutas
     archived?: boolean; // Added for soft delete/archiving
 }
 
@@ -140,7 +141,7 @@ export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'req
 
 export type FilterStatus = LoanStatus | 'Todos';
 
-export type NewClientData = Omit<Client, 'id' | 'joinDate'>;
+export type NewClientData = Omit<Client, 'id' | 'joinDate' | 'archived'>;
 export type NewLoanData = { amount: number; term: number };
 
 export interface DashboardStats {

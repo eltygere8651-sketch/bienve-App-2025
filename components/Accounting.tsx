@@ -494,141 +494,145 @@ const ReinvestmentManager: React.FC = () => {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-            {/* Form */}
-            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                    <Plus size={20} className="text-primary-400" />
-                    Registrar Reinversión
-                </h3>
-                <p className="text-sm text-slate-400 mb-6">
-                    Registra el capital que has sacado de tus beneficios (intereses) para volver a prestarlo.
-                </p>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Reinvertido (€)</label>
-                        <input 
-                            type="number" 
-                            value={amount} 
-                            onChange={e => setAmount(e.target.value)} 
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold text-lg focus:border-primary-500 outline-none" 
-                            placeholder="Ej: 500.00"
-                            step="0.01"
-                            required
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Origen del Dinero</label>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setSource('Banco')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Banco' ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
-                            >
-                                Banco
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setSource('Efectivo')}
-                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Efectivo' ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
-                            >
-                                Efectivo
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha</label>
-                        <input 
-                            type="date" 
-                            value={date} 
-                            onChange={e => setDate(e.target.value)} 
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none" 
-                            required
-                        />
-                    </div>
-                    
-                    {/* Treasury Deduction Checkbox */}
-                    <div 
-                        onClick={() => setDeductFromTreasury(!deductFromTreasury)}
-                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-colors ${deductFromTreasury ? 'bg-blue-900/20 border-blue-500/30' : 'bg-slate-900 border-slate-600'}`}
-                    >
-                        <div className={`mt-0.5 rounded text-white ${deductFromTreasury ? 'text-blue-400' : 'text-slate-500'}`}>
-                            {deductFromTreasury ? <CheckSquare size={18} /> : <Square size={18} />}
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+                {/* Form */}
+                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 h-fit">
+                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <Plus size={20} className="text-primary-400" />
+                        Registrar Reinversión
+                    </h3>
+                    <p className="text-sm text-slate-400 mb-6">
+                        Registra el capital que has sacado de tus beneficios (intereses) para volver a prestarlo.
+                    </p>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Reinvertido (€)</label>
+                            <input 
+                                type="number" 
+                                value={amount} 
+                                onChange={e => setAmount(e.target.value)} 
+                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white font-bold text-lg focus:border-primary-500 outline-none" 
+                                placeholder="Ej: 500.00"
+                                step="0.01"
+                                required
+                            />
                         </div>
                         <div>
-                            <p className={`text-sm font-bold ${deductFromTreasury ? 'text-blue-200' : 'text-slate-400'}`}>Descontar del Saldo Actual</p>
-                            <p className="text-xs text-slate-500 mt-1">
-                                Marca esto si el dinero sale de la caja en este momento. Desmárcalo si ya lo descontaste al crear el préstamo.
-                            </p>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Origen del Dinero</label>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setSource('Banco')}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Banco' ? 'bg-blue-600/20 text-blue-400 border-blue-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
+                                >
+                                    Banco
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSource('Efectivo')}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold border transition-all ${source === 'Efectivo' ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
+                                >
+                                    Efectivo
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha</label>
+                            <input 
+                                type="date" 
+                                value={date} 
+                                onChange={e => setDate(e.target.value)} 
+                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none" 
+                                required
+                            />
+                        </div>
+                        
+                        {/* Treasury Deduction Checkbox */}
+                        <div 
+                            onClick={() => setDeductFromTreasury(!deductFromTreasury)}
+                            className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-colors ${deductFromTreasury ? 'bg-blue-900/20 border-blue-500/30' : 'bg-slate-900 border-slate-600'}`}
+                        >
+                            <div className={`mt-0.5 rounded text-white ${deductFromTreasury ? 'text-blue-400' : 'text-slate-500'}`}>
+                                {deductFromTreasury ? <CheckSquare size={18} /> : <Square size={18} />}
+                            </div>
+                            <div>
+                                <p className={`text-sm font-bold ${deductFromTreasury ? 'text-blue-200' : 'text-slate-400'}`}>Descontar del Saldo Actual</p>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    Marca esto si el dinero sale de la caja en este momento. Desmárcalo si ya lo descontaste al crear el préstamo.
+                                </p>
+                            </div>
+                        </div>
 
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notas (Opcional)</label>
-                        <textarea 
-                            value={notes} 
-                            onChange={e => setNotes(e.target.value)} 
-                            rows={2}
-                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none resize-none" 
-                            placeholder="Detalles..."
-                        />
-                    </div>
-                    <button 
-                        type="submit" 
-                        disabled={isSubmitting}
-                        className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
-                    >
-                        {isSubmitting ? <Loader2 className="animate-spin" /> : <Save size={18} />}
-                        Guardar Registro
-                    </button>
-                </form>
-            </div>
-
-            {/* List */}
-            <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <History size={20} className="text-slate-400" />
-                        Historial de Reinversiones
-                    </h3>
-                    <div className="bg-slate-900 px-3 py-1 rounded-lg border border-slate-600 text-xs font-mono text-emerald-400 font-bold">
-                        Total: {formatCurrency(reinvestments.reduce((acc, r) => acc + r.amount, 0))}
-                    </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Notas (Opcional)</label>
+                            <textarea 
+                                value={notes} 
+                                onChange={e => setNotes(e.target.value)} 
+                                rows={2}
+                                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-primary-500 outline-none resize-none" 
+                                placeholder="Detalles..."
+                            />
+                        </div>
+                        <button 
+                            type="submit" 
+                            disabled={isSubmitting}
+                            className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                        >
+                            {isSubmitting ? <Loader2 className="animate-spin" /> : <Save size={18} />}
+                            Guardar Registro
+                        </button>
+                    </form>
                 </div>
 
-                <div className="flex-1 overflow-y-auto max-h-[500px] pr-2">
-                    {reinvestments.length === 0 ? (
-                        <div className="text-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-xl">
-                            <RefreshCw size={32} className="mx-auto mb-2 opacity-50" />
-                            <p>No hay reinversiones registradas.</p>
+                {/* List */}
+                <div className="lg:col-span-2 space-y-6 flex flex-col">
+                    <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <History size={20} className="text-slate-400" />
+                                Historial de Reinversiones
+                            </h3>
+                            <div className="bg-slate-900 px-3 py-1 rounded-lg border border-slate-600 text-xs font-mono text-emerald-400 font-bold">
+                                Total: {formatCurrency(reinvestments.reduce((acc, r) => acc + r.amount, 0))}
+                            </div>
                         </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {[...reinvestments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(record => (
-                                <div key={record.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center group hover:bg-slate-900 transition-colors">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="font-bold text-white text-lg">{formatCurrency(record.amount)}</span>
-                                            <span className={`text-[10px] uppercase px-2 py-0.5 rounded border ${record.source === 'Banco' ? 'border-blue-500/30 text-blue-400 bg-blue-500/10' : 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'}`}>
-                                                {record.source}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs text-slate-500">
-                                            <Calendar size={12} /> {new Date(record.date).toLocaleDateString()}
-                                            {record.notes && <span className="text-slate-400">• {record.notes}</span>}
-                                        </div>
-                                    </div>
-                                    <button 
-                                        onClick={() => handleDeleteReinvestment(record.id)}
-                                        className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                        title="Eliminar registro"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
+
+                        <div className="flex-1 overflow-y-auto max-h-[300px] pr-2">
+                            {reinvestments.length === 0 ? (
+                                <div className="text-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-xl">
+                                    <RefreshCw size={32} className="mx-auto mb-2 opacity-50" />
+                                    <p>No hay reinversiones registradas.</p>
                                 </div>
-                            ))}
+                            ) : (
+                                <div className="space-y-3">
+                                    {[...reinvestments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(record => (
+                                        <div key={record.id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center group hover:bg-slate-900 transition-colors">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="font-bold text-white text-lg">{formatCurrency(record.amount)}</span>
+                                                    <span className={`text-[10px] uppercase px-2 py-0.5 rounded border ${record.source === 'Banco' ? 'border-blue-500/30 text-blue-400 bg-blue-500/10' : 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'}`}>
+                                                        {record.source}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-xs text-slate-500">
+                                                    <Calendar size={12} /> {new Date(record.date).toLocaleDateString()}
+                                                    {record.notes && <span className="text-slate-400">• {record.notes}</span>}
+                                                </div>
+                                            </div>
+                                            <button 
+                                                onClick={() => handleDeleteReinvestment(record.id)}
+                                                className="p-2 text-slate-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                                title="Eliminar registro"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -1370,11 +1374,23 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
 };
 
 const Accounting: React.FC = () => {
-    const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded, recalculateTreasury, reinvestments } = useDataContext(); // Added reinvestments
+    const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded, recalculateTreasury, reinvestments, clients } = useDataContext(); // Added clients
     const { showToast } = useAppContext();
     const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal' | 'reinvestments'>('global');
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [showOverdueBreakdown, setShowOverdueBreakdown] = useState(false);
+    
+    // Filters
+    const [timeRange, setTimeRange] = useState<'all' | 'year' | 'month'>('month');
+    const [selectedRoute, setSelectedRoute] = useState('all');
+
+    // Unique routes for filter
+    const uniqueRoutes = useMemo(() => {
+        const routes = clients
+            .map(c => c.route)
+            .filter((r): r is string => !!r);
+        return Array.from(new Set(routes)).sort();
+    }, [clients]);
     
     // Treasury Config State
     const [treasurySettings, setTreasurySettings] = useState<TreasuryConfig>({
@@ -1384,9 +1400,6 @@ const Accounting: React.FC = () => {
     });
     const [isEditingTreasury, setIsEditingTreasury] = useState(false);
     
-    // Time Filtering
-    const [timeRange, setTimeRange] = useState<'all' | 'year' | 'month'>('month');
-
     // Real-time subscription to Treasury
     useEffect(() => {
         const unsubscribe = subscribeToCollection(TABLE_NAMES.TREASURY, (data) => {
@@ -1422,8 +1435,14 @@ const Accounting: React.FC = () => {
 
     // Aggregate all loans for accounting stats
     const allLoans = useMemo(() => {
-        return [...loans, ...archivedLoans];
-    }, [loans, archivedLoans]);
+        const baseLoans = [...loans, ...archivedLoans];
+        if (selectedRoute === 'all') return baseLoans;
+        
+        return baseLoans.filter(loan => {
+            const client = clients.find(c => c.id === loan.clientId);
+            return client?.route === selectedRoute;
+        });
+    }, [loans, archivedLoans, clients, selectedRoute]);
 
     const stats = useMemo(() => {
         const now = new Date();
@@ -1442,35 +1461,42 @@ const Accounting: React.FC = () => {
         // Cumulative Historical Totals (For Ratio Calculation)
         let historicalTotalCapitalRecovered = 0;
         let historicalTotalInterestEarned = 0;
+        let totalRemainingCapital = 0;
 
         // Sum reinvestments (Filtered by Date)
         const periodReinvested = reinvestments.reduce((acc, r) => {
             const rDate = new Date(r.date);
             let include = false;
+            
+            // Apply route filter to reinvestment if needed? 
+            // Reinvestments aren't tied to a specific route usually, but for consistency we might ignore them in route view?
+            // Actually, keep them as global unless we tie them to accounts/routes.
+            
             if (timeRange === 'all') include = true;
             else if (timeRange === 'year') include = rDate.getFullYear() === currentYear;
             else if (timeRange === 'month') include = rDate.getMonth() === currentMonth && rDate.getFullYear() === currentYear;
             
-            return include ? acc + r.amount : acc;
+            return include ? acc + (Number(r.amount) || 0) : acc;
         }, 0);
         
-        const totalReinvested = reinvestments.reduce((acc, r) => acc + r.amount, 0); // Keep total for ROI calc if needed
+        const totalReinvested = reinvestments.reduce((acc, r) => acc + (Number(r.amount) || 0), 0);
 
         // 1. Snapshot Metrics (Always Total Active)
         allLoans.forEach(loan => {
             if (!loan.archived) {
                 // If active or overdue, it contributes to current portfolio risk/value
                 if (loan.status !== 'Pagado') {
-                    currentOutstanding += loan.remainingCapital;
-                    forecastedMonthlyIncome += loan.remainingCapital * 0.08;
+                    currentOutstanding += (Number(loan.remainingCapital) || 0);
+                    forecastedMonthlyIncome += (Number(loan.remainingCapital) || 0) * 0.08;
                     if (loan.status === 'Vencido') {
-                        overdueAmount += loan.remainingCapital;
+                        overdueAmount += (Number(loan.remainingCapital) || 0);
                     }
-                    totalOverdueInterest += (loan.pendingInterest || 0);
+                    totalOverdueInterest += (Number(loan.pendingInterest) || 0);
                 }
             }
             // Invested is always total historical for context
-            totalInvested += (loan.initialCapital || loan.amount);
+            totalInvested += (Number(loan.initialCapital || loan.amount) || 0);
+            totalRemainingCapital += (Number(loan.remainingCapital) || 0);
             
             // Calculate Historical Totals for Ratio
             if (loan.paymentHistory) {
@@ -1527,6 +1553,8 @@ const Accounting: React.FC = () => {
             profitRatio,
             capitalRatio,
             isBreakEvenReached,
+            historicalTotalInterestEarned, 
+            historicalTotalCapitalRecovered,
             totalReinvested,
             periodReinvested,
             netAvailableProfit,
@@ -1665,7 +1693,19 @@ const Accounting: React.FC = () => {
                     <span>Finanzas Personales</span>
                 </button>
                 {activeTab === 'global' && (
-                    <div className="flex justify-end animate-fade-in">
+                    <div className="flex flex-col sm:flex-row gap-3 animate-fade-in w-full md:w-auto">
+                        {uniqueRoutes.length > 0 && (
+                            <select
+                                value={selectedRoute}
+                                onChange={(e) => setSelectedRoute(e.target.value)}
+                                className="bg-slate-800 p-2 rounded-lg border border-slate-700 text-xs font-bold text-slate-300 outline-none focus:border-primary-500"
+                            >
+                                <option value="all">Todas las Rutas</option>
+                                {uniqueRoutes.map(route => (
+                                    <option key={route} value={route}>{route}</option>
+                                ))}
+                            </select>
+                        )}
                         <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700 w-full sm:w-auto">
                             <button onClick={() => setTimeRange('month')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'month' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Mes</button>
                             <button onClick={() => setTimeRange('year')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${timeRange === 'year' ? 'bg-primary-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Año</button>
@@ -1700,8 +1740,8 @@ const Accounting: React.FC = () => {
             {activeTab === 'profits' && (
                 <ProfitsCalculator 
                     totalInvested={stats.totalInvested} // Always Total for ROI calc
-                    totalRecoveredCapital={allLoans.reduce((acc, l) => acc + Number(l.totalCapitalPaid || 0), 0)} // Total
-                    totalInterestEarned={allLoans.reduce((acc, l) => acc + Number(l.totalInterestPaid || 0), 0)} // Total
+                    totalRecoveredCapital={stats.historicalTotalCapitalRecovered} // Use pre-calculated values
+                    totalInterestEarned={stats.historicalTotalInterestEarned} // Use pre-calculated values
                     overdueAmount={stats.overdueAmount} // Current Snapshot
                     totalReinvested={stats.totalReinvested}
                 />

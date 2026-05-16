@@ -24,6 +24,7 @@ const NewClientForm: React.FC = () => {
         address: '',
         phone: '',
         email: '',
+        route: '', // Nuevo: Para escalabilidad por grupos/rutas
     });
 
     const handleScanClick = () => {
@@ -154,6 +155,7 @@ const NewClientForm: React.FC = () => {
                     phone: formatPhone(clientData.phone), // Ensure formatted saving
                     address: clientData.address,
                     email: clientData.email,
+                    route: clientData.route,
                 },
                 {
                     amount: parseFloat(loanData.amount),
@@ -256,7 +258,10 @@ const NewClientForm: React.FC = () => {
                             <div className="md:col-span-2">
                                 <InputField label="Dirección Completa" name="address" type="text" value={clientData.address} onChange={handleClientChange} required />
                             </div>
-                            <div className="md:col-span-2">
+                            <div className="md:col-span-1">
+                                <InputField label="Ruta / Grupo (Opcional)" name="route" type="text" value={clientData.route || ''} onChange={handleClientChange} isOptional placeholder="Ej: Ruta Norte, Grupo A..." />
+                            </div>
+                            <div className="md:col-span-1">
                                 <InputField label="Email (Opcional)" name="email" type="email" value={clientData.email} onChange={handleClientChange} isOptional />
                             </div>
                         </div>
