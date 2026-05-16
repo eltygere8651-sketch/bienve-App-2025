@@ -8,7 +8,7 @@ import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField, MoneyInput } from './FormFields';
 import { calculateMonthlyInterest } from '../config';
-import { generateLoanHistoryPDF } from '../services/pdfService';
+import { generateLoanHistoryPDF, generateDebtReportPDF } from '../services/pdfService';
 
 interface LoanDetailsModalProps {
     isOpen: boolean;
@@ -285,25 +285,34 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
 
         const overdueItems = (loan.overdueHistory || []).filter(h => h.status === 'pendiente');
         const totalOverdue = overdueItems.reduce((acc, curr) => acc + curr.amount, 0);
+        const totalToLiquidate = loan.remainingCapital + totalOverdue;
         
-        let message = `*B.M Contigo - Estado de Cuenta*\n\n`;
-        message += `Hola *${client.name}*,\n\n`;
-        message += `Te enviamos el resumen de tu préstamo actual:\n`;
+        let message = `🏛️ *B.M CONTIGO - ESTADO DE CUENTA PROFESIONAL*\n\n`;
+        message += `Estimado(a) *${client.name}*,\n\n`;
+        message += `Le saludamos cordialmente. A continuación, le presentamos el resumen actualizado de su expediente financiero con nosotros:\n\n`;
+        
+        message += `💰 *RESUMEN DE SALDOS:*\n`;
         message += `• *Capital Pendiente:* ${formatCurrency(loan.remainingCapital)}\n`;
 
         if (overdueItems.length > 0) {
-            message += `\n*DETALLE DE MORA / INTERESES PENDIENTES:*\n`;
+            message += `• *Mora/Intereses:* ${formatCurrency(totalOverdue)}\n\n`;
+            message += `🔴 *DETALLE DE INTERESES PENDIENTES:*\n`;
             overdueItems.forEach(item => {
-                message += `• ${item.monthName} ${item.year}: ${formatCurrency(item.amount)}\n`;
+                message += `  - ${item.monthName} ${item.year}: ${formatCurrency(item.amount)}\n`;
             });
-            message += `\n*Total intereses en mora:* ${formatCurrency(totalOverdue)}\n`;
-            message += `\n*TOTAL PARA LIQUIDAR TODO:* ${formatCurrency(loan.remainingCapital + totalOverdue)}\n`;
+            message += `\n🎯 *TOTAL PARA LIQUIDAR:* ${formatCurrency(totalToLiquidate)}\n`;
         } else {
-            message += `\nTu cuenta se encuentra al día con los intereses informativos.\n`;
+            message += `\n✅ *ESTADO:* Su cuenta se encuentra al día con los intereses informativos.\n`;
         }
 
-        message += `\nPor favor, contacta con nosotros si tienes alguna duda. ¡Gracias!`;
+        message += `\n*Nota:* Este es un reporte generado automáticamente. Si tiene alguna duda o desea realizar un pago, por favor contáctenos directamente.\n\n`;
+        message += `¡Gracias por su puntualidad y confianza!`;
         return message;
+    };
+
+    const handleShareDebtPDF = () => {
+        if (!loan || !client) return;
+        generateDebtReportPDF(loan, client, 'share');
     };
 
     const handleShareWhatsApp = () => {
@@ -475,6 +484,13 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                                                <button 
+                                                    onClick={handleShareDebtPDF}
+                                                    className="flex-1 sm:flex-none px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold rounded uppercase border border-red-500/30 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-red-900/20 active:scale-95 animate-pulse-slow"
+                                                    title="Descargar Reporte PDF"
+                                                >
+                                                    <FileDown size={14} /> Reporte PDF
+                                                </button>
                                                 <button 
                                                     onClick={handleShareWhatsApp}
                                                     className="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded uppercase border border-emerald-500/30 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/20 active:scale-95"

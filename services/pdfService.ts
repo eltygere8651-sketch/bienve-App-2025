@@ -896,3 +896,117 @@ export const generateLoanHistoryPDF = (loan: Loan, showInterestCovered: boolean 
 
     downloadPdf(doc.output('blob'), `Historial_${loan.clientName.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`);
 };
+
+export const generateDebtReportPDF = (loan: Loan, client: Client, mode: 'download' | 'share' = 'download') => {
+    const doc = new jsPDF();
+    const generationDate = new Date().toLocaleDateString('es-ES', { 
+        day: 'numeric', month: 'long', year: 'numeric' 
+    });
+
+    const overdueItems = (loan.overdueHistory || []).filter(h => h.status === 'pendiente');
+    const totalOverdue = overdueItems.reduce((acc, curr) => acc + curr.amount, 0);
+
+    // Header
+    doc.setFillColor(15, 23, 42); // Slate 900
+    doc.rect(0, 0, 210, 45, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.setFont("helvetica", "bold");
+    doc.text("B.M CONTIGO", 20, 25);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(148, 163, 184);
+    doc.text("ESTADO DE CUENTA Y REPORTE DE DEUDA", 20, 35);
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text(`Fecha de Emisión: ${generationDate}`, 190, 25, { align: 'right' });
+
+    // Client section
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("DATOS DEL CLIENTE", 20, 60);
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Nombre: ${client.name}`, 20, 68);
+    doc.text(`Identificación: ${client.idNumber || 'N/A'}`, 20, 74);
+    doc.text(`Dirección: ${client.address || 'N/A'}`, 20, 80);
+    doc.text(`Teléfono: ${client.phone || 'N/A'}`, 20, 86);
+
+    // Financial Summary
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(20, 95, 170, 40, 3, 3, 'FD');
+
+    doc.setFont("helvetica", "bold");
+    doc.text("RESUMEN DE SALDOS", 25, 105);
+    
+    doc.setFont("helvetica", "normal");
+    doc.text("Capital Pendiente:", 25, 115);
+    doc.setFont("helvetica", "bold");
+    doc.text(formatCurrency(loan.remainingCapital), 185, 115, { align: 'right' });
+    
+    doc.setFont("helvetica", "normal");
+    doc.text("Intereses en Mora / Pendientes:", 25, 122);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(220, 38, 38); // Red
+    doc.text(formatCurrency(totalOverdue), 185, 122, { align: 'right' });
+
+    doc.setFillColor(15, 23, 42);
+    doc.rect(25, 127, 160, 0.2, 'F');
+
+    doc.setTextColor(15, 23, 42);
+    doc.text("TOTAL PARA LIQUIDAR:", 25, 133);
+    doc.setFontSize(14);
+    doc.text(formatCurrency(loan.remainingCapital + totalOverdue), 185, 133, { align: 'right' });
+
+    // Detailed Table if overdue exists
+    if (overdueItems.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("DETALLE DE INTERESES PENDIENTES", 20, 150);
+
+        (doc as any).autoTable({
+            startY: 155,
+            head: [['Periodo (Mes/Año)', 'Concepto', 'Monto de Interés']],
+            body: overdueItems.map(item => [
+                `${item.monthName} ${item.year}`,
+                'Interés Mensual Vencido',
+                formatCurrency(item.amount)
+            ]),
+            theme: 'striped',
+            headStyles: { fillColor: [15, 23, 42], textColor: 255 },
+            styles: { fontSize: 10, cellPadding: 4 }
+        });
+    } else {
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(71, 85, 105);
+        doc.text("Su cuenta se encuentra al día con los intereses informativos.", 20, 150);
+    }
+
+    // Footer
+    const lastY = (doc as any).lastAutoTable?.finalY || 160;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 116, 139);
+    const footerText = "Por favor, contacta con nosotros para cualquier duda o para registrar su pago. Gracias por su confianza.";
+    const splitFooter = doc.splitTextToSize(footerText, 170);
+    doc.text(splitFooter, 20, lastY + 20);
+
+    doc.setFontSize(8);
+    doc.text(`Documento generado electrónicamente por B.M Contigo - ${generationDate}`, 105, 285, { align: 'center' });
+
+    const filename = `Reporte_Deuda_${client.name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    const blob = doc.output('blob');
+
+    if (mode === 'share') {
+        sharePdf(blob, filename);
+    } else {
+        downloadPdf(blob, filename);
+    }
+};
