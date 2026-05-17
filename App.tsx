@@ -299,9 +299,20 @@ const App: React.FC = () => {
             <div className="fixed inset-0 flex bg-slate-900 font-sans text-slate-300 overflow-hidden">
                  {/* Mobile Header */}
                 <header className="md:hidden fixed top-0 left-0 right-0 h-16 bg-slate-900/90 backdrop-blur-xl flex items-center justify-between px-4 z-30 transition-colors border-b border-white/5">
-                    <div className="flex items-center gap-2" onClick={handleLogoClick}>
-                         <Handshake className="text-primary-500 h-6 w-6" />
-                         <h1 className="text-lg font-heading font-bold text-primary-500">B.M Contigo</h1>
+                    <div className="flex items-center gap-1">
+                        {isAuthenticated && currentView !== 'dashboard' && (
+                            <button 
+                                onClick={() => setCurrentView('dashboard')} 
+                                className="p-2 -ml-2 text-slate-400 hover:text-primary-500 active:scale-90 transition-all"
+                                aria-label="Volver al inicio"
+                            >
+                                <ChevronLeft size={24} strokeWidth={2.5} />
+                            </button>
+                        )}
+                        <div className="flex items-center gap-2" onClick={handleLogoClick}>
+                             <Handshake className="text-primary-500 h-6 w-6 shrink-0" />
+                             <h1 className="text-lg font-heading font-bold text-primary-500 truncate">B.M Contigo</h1>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <HeaderActionsMobile />

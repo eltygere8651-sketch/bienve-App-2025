@@ -1635,9 +1635,6 @@ const Accounting: React.FC = () => {
                     </h1>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
                         <p className="text-slate-400">Análisis financiero y gestión de utilidades.</p>
-                        <span className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20 font-bold self-start sm:self-auto">
-                            Excluye Clientes de Prueba
-                        </span>
                     </div>
                 </div>
                 

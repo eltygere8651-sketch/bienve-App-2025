@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loan, Client, LoanStatus } from '../types';
-import { X, Banknote, Calendar, Percent, Clock, AlertTriangle, Edit, Trash2, Save, Loader2, TrendingDown, Infinity as InfinityIcon, User, MapPin, Phone, Mail, FileText, Check, Copy, Lock, RotateCcw, FileDown, CreditCard, Share2, Send, MessageCircle } from 'lucide-react';
+import { X, Banknote, Calendar, Percent, Clock, AlertTriangle, Edit, Trash2, Save, Loader2, TrendingDown, Infinity as InfinityIcon, User, MapPin, Phone, Mail, FileText, Check, Copy, Lock, RotateCcw, FileDown, CreditCard, Share2, Send, MessageCircle, ChevronLeft } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import PaymentHistory from './PaymentHistory';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { InputField, MoneyInput } from './FormFields';
 import { calculateMonthlyInterest } from '../config';
-import { generateLoanHistoryPDF, generateDebtReportPDF } from '../services/pdfService';
+import { generateLoanHistoryPDF } from '../services/pdfService';
 
 interface LoanDetailsModalProps {
     isOpen: boolean;
@@ -67,6 +67,15 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     
     const currentSuggestion = suggestedOverdues.find(s => s.loanId === loan.id);
     
+    const totalOverdueInterest = useMemo(() => {
+        if (!loan?.overdueHistory) return 0;
+        return loan.overdueHistory
+            .filter(h => h.status === 'pendiente')
+            .reduce((acc, curr) => acc + curr.amount, 0);
+    }, [loan?.overdueHistory]);
+
+    const totalLiquidationAmount = (loan?.remainingCapital || 0) + (loan?.pendingInterest || 0) + totalOverdueInterest;
+    
     // States for Edit Forms
     const [loanFormData, setLoanFormData] = useState<Partial<Loan>>({});
     const [clientFormData, setClientFormData] = useState<Partial<Client>>({});
@@ -79,6 +88,9 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     const [manualOverdueMonth, setManualOverdueMonth] = useState('');
     const [manualOverdueYear, setManualOverdueYear] = useState(new Date().getFullYear());
     const [manualOverdueAmount, setManualOverdueAmount] = useState('');
+
+    // Message Type State
+    const [msgType, setMsgType] = useState<'recommended' | 'direct' | 'premium'>('recommended');
     
     // Balance Correction State
     const [showCorrectionInput, setShowCorrectionInput] = useState(false);
@@ -96,7 +108,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         if (loan && client) {
             setLoanFormData({
                 initialCapital: loan.initialCapital || loan.amount,
-                amount: loan.amount, // Also sync amount property
+                amount: loan.amount,
                 remainingCapital: loan.remainingCapital,
                 pendingInterest: loan.pendingInterest || 0,
                 pendingInterestDetails: loan.pendingInterestDetails || '',
@@ -130,17 +142,14 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
         const monthlyInterest = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest;
         const pendingInt = loan.pendingInterest || 0;
 
-        // Priority 1: Pay off accrued PENDING interest
         const payOffPending = Math.min(amount, pendingInt);
         const amountAfterPending = amount - payOffPending;
 
-        // Priority 2: Pay current month's Regular interest
         const payOffRegular = Math.min(amountAfterPending, monthlyInterest);
         const amountAfterRegular = amountAfterPending - payOffRegular;
 
         const totalInterestPaid = payOffPending + payOffRegular;
 
-        // Everything else goes to Capital
         const capitalPart = Math.max(0, amountAfterRegular);
         const newBalance = Math.max(0, loan.remainingCapital - capitalPart);
 
@@ -159,6 +168,24 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     }, [loan]);
 
     const pendingInterestDisplay = loan?.pendingInterest || 0;
+
+    useEffect(() => {
+        if (isOpen) {
+            window.history.pushState({ modalOpen: true }, '');
+            
+            const handlePopState = () => {
+                onClose();
+            };
+
+            window.addEventListener('popstate', handlePopState);
+            document.body.style.overflow = 'hidden';
+
+            return () => {
+                window.removeEventListener('popstate', handlePopState);
+                document.body.style.overflow = 'auto';
+            };
+        }
+    }, [isOpen, onClose]);
 
     if (!isOpen || !loan || !client) return null;
 
@@ -276,90 +303,105 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
     };
 
     const setQuickAmount = (type: 'interest' | 'full') => {
-        if (type === 'interest') setPaymentAmount(pendingInterestDisplay.toFixed(2));
-        if (type === 'full') setPaymentAmount((loan.remainingCapital + pendingInterestDisplay).toFixed(2));
+        if (type === 'interest') setPaymentAmount((pendingInterestDisplay + totalOverdueInterest).toFixed(2));
+        if (type === 'full') setPaymentAmount(totalLiquidationAmount.toFixed(2));
     };
 
-    const getShareMessage = () => {
+    const getShareMessage = (type: 'recommended' | 'direct' | 'premium' = 'recommended') => {
         if (!client || !loan) return "";
 
         const overdueItems = (loan.overdueHistory || []).filter(h => h.status === 'pendiente');
         const totalOverdue = overdueItems.reduce((acc, curr) => acc + curr.amount, 0);
-        const totalToLiquidate = loan.remainingCapital + totalOverdue;
         
-        let message = `🏛️ *B.M CONTIGO - ESTADO DE CUENTA PROFESIONAL*\n\n`;
-        message += `Estimado(a) *${client.name}*,\n\n`;
-        message += `Le saludamos cordialmente. A continuación, le presentamos el resumen actualizado de su expediente financiero con nosotros:\n\n`;
-        
-        message += `💰 *RESUMEN DE SALDOS:*\n`;
-        message += `• *Capital Pendiente:* ${formatCurrency(loan.remainingCapital)}\n`;
+        const firstName = client.name.split(' ')[0];
 
-        if (overdueItems.length > 0) {
-            message += `• *Mora/Intereses:* ${formatCurrency(totalOverdue)}\n\n`;
-            message += `🔴 *DETALLE DE INTERESES PENDIENTES:*\n`;
-            overdueItems.forEach(item => {
-                message += `  - ${item.monthName} ${item.year}: ${formatCurrency(item.amount)}\n`;
-            });
-            message += `\n🎯 *TOTAL PARA LIQUIDAR:* ${formatCurrency(totalToLiquidate)}\n`;
-        } else {
-            message += `\n✅ *ESTADO:* Su cuenta se encuentra al día con los intereses informativos.\n`;
+        if (overdueItems.length === 0) {
+            return `¡Hola *${firstName}*! 👋\n\nPaso por aquí para saludarte y comentarte que tu cuenta está totalmente al día. ¡Muchas gracias por tu excelente puntualidad! Seguimos adelante. 🚀`;
         }
 
-        message += `\n*Nota:* Este es un reporte generado automáticamente. Si tiene alguna duda o desea realizar un pago, por favor contáctenos directamente.\n\n`;
-        message += `¡Gracias por su puntualidad y confianza!`;
+        if (type === 'direct') {
+            let msg = `Hola *${firstName}*, ¿cómo estás? Te envío el detalle de los intereses pendientes a la fecha:\n\n`;
+            overdueItems.forEach(item => {
+                msg += `📍 *${item.monthName} ${item.year}:* ${formatCurrency(item.amount)}\n`;
+            });
+            msg += `\n💵 *Total:* ${formatCurrency(totalOverdue)}\n\nQuedamos atentos a tu confirmación. ¡Saludos!`;
+            return msg;
+        }
+
+        if (type === 'premium') {
+            let msg = `Estimado(a) *${firstName}*, es un gusto saludarte. Espero que estés teniendo una excelente semana.\n\n`;
+            msg += `Como parte de nuestro seguimiento de cortesía, te compartimos el estado actual de los compromisos de tu cuenta:\n\n`;
+            overdueItems.forEach(item => {
+                msg += `📍 *${item.monthName} ${item.year}:* ${formatCurrency(item.amount)}\n`;
+            });
+            msg += `\n🏛️ *Saldo pendiente:* ${formatCurrency(totalOverdue)}\n\n`;
+            msg += `Nuestro compromiso es brindarte la mejor experiencia y asegurar la salud de tu cuenta con nosotros. Si necesitas asistencia, estamos a tu disposición.\n\nUn cordial saludo.`;
+            return msg;
+        }
+
+        // Recommended
+        let message = `¡Hola *${firstName}*! 👋 ¿Cómo estás? Espero que todo vaya excelente.\n\n`;
+        message += `Te paso por aquí este recordatorio de los intereses que tenemos pendientes por regularizar:\n\n`;
+        
+        overdueItems.forEach(item => {
+            message += `📍 *${item.monthName} ${item.year}:* ${formatCurrency(item.amount)}\n`;
+        });
+        
+        message += `\n💰 *Total pendiente:* ${formatCurrency(totalOverdue)}\n\n`;
+        message += `Valoramos mucho tu confianza y queremos que tu cuenta siga marchando en orden para que sigamos creciendo juntos. Por favor, cuando tengas un momento nos avisas para coordinar.\n\n`;
+        message += `¡Cualquier duda quedo a tu orden! Un gran abrazo.`;
+        
         return message;
     };
 
-    const handleShareDebtPDF = () => {
-        if (!loan || !client) return;
-        generateDebtReportPDF(loan, client, 'share');
-    };
-
-    const handleShareWhatsApp = () => {
-        const message = getShareMessage();
-        if (!message) return;
-        const encodedMessage = encodeURIComponent(message);
-        const phone = client.phone ? client.phone.replace(/\D/g, '') : '';
-        const whatsappUrl = `https://wa.me/${phone}?text=${encodedMessage}`;
-        window.open(whatsappUrl, '_blank');
-    };
-
-    const handleShareTelegram = () => {
-        const message = getShareMessage();
-        if (!message) return;
-        const encodedMessage = encodeURIComponent(message);
-        const telegramUrl = `https://t.me/share/url?url=&text=${encodedMessage}`;
-        window.open(telegramUrl, '_blank');
-    };
-
     const handleCopyReport = () => {
-        const message = getShareMessage();
+        const message = getShareMessage(msgType);
         if (!message) return;
         navigator.clipboard.writeText(message);
         showToast('Reporte copiado al portapapeles', 'success');
     };
 
+    const handleClose = () => {
+        // If the modal was opened normally, it pushed a state. 
+        // If we close manually, we should pop it to keep history clean
+        if (window.history.state?.modalOpen) {
+            window.history.back();
+        } else {
+            onClose();
+        }
+    };
+
     return (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex justify-center items-center z-50 p-2 sm:p-4 animate-modal-backdrop" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex justify-center items-center z-50 animate-modal-backdrop sm:p-4" onClick={handleClose}>
             {/* Modal Card - Fixed Max Height on Desktop, Full on Mobile */}
-            <div className="bg-slate-900 w-full h-full sm:h-auto sm:max-h-[90vh] sm:max-w-6xl rounded-none sm:rounded-2xl shadow-2xl flex flex-col border border-slate-700 overflow-hidden animate-modal-content" onClick={e => e.stopPropagation()}>
+            <div className="bg-slate-900 w-full h-full sm:h-auto sm:max-h-[95vh] sm:max-w-6xl rounded-none sm:rounded-3xl shadow-2xl flex flex-col border border-slate-700/50 overflow-hidden animate-modal-content" onClick={e => e.stopPropagation()}>
                 
-                {/* 1. Header Global */}
-                <div className="px-6 py-4 bg-slate-800/80 border-b border-slate-700 flex justify-between items-center shrink-0 z-10 backdrop-blur-md">
-                    <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 bg-gradient-to-br from-primary-600 to-indigo-700 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-primary-900/50">
+                {/* 1. Header Global - SAFE AREA OPTIMIZED FOR IOS/ANDROID */}
+                <div className="px-4 pb-4 sm:pt-4 pt-12 bg-slate-800/80 border-b border-slate-700 flex justify-between items-center shrink-0 z-10 backdrop-blur-md">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <button 
+                            onClick={handleClose} 
+                            className="sm:hidden -ml-1 p-2 rounded-full text-primary-400 active:scale-90 transition-transform"
+                            aria-label="Volver"
+                        >
+                            <ChevronLeft size={26} strokeWidth={2.5} />
+                        </button>
+                        <div className="h-10 w-10 sm:h-12 sm:w-12 shrink-0 bg-gradient-to-br from-primary-600 to-indigo-700 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-primary-900/50">
                             {client.name.charAt(0)}
                         </div>
-                        <div className="min-w-0">
-                            <h2 className="text-xl font-heading font-bold text-white leading-tight truncate pr-4">{client.name}</h2>
-                            <div className="flex items-center gap-2 text-sm text-slate-400">
-                                <span className="font-mono bg-slate-700/50 px-1.5 rounded">{client.idNumber || 'Sin ID'}</span>
-                                <span className="w-1 h-1 bg-slate-600 rounded-full"></span>
-                                <span className={`font-bold ${loan.status === LoanStatus.OVERDUE ? 'text-red-400' : 'text-emerald-400'}`}>{loan.status}</span>
+                        <div className="min-w-0 flex-1">
+                            <h2 className="text-base sm:text-xl font-heading font-bold text-white leading-tight truncate">{client.name}</h2>
+                            <div className="flex items-center gap-2 text-[10px] sm:text-sm text-slate-400">
+                                <span className="font-mono bg-slate-700/50 px-1.2 rounded truncate max-w-[80px] sm:max-w-none">{client.idNumber || 'Sin ID'}</span>
+                                <span className="w-1 h-1 bg-slate-600 rounded-full shrink-0"></span>
+                                <span className={`font-bold shrink-0 ${loan.status === LoanStatus.OVERDUE ? 'text-red-400' : 'text-emerald-400'}`}>{loan.status}</span>
                             </div>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-700 text-slate-400 transition-colors shrink-0"><X size={24} /></button>
+                    <button onClick={handleClose} className="p-2 sm:p-2.5 rounded-full hover:bg-slate-700 text-slate-400 transition-colors shrink-0 bg-slate-800/50 border border-slate-700 sm:border-transparent ml-2">
+                        <X size={20} className="sm:hidden" />
+                        <X size={24} className="hidden sm:block" />
+                    </button>
                 </div>
 
                 {/* Body Wrapper */}
@@ -457,12 +499,12 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                 <Check size={20}/> Liquidación Total
                                             </h4>
                                             <p className="text-sm text-slate-400 mt-1">
-                                                Monto total para cancelar la deuda de Capital.
+                                                Monto total para cancelar la deuda completa (Capital + Intereses).
                                             </p>
                                         </div>
                                         <div className="text-left sm:text-right w-full sm:w-auto bg-slate-900/50 sm:bg-transparent p-3 sm:p-0 rounded-lg border border-slate-700/50 sm:border-none">
                                             <p className="text-xs text-slate-500 uppercase font-bold mb-1 sm:hidden">Total a Pagar</p>
-                                            <p className="text-3xl font-bold text-white font-mono">{formatCurrency(loan.remainingCapital)}</p>
+                                            <p className="text-3xl font-bold text-white font-mono">{formatCurrency(totalLiquidationAmount)}</p>
                                             <button 
                                                 onClick={() => { setActiveTab('payment'); setQuickAmount('full'); }} 
                                                 className="mt-2 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors shadow-lg shadow-indigo-900/20"
@@ -484,34 +526,24 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                                                <button 
-                                                    onClick={handleShareDebtPDF}
-                                                    className="flex-1 sm:flex-none px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white text-[10px] font-bold rounded uppercase border border-red-500/30 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-red-900/20 active:scale-95 animate-pulse-slow"
-                                                    title="Descargar Reporte PDF"
-                                                >
-                                                    <FileDown size={14} /> Reporte PDF
-                                                </button>
-                                                <button 
-                                                    onClick={handleShareWhatsApp}
-                                                    className="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold rounded uppercase border border-emerald-500/30 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/20 active:scale-95"
-                                                    title="Compartir por WhatsApp"
-                                                >
-                                                    <MessageCircle size={12} /> WhatsApp
-                                                </button>
-                                                <button 
-                                                    onClick={handleShareTelegram}
-                                                    className="flex-1 sm:flex-none px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold rounded uppercase border border-sky-500/30 transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-sky-900/20 active:scale-95"
-                                                    title="Compartir por Telegram"
-                                                >
-                                                    <Send size={12} /> Telegram
-                                                </button>
-                                                <button 
-                                                    onClick={handleCopyReport}
-                                                    className="flex-1 sm:flex-none px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-bold rounded uppercase border border-slate-600 transition-all flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
-                                                    title="Copiar Reporte"
-                                                >
-                                                    <Copy size={12} /> Copiar
-                                                </button>
+                                                <div className="flex flex-1 sm:flex-none items-center bg-slate-700/50 rounded-lg border border-slate-600 overflow-hidden shadow-lg">
+                                                    <select
+                                                        value={msgType}
+                                                        onChange={(e) => setMsgType(e.target.value as any)}
+                                                        className="bg-transparent px-3 py-2 text-[10px] font-bold text-slate-300 outline-none border-r border-slate-600 cursor-pointer hover:bg-slate-700 transition-colors"
+                                                    >
+                                                        <option value="recommended">Recomendado</option>
+                                                        <option value="direct">Directo</option>
+                                                        <option value="premium">Premium</option>
+                                                    </select>
+                                                    <button 
+                                                        onClick={handleCopyReport}
+                                                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                                                        title="Copiar Recordatorio de Mora"
+                                                    >
+                                                        <Copy size={14} /> Copiar
+                                                    </button>
+                                                </div>
                                                 <button 
                                                     onClick={() => {
                                                         const nextStatus = loan.status === LoanStatus.OVERDUE ? LoanStatus.PENDING : LoanStatus.OVERDUE;
@@ -720,11 +752,11 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({ isOpen, onClose, lo
                                         </h3>
                                         
                                         <div className="flex gap-2 mb-6">
-                                            <button onClick={() => setPaymentAmount(calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest.toFixed(2))} className="flex-1 py-3 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 transition-colors border border-slate-600">
-                                                Cobrar Interés Mensual ({formatCurrency(calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest)})
+                                            <button onClick={() => setQuickAmount('interest')} className="flex-1 py-3 px-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs font-bold text-slate-300 transition-colors border border-slate-600">
+                                                Intereses Pendientes ({formatCurrency(pendingInterestDisplay + totalOverdueInterest)})
                                             </button>
-                                            <button onClick={() => setQuickAmount('full')} className="flex-1 py-3 px-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-slate-300 transition-colors border border-slate-600">
-                                                Liquidar Capital
+                                            <button onClick={() => setQuickAmount('full')} className="flex-1 py-3 px-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs font-bold text-slate-300 transition-colors border border-slate-600">
+                                                Liquidar Total ({formatCurrency(totalLiquidationAmount)})
                                             </button>
                                         </div>
 
