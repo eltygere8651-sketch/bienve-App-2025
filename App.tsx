@@ -212,7 +212,6 @@ const App: React.FC = () => {
                     <>
                         <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<FileText />} label="Iniciar Solicitud" view="loanRequest" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
-                        <NavItem icon={<User />} label="Portal del Cliente" view="clientPortal" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                     </>
                 )}
 

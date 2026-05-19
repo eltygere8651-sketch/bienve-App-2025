@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useDataContext } from '../contexts/DataContext';
-import { ShieldAlert, Search, RefreshCw, FileText, ChevronRight, User, Phone, CheckCircle2, AlertCircle, Clock, Check, X } from 'lucide-react';
+import { ShieldAlert, Search, RefreshCw, FileText, ChevronRight, User, Phone, CheckCircle2, AlertCircle, Clock, Check, X, Download, CalendarDays } from 'lucide-react';
 import { Client, Loan, LoanStatus } from '../types';
 import { formatCurrency } from '../services/utils';
+import { generateLoanHistoryPDF } from '../services/pdfService';
 
 const ClientPortal: React.FC = () => {
     const { clients, loans } = useDataContext();
-    const [loginMode, setLoginMode] = useState(true);
-    const [idNumberInput, setIdNumberInput] = useState('');
-    const [phoneInput, setPhoneInput] = useState('');
     const [activeClient, setActiveClient] = useState<Client | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
     const [isPortalLinkLoading, setIsPortalLinkLoading] = useState(() => {
@@ -26,54 +24,16 @@ const ClientPortal: React.FC = () => {
                 const foundUrlClient = clients.find(c => c.id === urlClientId);
                 if (foundUrlClient) {
                     setActiveClient(foundUrlClient);
-                    setLoginMode(false);
                 } else {
                     setErrorMsg('Enlace de portal inválido o cliente no encontrado.');
-                    setIsPortalLinkLoading(false);
                 }
                 setIsPortalLinkLoading(false); // Stop loading once clients are checked
             }
         } else {
             setIsPortalLinkLoading(false);
+            setErrorMsg('Enlace de portal no proporcionado.');
         }
     }, [clients]);
-
-    const handleLogin = (e: React.FormEvent) => {
-        e.preventDefault();
-        setErrorMsg('');
-
-        if (!idNumberInput) {
-            setErrorMsg('Por favor ingrese su número de identificación (Cédula).');
-            return;
-        }
-
-        const found = clients.find(c => 
-            c.idNumber === idNumberInput && 
-            (!phoneInput || (c.phone && c.phone === phoneInput))
-        );
-
-        if (found) {
-            setActiveClient(found);
-            setLoginMode(false);
-        } else {
-            setErrorMsg('Credenciales no válidas. Revise su número de cédula y teléfono o contacte con administración.');
-        }
-    };
-
-    const handleLogout = () => {
-        setActiveClient(null);
-        setLoginMode(true);
-        setIdNumberInput('');
-        setPhoneInput('');
-        setErrorMsg('');
-        
-        // Remove portal param from URL if it exists
-        const url = new URL(window.location.href);
-        if (url.searchParams.has('portal')) {
-            url.searchParams.delete('portal');
-            window.history.pushState({}, '', url.toString());
-        }
-    };
 
     if (isPortalLinkLoading) {
         return (
@@ -85,68 +45,17 @@ const ClientPortal: React.FC = () => {
         );
     }
 
-    if (loginMode) {
+    if (!activeClient) {
         return (
             <div className="flex justify-center items-center h-full min-h-[70vh] animate-fade-in px-4">
-                <div className="w-full max-w-md bg-slate-800/80 backdrop-blur-xl p-8 rounded-3xl border border-slate-700/50 shadow-2xl">
-                    <div className="flex justify-center mb-6">
-                        <div className="bg-primary-500/20 p-4 rounded-full">
-                            <User className="h-10 w-10 text-primary-400" />
-                        </div>
-                    </div>
-                    <h2 className="text-2xl font-bold text-center text-white mb-2">Portal del Cliente</h2>
-                    <p className="text-center text-slate-400 text-sm mb-8">
-                        Consulte el estado de sus préstamos y pagos
-                    </p>
-
-                    {errorMsg && (
-                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
-                            <ShieldAlert className="text-red-400 shrink-0 mt-0.5" size={18} />
-                            <p className="text-sm text-red-200 leading-relaxed font-medium">{errorMsg}</p>
-                        </div>
-                    )}
-
-                    <form onSubmit={handleLogin} className="space-y-5">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">No. Identificación (Cédula)</label>
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                                <input
-                                    type="text"
-                                    value={idNumberInput}
-                                    onChange={(e) => setIdNumberInput(e.target.value)}
-                                    placeholder="Ej. Cédula o DPI"
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all font-medium"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Teléfono (Opcional)</label>
-                            <div className="relative">
-                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                                <input
-                                    type="tel"
-                                    value={phoneInput}
-                                    onChange={(e) => setPhoneInput(e.target.value)}
-                                    placeholder="Número registrado"
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-all font-medium"
-                                />
-                            </div>
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="w-full bg-primary-600 hover:bg-primary-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-primary-900/20 transition-all focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-slate-900 mt-2"
-                        >
-                            Acceder a mi portal
-                        </button>
-                    </form>
+                <div className="w-full max-w-md bg-slate-800/80 backdrop-blur-xl p-8 rounded-3xl border border-red-500/30 shadow-2xl text-center">
+                    <ShieldAlert className="h-16 w-16 text-red-400 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-white mb-2">Acceso Denegado</h2>
+                    <p className="text-slate-400 text-sm">{errorMsg || 'Enlace no válido.'}</p>
                 </div>
             </div>
         );
     }
-
-    if (!activeClient) return null;
 
     const clientLoans = loans.filter(l => l.clientId === activeClient.id);
     const activeLoans = clientLoans.filter(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
@@ -162,12 +71,6 @@ const ClientPortal: React.FC = () => {
                     <h2 className="text-2xl font-bold text-white mb-1">¡Hola, {activeClient.name}!</h2>
                     <p className="text-slate-400 text-sm">Resumen de tus préstamos y aportaciones.</p>
                 </div>
-                <button
-                    onClick={handleLogout}
-                    className="relative z-10 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium rounded-lg transition-colors shadow flex items-center gap-2"
-                >
-                    <X size={16} /> Cerrar Sesión
-                </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -222,22 +125,49 @@ const ClientPortal: React.FC = () => {
                                                 ></div>
                                             </div>
                                             
-                                            <div className="flex justify-between items-end mt-4 pt-4 border-t border-slate-700/50">
-                                                <div>
-                                                    <span className="block text-xs text-slate-500 mb-1">Saldo Pendiente</span>
-                                                    <span className="font-bold text-white">{formatCurrency(loan.remainingCapital)}</span>
-                                                </div>
-                                                {loan.lastPaymentDate ? (
-                                                    <div className="text-right">
-                                                         <span className="block text-xs text-slate-500 mb-1">Último Pago</span>
-                                                         <span className="text-sm font-medium text-slate-300">
-                                                            {new Date(loan.lastPaymentDate).toLocaleDateString()}
-                                                         </span>
+                                            <div className="flex flex-col gap-4 mt-4 pt-4 border-t border-slate-700/50">
+                                                <div className="flex justify-between items-end">
+                                                    <div>
+                                                        <span className="block text-xs text-slate-500 mb-1">Saldo Pendiente</span>
+                                                        <span className="font-bold text-white">{formatCurrency(loan.remainingCapital)}</span>
                                                     </div>
-                                                ) : (
-                                                    <span className="text-xs text-slate-500 italic">Sin pagos aún</span>
-                                                )}
+                                                    {loan.lastPaymentDate ? (
+                                                        <div className="text-right">
+                                                            <span className="block text-xs text-slate-500 mb-1">Último Pago</span>
+                                                            <span className="text-sm font-medium text-slate-300">
+                                                                {new Date(loan.lastPaymentDate).toLocaleDateString()}
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-right">
+                                                            <span className="text-xs text-slate-500 italic">Sin pagos aún</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex justify-between items-center bg-primary-900/10 border border-primary-500/20 p-3 rounded-lg">
+                                                    <div className="flex items-center gap-2">
+                                                        <CalendarDays className="text-primary-400" size={16} />
+                                                        <span className="text-xs font-semibold text-primary-300">Próximo Pago Est.</span>
+                                                    </div>
+                                                    <span className="text-sm font-bold text-primary-400">
+                                                        {(() => {
+                                                            const baseDateStr = loan.lastPaymentDate || loan.startDate;
+                                                            const baseDate = new Date(baseDateStr);
+                                                            baseDate.setMonth(baseDate.getMonth() + 1);
+                                                            return baseDate.toLocaleDateString();
+                                                        })()}
+                                                    </span>
+                                                </div>
                                             </div>
+                                        </div>
+                                        <div className="mt-4 flex justify-end">
+                                            <button
+                                                onClick={() => generateLoanHistoryPDF(loan, false)}
+                                                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors shadow-md"
+                                            >
+                                                <Download size={16} />
+                                                Descargar Historial
+                                            </button>
                                         </div>
                                     </div>
                                 );
