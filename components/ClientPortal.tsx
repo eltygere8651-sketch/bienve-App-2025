@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, RefreshCw, User, CheckCircle2, AlertCircle, Clock, Check, Download, CalendarDays } from 'lucide-react';
-import { Client, Loan, LoanStatus } from '../types';
+import { ShieldAlert, RefreshCw, User, CheckCircle2, AlertCircle, Clock, Check, Download, CalendarDays, FileText } from 'lucide-react';
+import { Client, Loan, LoanStatus, PaymentRecord } from '../types';
 import { formatCurrency } from '../services/utils';
-import { generateLoanHistoryPDF } from '../services/pdfService';
+import { generatePaymentReceiptPdf, downloadPdf } from '../services/pdfService';
 import { getDocument, getCollection, where } from '../services/firebaseService';
 import { TABLE_NAMES } from '../constants';
 
@@ -49,6 +49,14 @@ const ClientPortal: React.FC = () => {
         }
     }, []);
 
+    const formatClientName = (fullName: string) => {
+        const parts = fullName.trim().split(/\s+/);
+        if (parts.length > 1) {
+            return `${parts[0]} ${parts[1].substring(0, 1)}.`;
+        }
+        return parts[0];
+    };
+
     if (isPortalLinkLoading) {
         return (
             <div className="flex flex-col justify-center items-center h-full min-h-[70vh] animate-pulse px-4">
@@ -81,8 +89,8 @@ const ClientPortal: React.FC = () => {
                     <User size={120} />
                 </div>
                 <div className="relative z-10">
-                    <h2 className="text-2xl font-bold text-white mb-1">¡Hola, {activeClient.name}!</h2>
-                    <p className="text-slate-400 text-sm">Resumen de tus préstamos y aportaciones.</p>
+                    <h2 className="text-2xl font-bold text-white mb-1">¡Hola, {formatClientName(activeClient.name)}!</h2>
+                    <p className="text-slate-400 text-sm">Resumen de tus préstamos y aportaciones de manera segura 🔒</p>
                 </div>
             </div>
 
@@ -98,89 +106,129 @@ const ClientPortal: React.FC = () => {
                              No tienes préstamos activos actualmente.
                         </div>
                     ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-6">
                             {activeLoans.map(loan => {
-                                const progressStatus = Math.min((loan.paymentsMade / loan.term) * 100, 100) || 0;
                                 const isOverdue = loan.status === LoanStatus.OVERDUE;
                                 
+                                // Obtener el último pago del historial para mostrar su monto real y fecha
+                                const paymentsSorted = loan.paymentHistory
+                                    ? [...loan.paymentHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                    : [];
+                                const lastPayment = paymentsSorted[0];
+                                const last3Payments = paymentsSorted.slice(0, 3);
+                                
                                 return (
-                                    <div key={loan.id} className={`bg-slate-800 border ${isOverdue ? 'border-red-500/50' : 'border-slate-700/50'} rounded-2xl p-5 shadow-lg relative overflow-hidden`}>
-                                         {isOverdue && (
-                                            <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
-                                        )}
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div>
-                                                <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold mb-3 border ${
-                                                    isOverdue ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                }`}>
-                                                    {isOverdue ? 'Atrasado' : 'Al Día'}
-                                                </span>
-                                                <h4 className="text-xl font-bold text-white mb-1">{formatCurrency(loan.amount)}</h4>
-                                                <p className="text-xs text-slate-400">
-                                                    Iniciado: {new Date(loan.startDate).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-sm text-slate-400 mb-1">Cuota</div>
-                                                <div className="font-bold text-emerald-400 text-lg">{formatCurrency(loan.monthlyPayment)}</div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="bg-slate-900/50 rounded-xl p-4 mt-4 border border-slate-700/30">
-                                            <div className="flex justify-between text-sm mb-2">
-                                                <span className="text-slate-400">Progreso ({loan.paymentsMade}/{loan.term})</span>
-                                                <span className="text-white font-medium">{progressStatus.toFixed(0)}%</span>
-                                            </div>
-                                            <div className="w-full bg-slate-700 rounded-full h-2">
-                                                <div 
-                                                    className={`h-2 rounded-full ${isOverdue ? 'bg-red-500' : 'bg-primary-500'}`} 
-                                                    style={{ width: `${progressStatus}%` }}
-                                                ></div>
-                                            </div>
+                                    <div key={loan.id} className="space-y-4">
+                                        <div className={`bg-gradient-to-b from-slate-800 to-slate-900 border ${isOverdue ? 'border-red-500/50' : 'border-slate-700/50'} rounded-3xl p-6 shadow-xl relative overflow-hidden`}>
+                                             {isOverdue && (
+                                                <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
+                                            )}
                                             
-                                            <div className="flex flex-col gap-4 mt-4 pt-4 border-t border-slate-700/50">
-                                                <div className="flex justify-between items-end">
-                                                    <div>
-                                                        <span className="block text-xs text-slate-500 mb-1">Saldo Pendiente</span>
-                                                        <span className="font-bold text-white">{formatCurrency(loan.remainingCapital)}</span>
-                                                    </div>
-                                                    {loan.lastPaymentDate ? (
-                                                        <div className="text-right">
-                                                            <span className="block text-xs text-slate-500 mb-1">Último Pago</span>
-                                                            <span className="text-sm font-medium text-slate-300">
-                                                                {new Date(loan.lastPaymentDate).toLocaleDateString()}
-                                                            </span>
+                                            {/* Cabecera de Estado simplificada */}
+                                            <div className="flex justify-between items-center mb-4">
+                                                <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold border ${
+                                                    isOverdue ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                }`}>
+                                                    {isOverdue ? 'Pendiente con Atraso' : 'Servicio Al Día'}
+                                                </span>
+                                                <span className="text-xs text-slate-500 font-mono">ID: {loan.id.substring(loan.id.length - 6).toUpperCase()}</span>
+                                            </div>
+
+                                            {/* Información de Deuda Pendiente (Saldo) destacada */}
+                                            <div className="mb-6">
+                                                <span className="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Monto Pendiente Actual</span>
+                                                <span className="text-4xl font-extrabold text-white tracking-tight">{formatCurrency(loan.remainingCapital)}</span>
+                                            </div>
+
+                                            {/* Detalles principales del último y próximo pago */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-700/30">
+                                                {/* Registro de Último Pago */}
+                                                <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-700/20">
+                                                    <span className="block text-xs text-slate-500 font-medium mb-1">Último Pago Realizado</span>
+                                                    {lastPayment ? (
+                                                        <div>
+                                                            <span className="text-base font-bold text-emerald-400">{formatCurrency(lastPayment.amount)}</span>
+                                                            <span className="text-xs text-slate-400 block mt-0.5">Fecha: {new Date(lastPayment.date).toLocaleDateString()}</span>
                                                         </div>
                                                     ) : (
-                                                        <div className="text-right">
-                                                            <span className="text-xs text-slate-500 italic">Sin pagos aún</span>
-                                                        </div>
+                                                        <span className="text-xs text-slate-400 font-medium block italic">Sin pagos registrados aún</span>
                                                     )}
                                                 </div>
-                                                <div className="flex justify-between items-center bg-primary-900/10 border border-primary-500/20 p-3 rounded-lg">
-                                                    <div className="flex items-center gap-2">
-                                                        <CalendarDays className="text-primary-400" size={16} />
-                                                        <span className="text-xs font-semibold text-primary-300">Próximo Pago Est.</span>
+
+                                                {/* Fecha Aproximada de Siguiente Pago */}
+                                                <div className="bg-primary-950/20 p-3 rounded-xl border border-primary-500/15">
+                                                    <span className="block text-xs text-primary-400 font-semibold mb-1">Fecha Aprox. Siguiente Pago</span>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <CalendarDays className="text-primary-400 shrink-0" size={15} />
+                                                        <span className="text-sm font-bold text-white">
+                                                            {(() => {
+                                                                const baseDateStr = loan.lastPaymentDate || loan.startDate;
+                                                                const baseDate = new Date(baseDateStr);
+                                                                baseDate.setMonth(baseDate.getMonth() + 1);
+                                                                return baseDate.toLocaleDateString();
+                                                            })()}
+                                                        </span>
                                                     </div>
-                                                    <span className="text-sm font-bold text-primary-400">
-                                                        {(() => {
-                                                            const baseDateStr = loan.lastPaymentDate || loan.startDate;
-                                                            const baseDate = new Date(baseDateStr);
-                                                            baseDate.setMonth(baseDate.getMonth() + 1);
-                                                            return baseDate.toLocaleDateString();
-                                                        })()}
-                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="mt-4 flex justify-end">
-                                            <button
-                                                onClick={() => generateLoanHistoryPDF(loan, false)}
-                                                className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition-colors shadow-md"
-                                            >
-                                                <Download size={16} />
-                                                Descargar Historial
-                                            </button>
+
+                                        {/* Lista de últimos 3 recibos/pagos */}
+                                        <div className="bg-slate-800/60 rounded-3xl p-5 border border-slate-700/40 shadow-md">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                                                <FileText className="text-primary-400" size={16} />
+                                                Últimos 3 Recibos de Pago
+                                            </h4>
+                                            
+                                            {last3Payments.length === 0 ? (
+                                                <div className="text-slate-500 text-xs py-2 italic text-center">
+                                                    Aún no se registran transacciones para este préstamo.
+                                                </div>
+                                            ) : (
+                                                <div className="divide-y divide-slate-700/50">
+                                                    {last3Payments.map(payment => (
+                                                        <div key={payment.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
+                                                            <div>
+                                                                <span className="text-xs font-semibold text-slate-300 block">
+                                                                    Abono Realizado
+                                                                </span>
+                                                                <span className="text-2xs text-slate-500 block mt-0.5">
+                                                                    {new Date(payment.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-sm font-bold text-white">{formatCurrency(payment.amount)}</span>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (!activeClient) return;
+                                                                        const prevBal = payment.remainingCapitalAfter + payment.capitalPaid;
+                                                                        const receiptPayload = {
+                                                                            clientName: activeClient.name,
+                                                                            loanId: loan.id,
+                                                                            paymentAmount: payment.amount,
+                                                                            paymentType: 'Pago de Cuota',
+                                                                            paymentDate: payment.date,
+                                                                            notes: payment.notes || '',
+                                                                            previousBalance: prevBal,
+                                                                            newBalance: payment.remainingCapitalAfter,
+                                                                            interestPaid: payment.interestPaid,
+                                                                            capitalPaid: payment.capitalPaid
+                                                                        };
+                                                                        const doc = generatePaymentReceiptPdf(receiptPayload);
+                                                                        const fileName = `Recibo_${activeClient.name.replace(/\s/g, '_')}_${new Date(payment.date).toISOString().split('T')[0]}.pdf`;
+                                                                        const blob = doc.output('blob');
+                                                                        downloadPdf(blob, fileName);
+                                                                    }}
+                                                                    title="Descargar Recibo en PDF"
+                                                                    className="p-1.5 hover:bg-slate-700/60 text-primary-400 hover:text-primary-300 rounded-lg transition-all focus:outline-none"
+                                                                >
+                                                                    <Download size={15} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -207,8 +255,9 @@ const ClientPortal: React.FC = () => {
                                         <Check size={24} />
                                      </div>
                                      <div className="flex-1">
-                                        <h4 className="text-white font-bold">{formatCurrency(loan.amount)}</h4>
-                                        <div className="flex gap-4 mt-1 text-xs text-slate-400">
+                                        <h4 className="text-white font-bold">Crédito Finalizado</h4>
+                                        <span className="text-2xs text-slate-500 block uppercase font-mono tracking-wide mt-0.5">ID: {loan.id.substring(loan.id.length - 6).toUpperCase()}</span>
+                                        <div className="flex gap-4 mt-2 text-xs text-slate-400">
                                             <span>Otorgado: {new Date(loan.startDate).toLocaleDateString()}</span>
                                             {loan.lastPaymentDate && <span>Completado: {new Date(loan.lastPaymentDate).toLocaleDateString()}</span>}
                                         </div>
