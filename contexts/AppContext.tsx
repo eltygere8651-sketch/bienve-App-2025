@@ -54,7 +54,13 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const [toast, setToast] = useState<ToastMessage>({ message: '', type: 'info' });
     const [user, setUser] = useState<any | null>(null);
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-    const [currentView, setCurrentView] = useState<AppView>('welcome');
+    const [currentView, setCurrentView] = useState<AppView>(() => {
+        const queryParams = new URLSearchParams(window.location.search);
+        if (queryParams.has('portal')) {
+            return 'clientPortal';
+        }
+        return 'welcome';
+    });
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [hasAdminAccount, setHasAdminAccount] = useState(true); 
     const [isOnline, setIsOnline] = useState(navigator.onLine);

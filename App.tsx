@@ -7,7 +7,7 @@ import Welcome from './components/Welcome';
 import Toast from './components/Toast';
 import ConfirmationModal from './components/ConfirmationModal';
 import NavItem from './components/NavItem';
-import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Share2, Download, History, PieChart, Calculator, TrendingUp } from 'lucide-react';
+import { Handshake, LayoutDashboard, Users, FileText, GitPullRequest, Loader2, LogOut, LogIn, ChevronLeft, ChevronRight, Home, ReceiptText, Settings, DatabaseBackup, Menu, Share2, Download, History, PieChart, Calculator, TrendingUp, User } from 'lucide-react';
 import { useAppContext } from './contexts/AppContext';
 import { useDataContext } from './contexts/DataContext';
 import LoanRequestForm from './components/LoanRequestForm';
@@ -24,6 +24,7 @@ const NewClientForm = React.lazy(() => import('./components/NewClientForm'));
 const HistoryPanel = React.lazy(() => import('./components/HistoryPanel'));
 const Accounting = React.lazy(() => import('./components/Accounting'));
 const LoanCalculator = React.lazy(() => import('./components/LoanCalculator'));
+const ClientPortal = React.lazy(() => import('./components/ClientPortal'));
 
 const LoadingFallback = () => (
     <div className="flex justify-center items-center h-full min-h-[50vh]">
@@ -163,6 +164,7 @@ const App: React.FC = () => {
                         case 'clients': return isAuthenticated ? <ClientList /> : <Auth />;
                         case 'newClient': return isAuthenticated ? <NewClientForm /> : <Auth />;
                         case 'loanRequest': return <LoanRequestForm />;
+                        case 'clientPortal': return <ClientPortal />;
                         case 'requests': return isAuthenticated ? <RequestList /> : <Auth />;
                         case 'auth': return <Auth />;
                         case 'receiptGenerator': return isAuthenticated ? <ReceiptGenerator /> : <Auth />;
@@ -210,6 +212,7 @@ const App: React.FC = () => {
                     <>
                         <NavItem icon={<Home />} label="Bienvenida" view="welcome" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                         <NavItem icon={<FileText />} label="Iniciar Solicitud" view="loanRequest" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
+                        <NavItem icon={<User />} label="Portal del Cliente" view="clientPortal" currentView={currentView} onClick={handleNavClick} isSidebarOpen={isSidebarOpen || isMobileMenuOpen} />
                     </>
                 )}
 

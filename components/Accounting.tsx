@@ -15,6 +15,7 @@ import { downloadPdf } from '../services/pdfService';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import OverdueBreakdownModal from './OverdueBreakdownModal';
+import CashflowForecaster from './CashflowForecaster';
 
 // --- COMPONENTS ---
 
@@ -1376,7 +1377,7 @@ const ProfitsCalculator: React.FC<ProfitsProps> = ({ totalInvested, totalRecover
 const Accounting: React.FC = () => {
     const { loans, archivedLoans, hasMoreArchivedLoans, loadAllHistory, allHistoryLoaded, recalculateTreasury, reinvestments, clients } = useDataContext(); // Added clients
     const { showToast } = useAppContext();
-    const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal' | 'reinvestments'>('global');
+    const [activeTab, setActiveTab] = useState<'global' | 'profits' | 'personal' | 'reinvestments' | 'payments' | 'forecaster'>('global');
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [showOverdueBreakdown, setShowOverdueBreakdown] = useState(false);
     
@@ -1688,6 +1689,13 @@ const Accounting: React.FC = () => {
                 >
                     <Umbrella size={18} /> 
                     <span>Finanzas Personales</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('forecaster')}
+                    className={`col-span-2 md:col-span-1 md:w-auto flex items-center justify-center md:justify-start gap-2 px-3 py-3 rounded-xl text-sm font-bold transition-all border ${activeTab === 'forecaster' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30 shadow-lg shadow-purple-900/20' : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-slate-200'}`}
+                >
+                    <Target size={18} /> 
+                    <span>Proyección</span>
                 </button>
                 {activeTab === 'global' && (
                     <div className="flex flex-col sm:flex-row gap-3 animate-fade-in w-full md:w-auto">
@@ -2068,6 +2076,10 @@ const Accounting: React.FC = () => {
                         </div>
                     </div>
                 </>
+            )}
+
+            {activeTab === 'forecaster' && (
+                <CashflowForecaster treasurySettings={treasurySettings} />
             )}
         </div>
     );

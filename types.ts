@@ -137,7 +137,7 @@ export interface LoanRequest {
     signature?: string;
 }
 
-export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient' | 'history' | 'accounting' | 'loanCalculator';
+export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'requests' | 'receiptGenerator' | 'settings' | 'dataManagement' | 'auth' | 'newClient' | 'history' | 'accounting' | 'loanCalculator' | 'clientPortal';
 
 export type FilterStatus = LoanStatus | 'Todos';
 

@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2, Clock, Trash2 } from 'lucide-react';
+import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2, Clock, Trash2, Activity, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import LoanDetailsModal from './LoanDetailsModal';
 import NewLoanModal from './NewLoanModal';
@@ -12,6 +12,84 @@ import { generateClientReport, generateFullClientListPDF } from '../services/pdf
 interface ClientWithData extends Client {
     loans: Loan[];
 }
+
+// === RISK SCORING ALGORITHM (Machine Learning Simple) ===
+const calculateRiskProfile = (client: ClientWithData) => {
+    let score = 500; // Base score
+    let maxPreviousAmount = 0;
+    let overdueIncidents = 0;
+    let totalCompleted = 0;
+    let totalPaymentsMade = 0;
+
+    // Handle "No loans" case explicitly
+    if (!client.loans || client.loans.length === 0) {
+        return { score: 0, category: 'Sin Historial', color: 'slate', risk: 'Desconocido' };
+    }
+
+    client.loans.forEach(loan => {
+        // Boost score for completed loans
+        if (loan.status === LoanStatus.PAID) {
+            score += 150;
+            totalCompleted++;
+            if (loan.initialCapital > maxPreviousAmount) {
+                maxPreviousAmount = loan.initialCapital;
+            }
+        }
+        
+        // Tracking max loan amount for limit estimation even if still active
+        if (loan.status !== LoanStatus.PAID && loan.initialCapital > maxPreviousAmount) {
+            maxPreviousAmount = loan.initialCapital;
+        }
+        
+        // Massive penalty if currently overdue
+        if (loan.status === LoanStatus.OVERDUE) {
+            score -= 150;
+            overdueIncidents++;
+        }
+
+        // Each payment made demonstrates responsibility (e.g. paying 'réditos' or capital)
+        if (loan.paymentHistory && loan.paymentHistory.length > 0) {
+            score += (loan.paymentHistory.length * 25);
+            totalPaymentsMade += loan.paymentHistory.length;
+        }
+
+        // Penalty for historical delayed months
+        if (loan.overdueHistory && loan.overdueHistory.length > 0) {
+             score -= (loan.overdueHistory.length * 40);
+             overdueIncidents += loan.overdueHistory.length;
+        }
+    });
+
+    // Special case: Loan approved but 0 payments made and 0 completions
+    if (totalPaymentsMade === 0 && totalCompleted === 0) {
+        if (overdueIncidents === 0) {
+            score = 400; // New loan, untouched
+        }
+    }
+
+    // Normalize score
+    score = Math.max(300, Math.min(1000, score));
+
+    let category = 'Regular';
+    let color = 'amber';
+    let risk = 'Medio';
+    
+    if (totalPaymentsMade === 0 && totalCompleted === 0 && overdueIncidents === 0) {
+        category = 'Nuevo Préstamo';
+        color = 'indigo';
+        risk = 'Evaluación';
+    } else if (score >= 800) { 
+        category = 'Excelente'; color = 'emerald'; risk = 'Muy Bajo'; 
+    } else if (score >= 600) { 
+        category = 'Bueno'; color = 'blue'; risk = 'Bajo'; 
+    } else if (score < 400) { 
+        category = 'Riesgoso'; color = 'red'; risk = 'Alto'; 
+    }
+
+    return { score, category, color, risk };
+};
+// ========================================================
+
 
 const ProgressBar: React.FC<{ percent: number }> = ({ percent }) => (
     <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden mt-3 border border-slate-700/50 shadow-inner">
@@ -41,9 +119,10 @@ interface ClientCardProps {
     onQuickPay: (loan: Loan) => void;
     onArchive: (client: Client) => void;
     onCleanDelete: (client: Client) => void;
+    onCopyLink: (client: Client) => void;
 }
 
-const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, onViewDetails, onQuickPay, onArchive, onCleanDelete }) => {
+const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, onViewDetails, onQuickPay, onArchive, onCleanDelete, onCopyLink }) => {
     const loans = client.loans || [];
     const activeLoan = loans.find(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
     const hasActiveLoan = !!activeLoan;
@@ -52,6 +131,8 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
         if (!client.joinDate) return false;
         return (Date.now() - new Date(client.joinDate).getTime()) < 86400000;
     }, [client.joinDate]);
+
+    const riskProfile = useMemo(() => calculateRiskProfile(client), [client]);
 
     // LOGIC: Check payment status for current month
     const monthlyStatus = useMemo(() => {
@@ -143,12 +224,51 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
                 {/* PDF Button (Clean button removed to be reallocated) */}
                 <div className="flex gap-2 z-20">
                     <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onCopyLink(client);
+                        }}
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-slate-700 hover:border-slate-600 shadow-sm active:scale-90"
+                        title="Copiar Enlace de Portal Privado"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                    </button>
+                    <button 
                         onClick={handleDownloadReport}
                         className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-all border border-slate-700 hover:border-slate-600 shadow-sm active:scale-90"
                         title="Descargar Ficha PDF"
                     >
                         <FileDown size={18} />
                     </button>
+                </div>
+            </div>
+
+            {/* Risk Score */}
+            <div className="px-5 mb-4">
+                <div className={`bg-slate-900/40 rounded-xl p-3 border border-slate-700/50 flex items-center justify-between`}>
+                    <div className="flex items-center gap-2">
+                        <div className={`p-1.5 rounded-lg bg-${riskProfile.color}-500/10 text-${riskProfile.color}-400 ring-1 ring-${riskProfile.color}-500/20`}>
+                            {riskProfile.score >= 600 ? <ShieldCheck size={16} /> : riskProfile.score < 400 ? <ShieldAlert size={16} /> : <Activity size={16} />}
+                        </div>
+                        <div>
+                             <div className="flex items-center gap-1">
+                                 <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">Scoring:</p>
+                                 <span className={`text-[10px] font-black text-${riskProfile.color}-400 leading-none`}>{riskProfile.score}</span>
+                             </div>
+                             <p className={`text-xs font-bold text-${riskProfile.color}-400 mt-0.5`}>{riskProfile.category}</p>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                         <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">Riesgo Estimado</p>
+                         <span className={`text-xs font-bold px-2 py-0.5 rounded border ${
+                              riskProfile.risk === 'Muy Bajo' || riskProfile.risk === 'Bajo' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                              riskProfile.risk === 'Medio' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                              riskProfile.risk === 'Alto' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                              'bg-slate-800 text-slate-300 border-slate-700'
+                         }`}>
+                             {riskProfile.risk}
+                         </span>
+                    </div>
                 </div>
             </div>
 
@@ -395,6 +515,13 @@ const ClientList: React.FC = () => {
         generateFullClientListPDF(clientLoanData);
     };
 
+    const handleCopyLink = (client: Client) => {
+        const link = `${window.location.origin}/?portal=${client.id}`;
+        navigator.clipboard.writeText(link)
+            .then(() => showToast('Enlace de portal copiado al portapapeles', 'success'))
+            .catch(() => showToast('Error al copiar el enlace', 'error'));
+    };
+
     return (
         <>
             <NewLoanModal 
@@ -510,6 +637,7 @@ const ClientList: React.FC = () => {
                                         onQuickPay={handleQuickPay}
                                         onArchive={confirmArchive}
                                         onCleanDelete={confirmCleanDelete}
+                                        onCopyLink={handleCopyLink}
                                     />
                                 ))}
                             </div>

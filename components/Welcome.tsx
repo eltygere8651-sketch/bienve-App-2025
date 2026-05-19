@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { PenSquare, Handshake, FileText, PenTool, Banknote, ShieldCheck } from 'lucide-react';
+import { PenSquare, Handshake, FileText, PenTool, Banknote, ShieldCheck, User } from 'lucide-react';
 import { useAppContext } from '../contexts/AppContext';
 
 const LargeLogo = () => (
@@ -48,14 +48,21 @@ const Welcome: React.FC = () => {
                     <span>Aprobación basada en confianza y análisis personalizado</span>
                 </div>
 
-                <div className="flex justify-center items-center">
+                <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
                     <button 
                         onClick={() => setCurrentView('loanRequest')}
-                        className="group relative inline-flex items-center justify-center px-8 py-4 bg-primary-600 text-white text-lg font-bold rounded-2xl shadow-[0_0_30px_rgba(79,70,229,0.3)] hover:bg-primary-500 hover:shadow-[0_0_40px_rgba(79,70,229,0.5)] focus:outline-none focus:ring-4 focus:ring-primary-500/30 transition-all duration-300 hover:scale-105"
+                        className="group w-full sm:w-auto relative inline-flex items-center justify-center px-8 py-4 bg-primary-600 text-white text-lg font-bold rounded-2xl shadow-[0_0_30px_rgba(79,70,229,0.3)] hover:bg-primary-500 hover:shadow-[0_0_40px_rgba(79,70,229,0.5)] focus:outline-none focus:ring-4 focus:ring-primary-500/30 transition-all duration-300 hover:scale-105"
                      >
                         <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></span>
                         <PenSquare size={22} className="mr-3" />
                         Iniciar Solicitud
+                     </button>
+                     <button 
+                        onClick={() => setCurrentView('clientPortal')}
+                        className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-4 bg-slate-800 text-slate-300 text-lg font-bold rounded-2xl border border-slate-700/50 hover:bg-slate-700 hover:text-white transition-all duration-300 shadow-lg hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-slate-700 hover:scale-105"
+                     >
+                        <User size={22} className="mr-3" />
+                        Portal del Cliente
                      </button>
                  </div>
             </div>
