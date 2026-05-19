@@ -26,9 +26,13 @@ const ClientPortal: React.FC = () => {
                 } else {
                     setErrorMsg('Enlace de portal inválido o cliente no encontrado.');
                 }
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Error loading portal data:", err);
-                setErrorMsg('Error de conexión o permisos insuficientes.');
+                if (err.message?.includes('permission-denied') || err.code === 'permission-denied') {
+                    setErrorMsg('Permisos insuficientes. Debes actualizar las reglas de Firestore (firestore.rules) en Firebase Console para permitir lectura pública de clientes y préstamos.');
+                } else {
+                    setErrorMsg('Error de conexión o permisos insuficientes.');
+                }
             } finally {
                 setIsPortalLinkLoading(false);
             }
