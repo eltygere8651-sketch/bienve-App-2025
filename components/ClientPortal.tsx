@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useDataContext } from '../contexts/DataContext';
-import { ShieldAlert, Search, RefreshCw, FileText, ChevronRight, User, Phone, CheckCircle2, AlertCircle, Clock, Check, X, Download, CalendarDays } from 'lucide-react';
+import { ShieldAlert, RefreshCw, User, CheckCircle2, AlertCircle, Clock, Check, Download, CalendarDays } from 'lucide-react';
 import { Client, Loan, LoanStatus } from '../types';
 import { formatCurrency } from '../services/utils';
 import { generateLoanHistoryPDF } from '../services/pdfService';
+import { getDocument, getCollection, where } from '../services/firebaseService';
+import { TABLE_NAMES } from '../constants';
 
 const ClientPortal: React.FC = () => {
-    const { clients, loans } = useDataContext();
     const [activeClient, setActiveClient] = useState<Client | null>(null);
+    const [portalLoans, setPortalLoans] = useState<Loan[]>([]);
     const [errorMsg, setErrorMsg] = useState('');
     const [isPortalLinkLoading, setIsPortalLinkLoading] = useState(() => {
         const queryParams = new URLSearchParams(window.location.search);
@@ -15,25 +16,34 @@ const ClientPortal: React.FC = () => {
     });
 
     useEffect(() => {
-        // Auto-login if a valid clientId is in the query params
+        const loadPortalData = async (clientId: string) => {
+            try {
+                const clientDoc = await getDocument(TABLE_NAMES.CLIENTS, clientId);
+                if (clientDoc) {
+                    const loansData = await getCollection(TABLE_NAMES.LOANS, [where('clientId', '==', clientId)]);
+                    setActiveClient(clientDoc as Client);
+                    setPortalLoans(loansData as Loan[]);
+                } else {
+                    setErrorMsg('Enlace de portal inválido o cliente no encontrado.');
+                }
+            } catch (err) {
+                console.error("Error loading portal data:", err);
+                setErrorMsg('Error de conexión o permisos insuficientes.');
+            } finally {
+                setIsPortalLinkLoading(false);
+            }
+        };
+
         const queryParams = new URLSearchParams(window.location.search);
         const urlClientId = queryParams.get('portal');
         
         if (urlClientId) {
-            if (clients.length > 0) {
-                const foundUrlClient = clients.find(c => c.id === urlClientId);
-                if (foundUrlClient) {
-                    setActiveClient(foundUrlClient);
-                } else {
-                    setErrorMsg('Enlace de portal inválido o cliente no encontrado.');
-                }
-                setIsPortalLinkLoading(false); // Stop loading once clients are checked
-            }
+            loadPortalData(urlClientId);
         } else {
             setIsPortalLinkLoading(false);
             setErrorMsg('Enlace de portal no proporcionado.');
         }
-    }, [clients]);
+    }, []);
 
     if (isPortalLinkLoading) {
         return (
@@ -57,9 +67,8 @@ const ClientPortal: React.FC = () => {
         );
     }
 
-    const clientLoans = loans.filter(l => l.clientId === activeClient.id);
-    const activeLoans = clientLoans.filter(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
-    const pastLoans = clientLoans.filter(l => l.status === LoanStatus.PAID);
+    const activeLoans = portalLoans.filter(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
+    const pastLoans = portalLoans.filter(l => l.status === LoanStatus.PAID);
 
     return (
         <div className="space-y-6 animate-fade-in max-w-5xl mx-auto pb-10">
