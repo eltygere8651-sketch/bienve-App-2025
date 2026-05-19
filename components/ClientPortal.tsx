@@ -11,20 +11,32 @@ const ClientPortal: React.FC = () => {
     const [phoneInput, setPhoneInput] = useState('');
     const [activeClient, setActiveClient] = useState<Client | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
+    const [isPortalLinkLoading, setIsPortalLinkLoading] = useState(() => {
+        const queryParams = new URLSearchParams(window.location.search);
+        return queryParams.has('portal');
+    });
 
     useEffect(() => {
         // Auto-login if a valid clientId is in the query params
         const queryParams = new URLSearchParams(window.location.search);
         const urlClientId = queryParams.get('portal');
         
-        if (urlClientId && clients.length > 0 && !activeClient) {
-            const foundUrlClient = clients.find(c => c.id === urlClientId);
-            if (foundUrlClient) {
-                setActiveClient(foundUrlClient);
-                setLoginMode(false);
+        if (urlClientId) {
+            if (clients.length > 0) {
+                const foundUrlClient = clients.find(c => c.id === urlClientId);
+                if (foundUrlClient) {
+                    setActiveClient(foundUrlClient);
+                    setLoginMode(false);
+                } else {
+                    setErrorMsg('Enlace de portal inválido o cliente no encontrado.');
+                    setIsPortalLinkLoading(false);
+                }
+                setIsPortalLinkLoading(false); // Stop loading once clients are checked
             }
+        } else {
+            setIsPortalLinkLoading(false);
         }
-    }, [clients, activeClient]);
+    }, [clients]);
 
     const handleLogin = (e: React.FormEvent) => {
         e.preventDefault();
@@ -54,7 +66,24 @@ const ClientPortal: React.FC = () => {
         setIdNumberInput('');
         setPhoneInput('');
         setErrorMsg('');
+        
+        // Remove portal param from URL if it exists
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('portal')) {
+            url.searchParams.delete('portal');
+            window.history.pushState({}, '', url.toString());
+        }
     };
+
+    if (isPortalLinkLoading) {
+        return (
+            <div className="flex flex-col justify-center items-center h-full min-h-[70vh] animate-pulse px-4">
+                 <RefreshCw className="h-12 w-12 text-primary-400 mb-4 animate-spin" />
+                 <h2 className="text-xl font-bold text-slate-300">Cargando su portal...</h2>
+                 <p className="text-slate-500 text-sm mt-2">Verificando enlace seguro</p>
+            </div>
+        );
+    }
 
     if (loginMode) {
         return (
