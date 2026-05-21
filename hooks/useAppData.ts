@@ -276,17 +276,18 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
                 if (loan.status === LoanStatus.PAID || loan.archived) return;
 
                 const baseDate = loan.lastPaymentDate ? new Date(loan.lastPaymentDate) : new Date(loan.startDate);
-                const diffTime = today.getTime() - baseDate.getTime();
-                if (diffTime < 0) return; 
-                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                let tempBaseDate = new Date(baseDate.getTime());
+                const todayTime = today.getTime();
+                let limit = 0;
 
-                // Requirement: 35 days threshold
-                if (diffDays >= 35) {
-                    const accrualDate = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000); // We still count by 30 day periods for the amount
+                while (todayTime - tempBaseDate.getTime() >= 35 * 24 * 60 * 60 * 1000 && limit < 48) {
+                    limit++;
+                    const accrualDate = new Date(tempBaseDate.getTime() + 30 * 24 * 60 * 60 * 1000); // We still count by 30 day periods for the amount
                     const monthDate = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(accrualDate);
+                    const monthPart = monthDate.split(' ')[0].toLowerCase();
                     
                     const overdueHistory = loan.overdueHistory || [];
-                    const alreadyExists = overdueHistory.some(m => m.monthName.toLowerCase() === monthDate.split(' ')[0].toLowerCase());
+                    const alreadyExists = overdueHistory.some(m => m.monthName.toLowerCase() === monthPart);
                     
                     if (!alreadyExists) {
                         const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
@@ -297,6 +298,9 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
                             accrualDate: accrualDate.toISOString()
                         });
                     }
+
+                    // Advance tempBaseDate for the next iteration (checks the next month slot)
+                    tempBaseDate = accrualDate;
                 }
             });
 

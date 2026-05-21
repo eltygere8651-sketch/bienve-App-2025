@@ -127,7 +127,10 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
     "details" | "payment" | "history" | "edit" | "security"
   >(initialTab as any);
 
-  const currentSuggestion = suggestedOverdues.find((s) => s.loanId === loan.id);
+  const currentSuggestions = useMemo(() => {
+    if (!loan) return [];
+    return suggestedOverdues.filter((s) => s.loanId === loan.id);
+  }, [suggestedOverdues, loan?.id]);
 
   const totalOverdueInterest = useMemo(() => {
     if (!loan?.overdueHistory) return 0;
@@ -835,9 +838,21 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                             : "Marcar Vencido"}
                         </button>
                         <button
-                          onClick={() =>
-                            setShowManualOverdue(!showManualOverdue)
-                          }
+                          onClick={() => {
+                            if (!showManualOverdue) {
+                              const today = new Date();
+                              const monthNameLong = new Intl.DateTimeFormat("es-ES", { month: "long" }).format(today);
+                              const capitalizedMonth = monthNameLong.charAt(0).toUpperCase() + monthNameLong.slice(1);
+                              setManualOverdueMonth(capitalizedMonth);
+                              setManualOverdueYear(today.getFullYear());
+                              
+                              if (loan) {
+                                const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
+                                setManualOverdueAmount(interest.toFixed(2));
+                              }
+                            }
+                            setShowManualOverdue(!showManualOverdue);
+                          }}
                           className="flex-1 sm:flex-none px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold rounded uppercase border border-slate-600 transition-colors"
                         >
                           {showManualOverdue ? "Cerrar" : "+ Añadir Registro"}
@@ -924,30 +939,36 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                       </div>
                     )}
 
-                    {currentSuggestion && (
-                      <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl animate-pulse-slow">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="p-2 bg-amber-500/20 rounded-full text-amber-500">
-                            <AlertTriangle size={18} />
+                    {currentSuggestions.length > 0 && (
+                      <div className="mb-6 space-y-3">
+                        <h4 className="text-xs font-extrabold text-amber-400 uppercase tracking-widest font-mono">
+                          ⚠️ Moras Detectadas Pendientes de Registrar
+                        </h4>
+                        {currentSuggestions.map((suggestion, sIdx) => (
+                          <div key={sIdx} className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl animate-pulse-slow flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex items-start gap-2.5">
+                              <div className="p-1.5 bg-amber-500/20 rounded-full text-amber-500 mt-0.5">
+                                <AlertTriangle size={15} />
+                              </div>
+                              <div>
+                                <h5 className="text-[13px] font-black text-amber-200 font-heading">
+                                  Mora del periodo: <span className="text-white underline decoration-amber-500">{suggestion.monthName}</span>
+                                </h5>
+                                <p className="text-[10px] text-amber-400/80 mt-0.5">
+                                  Importe calculado: <span className="font-extrabold text-[#f59e0b]">{formatCurrency(suggestion.amount)}</span>
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() =>
+                                handleConfirmOverdue(loan.id, suggestion)
+                              }
+                              className="bg-amber-600 hover:bg-amber-500 text-stone-950 text-2xs font-extrabold py-2 px-3 rounded-lg transition-all shadow-md shadow-amber-900/10 flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <Check size={12} /> Registrar Mora
+                            </button>
                           </div>
-                          <div>
-                            <h5 className="text-sm font-bold text-amber-200">
-                              Mora detectada (+35 días)
-                            </h5>
-                            <p className="text-xs text-amber-400/80">
-                              Periodo sugerido: {currentSuggestion.monthName}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() =>
-                            handleConfirmOverdue(loan.id, currentSuggestion)
-                          }
-                          className="w-full bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold py-2.5 rounded-lg transition-all shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
-                        >
-                          <Check size={16} /> Confirmar Interés Vencido
-                          Informativo
-                        </button>
+                        ))}
                       </div>
                     )}
 
