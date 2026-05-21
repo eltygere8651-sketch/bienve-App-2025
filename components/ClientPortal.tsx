@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, RefreshCw, User, CheckCircle2, AlertCircle, Clock, Check, Download, CalendarDays, FileText, Lock, Shield } from 'lucide-react';
+import { ShieldAlert, RefreshCw, User, CheckCircle2, AlertCircle, Clock, Check, Download, CalendarDays, FileText, Lock, Shield, ChevronDown, ChevronUp } from 'lucide-react';
 import { Client, Loan, LoanStatus, PaymentRecord } from '../types';
 import { formatCurrency } from '../services/utils';
 import { generatePaymentReceiptPdf, downloadPdf } from '../services/pdfService';
@@ -9,6 +9,7 @@ import { TABLE_NAMES } from '../constants';
 const ClientPortal: React.FC = () => {
     const [activeClient, setActiveClient] = useState<Client | null>(null);
     const [portalLoans, setPortalLoans] = useState<Loan[]>([]);
+    const [openMoras, setOpenMoras] = useState<Record<string, boolean>>({});
     const [errorMsg, setErrorMsg] = useState('');
     const [isPortalLinkLoading, setIsPortalLinkLoading] = useState(() => {
         const queryParams = new URLSearchParams(window.location.search);
@@ -276,81 +277,114 @@ const ClientPortal: React.FC = () => {
                                     </div>
                                 </div>
 
-                                {/* Meses Vencidos - Detalle de Historia de Moras / Intereses */}
-                                {loan.overdueHistory && loan.overdueHistory.length > 0 && (
-                                    <div className="mb-6 bg-[#211a17]/50 border border-orange-500/15 p-5 rounded-2xl relative overflow-hidden shadow-inner">
-                                        <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/5 rounded-full blur-2xl pointer-events-none"></div>
-                                        <div className="flex items-center gap-2.5 mb-4">
-                                            <div className="p-2 bg-orange-500/10 rounded-xl text-orange-400 border border-orange-500/10 shrink-0">
-                                                <AlertCircle size={18} className="stroke-[2]" />
-                                            </div>
-                                            <div>
-                                                <h4 className="text-sm font-black uppercase tracking-wider text-orange-400 font-heading">
-                                                    Control de Mensualidades y Moras
-                                                </h4>
-                                                <p className="text-[10px] text-stone-450 mt-0.5 leading-relaxed">
-                                                    Detalle oficial de las cuotas e intereses de mora registrados en su estado de cuenta.
-                                                </p>
-                                            </div>
-                                        </div>
+                                {/* Meses Vencidos - Detalle de Historia de Moras / Intereses Collapsible */}
+                                {loan.overdueHistory && loan.overdueHistory.length > 0 && (() => {
+                                    const itemsPending = loan.overdueHistory.filter(h => h.status === 'pendiente');
+                                    const isExpanded = openMoras[loan.id] || false;
+                                    const totalOverdueAmount = itemsPending.reduce((sum, item) => sum + item.amount, 0);
 
-                                        <div className="grid grid-cols-1 gap-2.5 max-h-[280px] overflow-y-auto pr-1">
-                                            {loan.overdueHistory.map((item) => {
-                                                const isPend = item.status === "pendiente";
-                                                const isRecl = item.status === "reclamado";
-                                                return (
-                                                    <div 
-                                                        key={item.id} 
-                                                        className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
-                                                            isPend 
-                                                                ? "bg-red-950/20 border-red-500/20 text-red-100" 
-                                                                : isRecl 
-                                                                    ? "bg-emerald-950/20 border-emerald-500/20 text-emerald-100" 
-                                                                    : "bg-stone-900/60 border-stone-850 text-stone-400"
-                                                        }`}
-                                                    >
-                                                        <div>
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className="text-xs font-black font-heading tracking-wide">
-                                                                    {item.monthName} {item.year}
-                                                                </span>
-                                                                <span className={`text-[8.5px] px-2 py-0.5 rounded-full border font-black uppercase tracking-wider font-mono ${
-                                                                    isPend 
-                                                                        ? "bg-red-500/10 text-red-400 border-red-500/20 animate-pulse" 
-                                                                        : isRecl 
-                                                                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
-                                                                            : "bg-amber-950/40 text-amber-500 border-amber-500/20"
-                                                                }`}>
-                                                                    {isPend ? "Deuda de Mora" : isRecl ? "Cobrada con éxito" : "Mora Perdonada / Anulada"}
-                                                                </span>
-                                                            </div>
-                                                            <p className={`text-[10px] mt-1 font-semibold ${isPend ? "text-red-300/80" : isRecl ? "text-emerald-300/80" : "text-stone-500"}`}>
-                                                                Importe adicional: <span className="font-extrabold">{formatCurrency(item.amount)}</span>
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5">
-                                                            {isPend && (
-                                                                <span className="text-[10px] text-red-400 font-extrabold flex items-center gap-1 leading-none font-sans">
-                                                                    ⚠️ Pendiente
-                                                                </span>
-                                                            )}
-                                                            {isRecl && (
-                                                                <span className="text-[10px] text-emerald-400 font-extrabold flex items-center gap-1 leading-none font-sans">
-                                                                    ✓ Cobrado
-                                                                </span>
-                                                            )}
-                                                            {!isPend && !isRecl && (
-                                                                <span className="text-[10px] text-[#f59e0b] font-extrabold flex items-center gap-1 leading-none font-sans">
-                                                                    🤝 Condonado
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                    return (
+                                        <div className="mb-6 bg-[#211a17]/50 border border-orange-500/15 rounded-2xl relative overflow-hidden shadow-inner transition-all duration-300">
+                                            <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/3 rounded-full blur-2xl pointer-events-none"></div>
+                                            <button 
+                                                onClick={() => setOpenMoras(prev => ({ ...prev, [loan.id]: !isExpanded }))}
+                                                className="w-full flex items-center justify-between p-4 hover:bg-orange-500/5 transition-colors focus:outline-none select-none text-left"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-orange-500/10 rounded-xl text-orange-400 border border-orange-500/10 shrink-0">
+                                                        <AlertCircle size={18} className="stroke-[2]" />
                                                     </div>
-                                                );
-                                            })}
+                                                    <div>
+                                                        <h4 className="text-xs sm:text-sm font-black uppercase tracking-wider text-orange-400 font-heading">
+                                                            Control de Mensualidades y Moras
+                                                        </h4>
+                                                        <p className="text-[10px] text-stone-400 mt-0.5">
+                                                            {itemsPending.length > 0 ? (
+                                                                <>
+                                                                    Tiene <strong className="text-red-400 font-extrabold">{itemsPending.length} {itemsPending.length === 1 ? 'mora pendiente' : 'moras pendientes'}</strong> ({formatCurrency(totalOverdueAmount)})
+                                                                </>
+                                                            ) : (
+                                                                "Historial de moras registradas (al día)"
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[9px] font-mono tracking-wider uppercase font-bold text-stone-500 hidden sm:inline">
+                                                        {isExpanded ? "Ocultar" : "Ver Detalle"}
+                                                    </span>
+                                                    <div className="p-1 px-1.5 rounded bg-stone-850 text-stone-400 border border-stone-800 flex items-center justify-center transition-transform">
+                                                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                    </div>
+                                                </div>
+                                            </button>
+
+                                            {isExpanded && (
+                                                <div className="border-t border-stone-850 p-4 pt-3 bg-stone-950/20 animate-fade-in-down">
+                                                    <p className="text-[9.5px] text-stone-450 mb-3 leading-relaxed">
+                                                        Detalle oficial de las cuotas e intereses de mora registrados en su estado de cuenta.
+                                                    </p>
+                                                    
+                                                    <div className="grid grid-cols-1 gap-2 max-h-[250px] overflow-y-auto pr-1">
+                                                        {loan.overdueHistory.map((item) => {
+                                                            const isPend = item.status === "pendiente";
+                                                            const isRecl = item.status === "reclamado";
+                                                            return (
+                                                                <div 
+                                                                    key={item.id} 
+                                                                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                                                                        isPend 
+                                                                            ? "bg-red-950/20 border-red-500/20 text-red-100" 
+                                                                            : isRecl 
+                                                                                ? "bg-emerald-950/20 border-emerald-500/20 text-emerald-100" 
+                                                                                : "bg-stone-900/60 border-stone-850 text-stone-400"
+                                                                    }`}
+                                                                >
+                                                                    <div>
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <span className="text-xs font-black font-heading tracking-wide">
+                                                                                {item.monthName} {item.year}
+                                                                            </span>
+                                                                            <span className={`text-[8.5px] px-2 py-0.5 rounded-full border font-black uppercase tracking-wider font-mono ${
+                                                                                isPend 
+                                                                                    ? "bg-red-500/10 text-red-400 border-red-500/20 animate-pulse" 
+                                                                                    : isRecl 
+                                                                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                                                                                        : "bg-amber-950/40 text-amber-500 border-amber-500/20"
+                                                                            }`}>
+                                                                                {isPend ? "Deuda de Mora" : isRecl ? "Cobrada" : "Anulada"}
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className={`text-[10px] mt-1 font-semibold ${isPend ? "text-red-300/80" : isRecl ? "text-emerald-300/80" : "text-stone-500"}`}>
+                                                                            Importe adicional: <span className="font-extrabold">{formatCurrency(item.amount)}</span>
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        {isPend && (
+                                                                            <span className="text-[10px] text-red-400 font-extrabold flex items-center gap-1 leading-none font-sans">
+                                                                                ⚠️ Pendiente
+                                                                            </span>
+                                                                        )}
+                                                                        {isRecl && (
+                                                                            <span className="text-[10px] text-emerald-400 font-extrabold flex items-center gap-1 leading-none font-sans">
+                                                                                ✓ Cobrado
+                                                                            </span>
+                                                                        )}
+                                                                        {!isPend && !isRecl && (
+                                                                            <span className="text-[10px] text-[#f59e0b] font-extrabold flex items-center gap-1 leading-none font-sans">
+                                                                                🤝 Condonado
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
 
                                 {/* Integrated last payment receipts - REUNIFICATION AT ITS FINEST */}
                                 {lastPayment ? (
