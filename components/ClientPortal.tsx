@@ -207,14 +207,44 @@ const ClientPortal: React.FC = () => {
                                     <div className="bg-[#241e1b] border border-stone-850 p-5 rounded-2xl relative shadow-inner flex flex-col justify-center">
                                         <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl pointer-events-none"></div>
                                         <span className="block text-[10px] uppercase tracking-[0.15em] text-stone-400 font-bold mb-1 font-mono">
-                                            Saldo Pendiente Actual
+                                            Saldo Contratado y Mora
                                         </span>
                                         <span className="text-3xl sm:text-4xl font-extrabold text-amber-400 tracking-tight block">
-                                            {formatCurrency(loan.remainingCapital)}
+                                            {(() => {
+                                                const totalOverdue = loan.overdueHistory
+                                                    ?.filter((h) => h.status === "pendiente")
+                                                    .reduce((sum, item) => sum + item.amount, 0) || 0;
+                                                return formatCurrency(loan.remainingCapital + totalOverdue);
+                                            })()}
                                         </span>
-                                        <span className="block text-[9px] text-stone-500 mt-1 font-semibold">
-                                            Actualizado automáticamente por B.M Contigo
-                                        </span>
+                                        {(() => {
+                                            const totalOverdue = loan.overdueHistory
+                                                ?.filter((h) => h.status === "pendiente")
+                                                .reduce((sum, item) => sum + item.amount, 0) || 0;
+                                            if (totalOverdue > 0) {
+                                                return (
+                                                    <div className="mt-3 pt-2.5 border-t border-stone-800/80 space-y-1">
+                                                        <div className="flex justify-between text-[11px] font-semibold text-stone-400">
+                                                            <span>Capital pendiente:</span>
+                                                            <span className="font-mono text-stone-300 font-extrabold">{formatCurrency(loan.remainingCapital)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-[11px] font-semibold text-orange-400">
+                                                            <span>Mora pendiente:</span>
+                                                            <span className="font-mono font-extrabold">{formatCurrency(totalOverdue)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs font-black text-white pt-1.5 border-t border-stone-800/40">
+                                                            <span>Total general deuda:</span>
+                                                            <span className="font-mono text-amber-500">{formatCurrency(loan.remainingCapital + totalOverdue)}</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return (
+                                                <span className="block text-[9px] text-stone-500 mt-1 font-semibold">
+                                                    Actualizado automáticamente por B.M Contigo
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Maximum Payment Date Box */}
@@ -253,6 +283,82 @@ const ClientPortal: React.FC = () => {
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* Meses Vencidos - Detalle de Historia de Moras / Intereses */}
+                                {loan.overdueHistory && loan.overdueHistory.length > 0 && (
+                                    <div className="mb-6 bg-[#211a17]/50 border border-orange-500/15 p-5 rounded-2xl relative overflow-hidden shadow-inner">
+                                        <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                                        <div className="flex items-center gap-2.5 mb-4">
+                                            <div className="p-2 bg-orange-500/10 rounded-xl text-orange-400 border border-orange-500/10 shrink-0">
+                                                <AlertCircle size={18} className="stroke-[2]" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-sm font-black uppercase tracking-wider text-orange-400 font-heading">
+                                                    Control de Mensualidades y Moras
+                                                </h4>
+                                                <p className="text-[10px] text-stone-450 mt-0.5 leading-relaxed">
+                                                    Detalle oficial de las cuotas e intereses de mora registrados en su estado de cuenta.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-2.5 max-h-[280px] overflow-y-auto pr-1">
+                                            {loan.overdueHistory.map((item) => {
+                                                const isPend = item.status === "pendiente";
+                                                const isRecl = item.status === "reclamado";
+                                                return (
+                                                    <div 
+                                                        key={item.id} 
+                                                        className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
+                                                            isPend 
+                                                                ? "bg-red-950/20 border-red-500/20 text-red-100" 
+                                                                : isRecl 
+                                                                    ? "bg-emerald-950/20 border-emerald-500/20 text-emerald-100" 
+                                                                    : "bg-stone-900/60 border-stone-850 text-stone-400"
+                                                        }`}
+                                                    >
+                                                        <div>
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="text-xs font-black font-heading tracking-wide">
+                                                                    {item.monthName} {item.year}
+                                                                </span>
+                                                                <span className={`text-[8.5px] px-2 py-0.5 rounded-full border font-black uppercase tracking-wider font-mono ${
+                                                                    isPend 
+                                                                        ? "bg-red-500/10 text-red-400 border-red-500/20 animate-pulse" 
+                                                                        : isRecl 
+                                                                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                                                                            : "bg-amber-950/40 text-amber-500 border-amber-500/20"
+                                                                }`}>
+                                                                    {isPend ? "Deuda de Mora" : isRecl ? "Cobrada con éxito" : "Mora Perdonada / Anulada"}
+                                                                </span>
+                                                            </div>
+                                                            <p className={`text-[10px] mt-1 font-semibold ${isPend ? "text-red-300/80" : isRecl ? "text-emerald-300/80" : "text-stone-500"}`}>
+                                                                Importe adicional: <span className="font-extrabold">{formatCurrency(item.amount)}</span>
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            {isPend && (
+                                                                <span className="text-[10px] text-red-400 font-extrabold flex items-center gap-1 leading-none font-sans">
+                                                                    ⚠️ Pendiente
+                                                                </span>
+                                                            )}
+                                                            {isRecl && (
+                                                                <span className="text-[10px] text-emerald-400 font-extrabold flex items-center gap-1 leading-none font-sans">
+                                                                    ✓ Cobrado
+                                                                </span>
+                                                            )}
+                                                            {!isPend && !isRecl && (
+                                                                <span className="text-[10px] text-[#f59e0b] font-extrabold flex items-center gap-1 leading-none font-sans">
+                                                                    🤝 Condonado
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Integrated last payment receipts - REUNIFICATION AT ITS FINEST */}
                                 {lastPayment ? (
