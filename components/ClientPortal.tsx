@@ -57,6 +57,29 @@ const ClientPortal: React.FC = () => {
         return parts[0];
     };
 
+    const getSafeLocalDate = (dateStr: string) => {
+        if (dateStr.includes('-') && !dateStr.includes('T')) {
+            return new Date(dateStr + 'T12:00:00');
+        }
+        return new Date(dateStr);
+    };
+
+    const formatDateToSpanishFull = (dateStr: string) => {
+        try {
+            const date = getSafeLocalDate(dateStr);
+            const options: Intl.DateTimeFormatOptions = { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long', 
+                year: 'numeric' 
+            };
+            const formatted = date.toLocaleDateString('es-ES', options);
+            return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+        } catch (e) {
+            return dateStr;
+        }
+    };
+
     if (isPortalLinkLoading) {
         return (
             <div className="flex flex-col justify-center items-center h-full min-h-[70vh] animate-pulse px-4">
@@ -173,63 +196,97 @@ const ClientPortal: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        {/* Lista de últimos 3 recibos/pagos */}
-                                        <div className="bg-slate-800/60 rounded-3xl p-5 border border-slate-700/40 shadow-md">
-                                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-                                                <FileText className="text-primary-400" size={16} />
-                                                Últimos 3 Recibos de Pago
-                                            </h4>
-                                            
-                                            {last3Payments.length === 0 ? (
-                                                <div className="text-slate-500 text-xs py-2 italic text-center">
-                                                    Aún no se registran transacciones para este préstamo.
-                                                </div>
-                                            ) : (
-                                                <div className="divide-y divide-slate-700/50">
-                                                    {last3Payments.map(payment => (
-                                                        <div key={payment.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
-                                                            <div>
-                                                                <span className="text-xs font-semibold text-slate-300 block">
-                                                                    Abono Realizado
+                                        {/* DESTACADO ESPECIAL: ÚLTIMO RECIBO DE PAGO EMITIDO (MÁS RECIENTE) */}
+                                        {lastPayment ? (
+                                            <div className="relative mt-2">
+                                                <div className="bg-gradient-to-br from-emerald-900/40 to-slate-900/80 backdrop-blur-xl border border-emerald-500/20 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden transition-all hover:border-emerald-500/40 group">
+                                                    {/* Decorative Elements */}
+                                                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none transition-opacity group-hover:opacity-100 opacity-70"></div>
+                                                    <div className="absolute bottom-0 left-0 w-40 h-40 bg-teal-500/10 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none transition-opacity group-hover:opacity-100 opacity-50"></div>
+                                                    
+                                                    <div className="relative z-10 flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-start justify-between">
+                                                        {/* Info Column */}
+                                                        <div className="space-y-5 flex-1 w-full text-center md:text-left">
+                                                            
+                                                            <div className="inline-flex items-center gap-2 bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full shadow-inner">
+                                                                <CheckCircle2 size={16} className="text-emerald-400" />
+                                                                <span>Último abono procesado con éxito</span>
+                                                            </div>
+
+                                                            <div className="space-y-1">
+                                                                <span className="block text-xs uppercase tracking-[0.2em] text-slate-400 font-medium">
+                                                                    Monto Abonado
                                                                 </span>
-                                                                <span className="text-2xs text-slate-500 block mt-0.5">
-                                                                    {new Date(payment.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                                                <span className="text-4xl md:text-5xl font-black text-white tracking-tight block font-mono">
+                                                                    {formatCurrency(lastPayment.amount)}
                                                                 </span>
                                                             </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-sm font-bold text-white">{formatCurrency(payment.amount)}</span>
+
+                                                            <div className="bg-slate-900/60 rounded-2xl p-4 border border-slate-700/50 flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                                                                <div className="flex-shrink-0 bg-emerald-500/20 p-3 rounded-xl border border-emerald-500/20">
+                                                                    <CalendarDays size={24} className="text-emerald-400" />
+                                                                </div>
+                                                                <div className="w-full">
+                                                                    <span className="block text-xs text-slate-400 mb-1">Fecha de Operación</span>
+                                                                    <span className="text-lg font-bold text-slate-200 block capitalize">
+                                                                        {formatDateToSpanishFull(lastPayment.date)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Action Column */}
+                                                        <div className="flex-shrink-0 w-full md:w-auto flex flex-col justify-center h-full pt-2 md:pt-0">
+                                                            <div className="bg-slate-950/40 p-5 rounded-3xl border border-slate-800 backdrop-blur-sm w-full md:w-80 shadow-inner flex flex-col items-center">
+                                                                <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl shadow-lg flex items-center justify-center mb-4 transform -translate-y-10 -mb-6 border-4 border-slate-900">
+                                                                    <FileText className="text-slate-950" size={28} strokeWidth={2.5} />
+                                                                </div>
+                                                                
+                                                                <h4 className="text-white font-bold text-lg mb-2">Recibo Digital</h4>
+                                                                <p className="text-slate-400 text-xs text-center mb-5 px-2">
+                                                                    Documento oficial en PDF. Su comprobante de pago está listo para ser guardado.
+                                                                </p>
+
                                                                 <button
                                                                     onClick={() => {
                                                                         if (!activeClient) return;
-                                                                        const prevBal = payment.remainingCapitalAfter + payment.capitalPaid;
+                                                                        const prevBal = lastPayment.remainingCapitalAfter + lastPayment.capitalPaid;
                                                                         const receiptPayload = {
                                                                             clientName: activeClient.name,
                                                                             loanId: loan.id,
-                                                                            paymentAmount: payment.amount,
+                                                                            paymentAmount: lastPayment.amount,
                                                                             paymentType: 'Pago de Cuota',
-                                                                            paymentDate: payment.date,
-                                                                            notes: payment.notes || '',
+                                                                            paymentDate: lastPayment.date,
+                                                                            notes: lastPayment.notes || '',
                                                                             previousBalance: prevBal,
-                                                                            newBalance: payment.remainingCapitalAfter,
-                                                                            interestPaid: payment.interestPaid,
-                                                                            capitalPaid: payment.capitalPaid
+                                                                            newBalance: lastPayment.remainingCapitalAfter,
+                                                                            interestPaid: lastPayment.interestPaid,
+                                                                            capitalPaid: lastPayment.capitalPaid
                                                                         };
                                                                         const doc = generatePaymentReceiptPdf(receiptPayload);
-                                                                        const fileName = `Recibo_${activeClient.name.replace(/\s/g, '_')}_${new Date(payment.date).toISOString().split('T')[0]}.pdf`;
+                                                                        const fileName = `Recibo_${activeClient.name.replace(/\s/g, '_')}_${new Date(lastPayment.date).toISOString().split('T')[0]}.pdf`;
                                                                         const blob = doc.output('blob');
                                                                         downloadPdf(blob, fileName);
                                                                     }}
-                                                                    title="Descargar Recibo en PDF"
-                                                                    className="p-1.5 hover:bg-slate-700/60 text-primary-400 hover:text-primary-300 rounded-lg transition-all focus:outline-none"
+                                                                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-sm py-3.5 px-6 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all focus:outline-none"
                                                                 >
-                                                                    <Download size={15} />
+                                                                    <Download size={18} className="stroke-[2.5]" />
+                                                                    <span>Descargar PDF</span>
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                    ))}
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-slate-800/40 border border-slate-700/30 rounded-3xl p-8 flex flex-col items-center justify-center text-center">
+                                                <div className="w-16 h-16 bg-slate-900/80 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
+                                                    <FileText size={28} className="text-slate-500" />
+                                                </div>
+                                                <h4 className="text-base font-bold text-white mb-2">Sin recibos emitidos</h4>
+                                                <p className="text-sm text-slate-400 max-w-sm">Su recibo oficial de pago aparecerá en esta sección de forma automática una vez registrado su primer abono.</p>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
