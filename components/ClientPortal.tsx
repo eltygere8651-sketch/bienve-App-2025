@@ -166,30 +166,69 @@ const ClientPortal: React.FC = () => {
                                             {/* Detalles principales del último y próximo pago */}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-700/30">
                                                 {/* Registro de Último Pago */}
-                                                <div className="bg-slate-900/40 p-3 rounded-xl border border-slate-700/20">
-                                                    <span className="block text-xs text-slate-500 font-medium mb-1">Último Pago Realizado</span>
-                                                    {lastPayment ? (
-                                                        <div>
-                                                            <span className="text-base font-bold text-emerald-400">{formatCurrency(lastPayment.amount)}</span>
-                                                            <span className="text-xs text-slate-400 block mt-0.5">Fecha: {new Date(lastPayment.date).toLocaleDateString()}</span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs text-slate-400 font-medium block italic">Sin pagos registrados aún</span>
-                                                    )}
+                                                <div className="bg-slate-950/75 p-4 rounded-2xl border border-emerald-500/25 shadow-lg relative overflow-hidden flex flex-col justify-between">
+                                                    <div className="absolute top-0 right-0 p-3 opacity-5 pointer-events-none">
+                                                        <CheckCircle2 size={48} className="text-emerald-400" />
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-[11px] uppercase tracking-wider text-slate-400 font-extrabold mb-1.5 flex items-center gap-1">
+                                                            ✅ Último Pago Registrado
+                                                        </span>
+                                                        {lastPayment ? (
+                                                            <div className="space-y-1">
+                                                                <span className="text-2xl font-black text-emerald-400 tracking-tight block font-mono">
+                                                                    {formatCurrency(lastPayment.amount)}
+                                                                </span>
+                                                                <div className="bg-emerald-500/5 px-2.5 py-1.5 rounded-lg border border-emerald-450/20 mt-1">
+                                                                    <span className="text-[10px] uppercase font-bold text-emerald-300 block">Día y Fecha de Registro:</span>
+                                                                    <span className="text-xs font-extrabold text-white block">
+                                                                        {formatDateToSpanishFull(lastPayment.date)}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-slate-400 font-bold block italic py-2">
+                                                                Sin abonos registrados aún
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 {/* Fecha Aproximada de Siguiente Pago */}
-                                                <div className="bg-primary-950/20 p-3 rounded-xl border border-primary-500/15">
-                                                    <span className="block text-xs text-primary-400 font-semibold mb-1">Fecha Aprox. Siguiente Pago</span>
+                                                <div className="bg-primary-950/20 p-3.5 rounded-2xl border border-primary-500/20 shadow-inner">
+                                                    <span className="block text-[10px] uppercase tracking-wider text-primary-400 font-bold mb-1 flex items-center gap-1">
+                                                        📅 Fecha Máxima de Pago
+                                                    </span>
                                                     <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <CalendarDays className="text-primary-400 shrink-0" size={15} />
-                                                        <span className="text-sm font-bold text-white">
+                                                        <CalendarDays className="text-primary-400 shrink-0 animate-pulse" size={15} />
+                                                        <span className="text-sm font-extrabold text-white">
                                                             {(() => {
                                                                 const baseDateStr = loan.lastPaymentDate || loan.startDate;
-                                                                const baseDate = new Date(baseDateStr);
-                                                                baseDate.setMonth(baseDate.getMonth() + 1);
-                                                                return baseDate.toLocaleDateString();
+                                                                const baseDate = getSafeLocalDate(baseDateStr);
+                                                                
+                                                                // Calculate next month
+                                                                const nextDate = new Date(baseDate);
+                                                                nextDate.setMonth(nextDate.getMonth() + 1);
+                                                                // Set day strictly to the 5th of that month ("como tarde el día 5")
+                                                                nextDate.setDate(5);
+                                                                
+                                                                try {
+                                                                    const options: Intl.DateTimeFormatOptions = { 
+                                                                        day: 'numeric', 
+                                                                        month: 'long', 
+                                                                        year: 'numeric' 
+                                                                    };
+                                                                    const formatted = nextDate.toLocaleDateString('es-ES', options);
+                                                                    return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+                                                                } catch(e) {
+                                                                    return `5/${nextDate.getMonth() + 1}/${nextDate.getFullYear()}`;
+                                                                }
                                                             })()}
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-2.5 flex items-center gap-1.5 bg-primary-500/10 px-2 py-1 rounded-lg border border-primary-500/15">
+                                                        <span className="text-[10px] text-primary-300 font-bold leading-tight">
+                                                            ⚠️ Favor de pagar a más tardar el día 5 del mes
                                                         </span>
                                                     </div>
                                                 </div>
@@ -198,93 +237,90 @@ const ClientPortal: React.FC = () => {
 
                                         {/* DESTACADO ESPECIAL: ÚLTIMO RECIBO DE PAGO EMITIDO (MÁS RECIENTE) */}
                                         {lastPayment ? (
-                                            <div className="relative mt-2">
-                                                <div className="bg-gradient-to-br from-emerald-900/40 to-slate-900/80 backdrop-blur-xl border border-emerald-500/20 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden transition-all hover:border-emerald-500/40 group">
-                                                    {/* Decorative Elements */}
-                                                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none transition-opacity group-hover:opacity-100 opacity-70"></div>
-                                                    <div className="absolute bottom-0 left-0 w-40 h-40 bg-teal-500/10 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none transition-opacity group-hover:opacity-100 opacity-50"></div>
+                                            <div className="relative mt-4">
+                                                <div className="bg-gradient-to-br from-emerald-950/60 via-slate-900 to-slate-900 border-2 border-emerald-400 rounded-3xl p-6 shadow-2xl relative overflow-hidden transition-all hover:border-emerald-350">
+                                                    {/* Decorative background effects */}
+                                                    <div className="absolute -top-10 -right-10 bg-emerald-500/10 w-40 h-40 rounded-full blur-2xl pointer-events-none"></div>
+                                                    <div className="absolute top-4 right-4 text-emerald-400 opacity-15 pointer-events-none">
+                                                        <CheckCircle2 size={72} className="stroke-[1.5]" />
+                                                    </div>
                                                     
-                                                    <div className="relative z-10 flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-start justify-between">
-                                                        {/* Info Column */}
-                                                        <div className="space-y-5 flex-1 w-full text-center md:text-left">
-                                                            
-                                                            <div className="inline-flex items-center gap-2 bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full shadow-inner">
-                                                                <CheckCircle2 size={16} className="text-emerald-400" />
-                                                                <span>Último abono procesado con éxito</span>
-                                                            </div>
+                                                    <div className="relative z-10 space-y-5">
+                                                        {/* Confirmation Badge */}
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className="bg-emerald-500 text-slate-950 text-[10px] sm:text-xs font-black uppercase px-3 py-1 rounded-full tracking-wider flex items-center gap-1.5 shadow-md">
+                                                                <Check size={14} className="stroke-[3]" />
+                                                                PAGO CONFIRMADO CON ÉXITO
+                                                            </span>
+                                                            <span className="bg-slate-800 text-slate-300 text-[10px] font-bold px-2.5 py-1 rounded-lg border border-slate-700">
+                                                                Recibo Digital Oficial
+                                                            </span>
+                                                        </div>
 
-                                                            <div className="space-y-1">
-                                                                <span className="block text-xs uppercase tracking-[0.2em] text-slate-400 font-medium">
-                                                                    Monto Abonado
-                                                                </span>
-                                                                <span className="text-4xl md:text-5xl font-black text-white tracking-tight block font-mono">
+                                                        {/* Primary Details Side by Side */}
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+                                                            {/* Amount */}
+                                                            <div>
+                                                                <span className="block text-[10px] uppercase tracking-widest text-slate-400 font-extrabold mb-1">Monto de este Abono:</span>
+                                                                <span className="text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight block font-mono">
                                                                     {formatCurrency(lastPayment.amount)}
                                                                 </span>
                                                             </div>
 
-                                                            <div className="bg-slate-900/60 rounded-2xl p-4 border border-slate-700/50 flex flex-col sm:flex-row items-center sm:items-start gap-4">
-                                                                <div className="flex-shrink-0 bg-emerald-500/20 p-3 rounded-xl border border-emerald-500/20">
-                                                                    <CalendarDays size={24} className="text-emerald-400" />
-                                                                </div>
-                                                                <div className="w-full">
-                                                                    <span className="block text-xs text-slate-400 mb-1">Fecha de Operación</span>
-                                                                    <span className="text-lg font-bold text-slate-200 block capitalize">
-                                                                        {formatDateToSpanishFull(lastPayment.date)}
-                                                                    </span>
-                                                                </div>
+                                                            {/* Date - High emphasis date box */}
+                                                            <div className="bg-slate-950/70 p-4 rounded-2xl border border-emerald-500/20 shadow-inner">
+                                                                <span className="block text-[10px] text-emerald-400 uppercase tracking-widest font-extrabold mb-1 flex items-center gap-1.5">
+                                                                    <CalendarDays size={13} className="text-emerald-400 animate-pulse" />
+                                                                    Día y Fecha del Pago:
+                                                                </span>
+                                                                <span className="text-sm sm:text-base font-black text-white leading-tight block">
+                                                                    {formatDateToSpanishFull(lastPayment.date)}
+                                                                </span>
                                                             </div>
                                                         </div>
 
-                                                        {/* Action Column */}
-                                                        <div className="flex-shrink-0 w-full md:w-auto flex flex-col justify-center h-full pt-2 md:pt-0">
-                                                            <div className="bg-slate-950/40 p-5 rounded-3xl border border-slate-800 backdrop-blur-sm w-full md:w-80 shadow-inner flex flex-col items-center">
-                                                                <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-2xl shadow-lg flex items-center justify-center mb-4 transform -translate-y-10 -mb-6 border-4 border-slate-900">
-                                                                    <FileText className="text-slate-950" size={28} strokeWidth={2.5} />
-                                                                </div>
-                                                                
-                                                                <h4 className="text-white font-bold text-lg mb-2">Recibo Digital</h4>
-                                                                <p className="text-slate-400 text-xs text-center mb-5 px-2">
-                                                                    Documento oficial en PDF. Su comprobante de pago está listo para ser guardado.
-                                                                </p>
-
-                                                                <button
-                                                                    onClick={() => {
-                                                                        if (!activeClient) return;
-                                                                        const prevBal = lastPayment.remainingCapitalAfter + lastPayment.capitalPaid;
-                                                                        const receiptPayload = {
-                                                                            clientName: activeClient.name,
-                                                                            loanId: loan.id,
-                                                                            paymentAmount: lastPayment.amount,
-                                                                            paymentType: 'Pago de Cuota',
-                                                                            paymentDate: lastPayment.date,
-                                                                            notes: lastPayment.notes || '',
-                                                                            previousBalance: prevBal,
-                                                                            newBalance: lastPayment.remainingCapitalAfter,
-                                                                            interestPaid: lastPayment.interestPaid,
-                                                                            capitalPaid: lastPayment.capitalPaid
-                                                                        };
-                                                                        const doc = generatePaymentReceiptPdf(receiptPayload);
-                                                                        const fileName = `Recibo_${activeClient.name.replace(/\s/g, '_')}_${new Date(lastPayment.date).toISOString().split('T')[0]}.pdf`;
-                                                                        const blob = doc.output('blob');
-                                                                        downloadPdf(blob, fileName);
-                                                                    }}
-                                                                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-sm py-3.5 px-6 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all focus:outline-none"
-                                                                >
-                                                                    <Download size={18} className="stroke-[2.5]" />
-                                                                    <span>Descargar PDF</span>
-                                                                </button>
-                                                            </div>
+                                                        {/* GIANT, SUPER HIGH-CONTRAST AND INTUITIVE DOWNLOAD BUTTON */}
+                                                        <div className="pt-2 border-t border-slate-800/85">
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (!activeClient) return;
+                                                                    const prevBal = lastPayment.remainingCapitalAfter + lastPayment.capitalPaid;
+                                                                    const receiptPayload = {
+                                                                        clientName: activeClient.name,
+                                                                        loanId: loan.id,
+                                                                        paymentAmount: lastPayment.amount,
+                                                                        paymentType: 'Pago de Cuota',
+                                                                        paymentDate: lastPayment.date,
+                                                                        notes: lastPayment.notes || '',
+                                                                        previousBalance: prevBal,
+                                                                        newBalance: lastPayment.remainingCapitalAfter,
+                                                                        interestPaid: lastPayment.interestPaid,
+                                                                        capitalPaid: lastPayment.capitalPaid
+                                                                    };
+                                                                    const doc = generatePaymentReceiptPdf(receiptPayload);
+                                                                    const fileName = `Recibo_${activeClient.name.replace(/\s/g, '_')}_${new Date(lastPayment.date).toISOString().split('T')[0]}.pdf`;
+                                                                    const blob = doc.output('blob');
+                                                                    downloadPdf(blob, fileName);
+                                                                }}
+                                                                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-base sm:text-lg py-4 px-6 rounded-2xl shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all focus:outline-none focus:ring-4 focus:ring-emerald-400/30 cursor-pointer shadow-emerald-500/10"
+                                                            >
+                                                                <Download size={22} className="shrink-0 stroke-[3]" />
+                                                                <span>DESCARGAR MI RECIBO AQUÍ (PDF)</span>
+                                                            </button>
+                                                            <p className="text-center text-xs text-slate-400 mt-3 font-medium leading-relaxed">
+                                                                👉 <span className="text-emerald-400 font-extrabold underline">Toque el enorme botón verde de arriba</span> para ver y descargar el recibo en su teléfono móvil o computadora.
+                                                            </p>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="bg-slate-800/40 border border-slate-700/30 rounded-3xl p-8 flex flex-col items-center justify-center text-center">
-                                                <div className="w-16 h-16 bg-slate-900/80 rounded-2xl flex items-center justify-center mb-4 border border-slate-700">
-                                                    <FileText size={28} className="text-slate-500" />
+                                            <div className="bg-slate-800/40 border border-slate-700/30 rounded-2xl p-6 flex flex-col items-center justify-center text-center">
+                                                <div className="w-12 h-12 bg-slate-900/80 rounded-xl flex items-center justify-center mb-3 border border-slate-700">
+                                                    <FileText size={20} className="text-slate-500" />
                                                 </div>
-                                                <h4 className="text-base font-bold text-white mb-2">Sin recibos emitidos</h4>
-                                                <p className="text-sm text-slate-400 max-w-sm">Su recibo oficial de pago aparecerá en esta sección de forma automática una vez registrado su primer abono.</p>
+                                                <h4 className="text-xs font-bold text-white mb-1">Sin recibos emitidos</h4>
+                                                <p className="text-[11px] text-slate-400 max-w-sm">Su recibo oficial de pago aparecerá aquí automáticamente al registrar su primer abono.</p>
                                             </div>
                                         )}
                                     </div>

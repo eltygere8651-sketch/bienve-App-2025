@@ -100,45 +100,44 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }, [showToast]);
 
     useEffect(() => {
-        const init = async () => {
-            const configured = initializeFirebase();
-            if (!configured) {
-                setInitializationStatus('not_configured');
-                return;
-            }
+        const configured = initializeFirebase();
+        if (!configured) {
+            setInitializationStatus('not_configured');
+            return;
+        }
 
-            const safetyTimeout = setTimeout(() => {
-                if (initializationStatus === 'pending') {
+        const safetyTimeout = setTimeout(() => {
+            setInitializationStatus((currentStatus) => {
+                if (currentStatus === 'pending') {
                     console.warn("Auth check timed out, forcing initialization");
-                    setInitializationStatus('success');
+                    return 'success';
                 }
-            }, 5000);
+                return currentStatus;
+            });
+        }, 5000);
 
-            const unsubscribe = onAuthStateChanged((firebaseUser) => {
-                if (firebaseUser) {
-                    if (!firebaseUser.isAnonymous) {
-                        setUser(firebaseUser);
-                        setIsAuthenticated(true);
-                        setHasAdminAccount(true);
-                        setCurrentView((prev) => (prev === 'welcome' || prev === 'auth') ? 'dashboard' : prev);
-                    } else {
-                        setIsAuthenticated(false);
-                    }
+        const unsubscribe = onAuthStateChanged((firebaseUser) => {
+            if (firebaseUser) {
+                if (!firebaseUser.isAnonymous) {
+                    setUser(firebaseUser);
+                    setIsAuthenticated(true);
+                    setHasAdminAccount(true);
+                    setCurrentView((prev) => (prev === 'welcome' || prev === 'auth') ? 'dashboard' : prev);
                 } else {
-                    setUser(null);
                     setIsAuthenticated(false);
                 }
-                setInitializationStatus('success');
-                clearTimeout(safetyTimeout);
-            });
+            } else {
+                setUser(null);
+                setIsAuthenticated(false);
+            }
+            setInitializationStatus('success');
+            clearTimeout(safetyTimeout);
+        });
 
-            return () => {
-                clearTimeout(safetyTimeout);
-                unsubscribe();
-            };
+        return () => {
+            clearTimeout(safetyTimeout);
+            unsubscribe();
         };
-
-        init();
     }, []);
     
     useEffect(() => {
