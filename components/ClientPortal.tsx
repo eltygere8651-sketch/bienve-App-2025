@@ -168,6 +168,11 @@ const ClientPortal: React.FC = () => {
                             ? [...loan.paymentHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                             : [];
                         const lastPayment = paymentsSorted[0];
+
+                        // Calculate total overdue interest once
+                        const totalOverdue = loan.overdueHistory
+                            ?.filter((h) => h.status === "pendiente")
+                            .reduce((sum, item) => sum + item.amount, 0) || 0;
                         
                         return (
                             <div 
@@ -207,44 +212,31 @@ const ClientPortal: React.FC = () => {
                                     <div className="bg-[#241e1b] border border-stone-850 p-5 rounded-2xl relative shadow-inner flex flex-col justify-center">
                                         <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl pointer-events-none"></div>
                                         <span className="block text-[10px] uppercase tracking-[0.15em] text-stone-400 font-bold mb-1 font-mono">
-                                            Saldo Contratado y Mora
+                                            {totalOverdue > 0 ? "Saldo Contratado y Mora" : "Saldo Pendiente"}
                                         </span>
                                         <span className="text-3xl sm:text-4xl font-extrabold text-amber-400 tracking-tight block">
-                                            {(() => {
-                                                const totalOverdue = loan.overdueHistory
-                                                    ?.filter((h) => h.status === "pendiente")
-                                                    .reduce((sum, item) => sum + item.amount, 0) || 0;
-                                                return formatCurrency(loan.remainingCapital + totalOverdue);
-                                            })()}
+                                            {formatCurrency(loan.remainingCapital + totalOverdue)}
                                         </span>
-                                        {(() => {
-                                            const totalOverdue = loan.overdueHistory
-                                                ?.filter((h) => h.status === "pendiente")
-                                                .reduce((sum, item) => sum + item.amount, 0) || 0;
-                                            if (totalOverdue > 0) {
-                                                return (
-                                                    <div className="mt-3 pt-2.5 border-t border-stone-800/80 space-y-1">
-                                                        <div className="flex justify-between text-[11px] font-semibold text-stone-400">
-                                                            <span>Capital pendiente:</span>
-                                                            <span className="font-mono text-stone-300 font-extrabold">{formatCurrency(loan.remainingCapital)}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-[11px] font-semibold text-orange-400">
-                                                            <span>Mora pendiente:</span>
-                                                            <span className="font-mono font-extrabold">{formatCurrency(totalOverdue)}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-xs font-black text-white pt-1.5 border-t border-stone-800/40">
-                                                            <span>Total general deuda:</span>
-                                                            <span className="font-mono text-amber-500">{formatCurrency(loan.remainingCapital + totalOverdue)}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
-                                            return (
-                                                <span className="block text-[9px] text-stone-500 mt-1 font-semibold">
-                                                    Actualizado automáticamente por B.M Contigo
-                                                </span>
-                                            );
-                                        })()}
+                                        {totalOverdue > 0 ? (
+                                            <div className="mt-3 pt-2.5 border-t border-stone-800/80 space-y-1">
+                                                <div className="flex justify-between text-[11px] font-semibold text-stone-400">
+                                                    <span>Capital pendiente:</span>
+                                                    <span className="font-mono text-stone-300 font-extrabold">{formatCurrency(loan.remainingCapital)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-[11px] font-semibold text-orange-400">
+                                                    <span>Mora pendiente:</span>
+                                                    <span className="font-mono font-extrabold">{formatCurrency(totalOverdue)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-xs font-black text-white pt-1.5 border-t border-stone-800/40">
+                                                    <span>Total general deuda:</span>
+                                                    <span className="font-mono text-amber-500">{formatCurrency(loan.remainingCapital + totalOverdue)}</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <span className="block text-[9px] text-stone-500 mt-1 font-semibold">
+                                                Actualizado automáticamente por B.M Contigo
+                                            </span>
+                                        )}
                                     </div>
 
                                     {/* Maximum Payment Date Box */}
