@@ -15,7 +15,7 @@ import ShareApp from './components/ShareApp';
 import InstallPWAInstructions from './components/InstallPWAInstructions';
 
 // Lazy load heavy components to optimize initial load time
-const ClientList = React.lazy(() => import('./components/ClientList'));
+import ClientList from './components/ClientList';
 const RequestList = React.lazy(() => import('./components/RequestList'));
 const ReceiptGenerator = React.lazy(() => import('./components/ReceiptGenerator'));
 const SettingsComponent = React.lazy(() => import('./components/Settings'));

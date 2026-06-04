@@ -36,7 +36,7 @@ interface DataContextType {
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
     handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; source?: 'Banco' | 'Efectivo' }) => Promise<void>;
     handleCleanDeleteClient: (clientId: string) => Promise<void>;
-    handleConfirmOverdue: (loanId: string, suggestion: { monthName: string, amount: number, accrualDate: string }) => Promise<void>;
+    handleConfirmOverdue: (loanId: string, suggestion: { monthName: string, amount: number, accrualDate: string }, initialStatus?: 'pendiente' | 'anulado') => Promise<void>;
     suggestedOverdues: { loanId: string, monthName: string, amount: number, accrualDate: string }[];
     handleManualAddOverdue: (loanId: string, monthName: string, year: number, amount: number) => Promise<void>;
     handleDeleteOverdueMonth: (loanId: string, overdueId: string) => Promise<void>;

@@ -5,6 +5,7 @@ import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
 import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2, Clock, Trash2, Activity, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
+import { calculateMonthlyInterest } from '../config';
 import LoanDetailsModal from './LoanDetailsModal';
 import NewLoanModal from './NewLoanModal';
 import { generateClientReport, generateFullClientListPDF } from '../services/pdfService';
@@ -123,6 +124,8 @@ interface ClientCardProps {
 }
 
 const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, onViewDetails, onQuickPay, onArchive, onCleanDelete, onCopyLink }) => {
+    const { showToast } = useAppContext();
+    const { handleConfirmOverdue } = useDataContext();
     const loans = client.loans || [];
     const activeLoan = loans.find(l => l.status === LoanStatus.PENDING || l.status === LoanStatus.OVERDUE);
     const hasActiveLoan = !!activeLoan;
@@ -154,12 +157,23 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
             return pDate.getMonth() === currentMonth && pDate.getFullYear() === currentYear;
         });
 
+        // Check if it's recorded in overdueHistory as perdonado (anulado) or claimed (reclamado)
+        const overdueMonthRecord = activeLoan.overdueHistory?.find(oh => {
+            return oh.monthName.toLowerCase() === currentMonthName.toLowerCase() && oh.year === currentYear;
+        });
+
+        const isPerdonado = overdueMonthRecord?.status === 'anulado';
+        const isReclamado = overdueMonthRecord?.status === 'reclamado';
+        const isPendienteMora = overdueMonthRecord?.status === 'pendiente';
+
         // Check if loan STARTED this month
         const loanStartDate = new Date(activeLoan.startDate);
         const isLoanNewThisMonth = loanStartDate.getMonth() === currentMonth && loanStartDate.getFullYear() === currentYear;
         
         return {
-            hasPaid: hasPaidThisMonth,
+            hasPaid: hasPaidThisMonth || isPerdonado || isReclamado,
+            isPerdonado,
+            isPendienteMora,
             monthName: currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1),
             isLoanNewThisMonth,
             nextMonthName: nextMonthName.charAt(0).toUpperCase() + nextMonthName.slice(1)
@@ -282,7 +296,7 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
                                 monthlyStatus.isLoanNewThisMonth
                                 ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                                 : monthlyStatus.hasPaid 
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                    ? (monthlyStatus.isPerdonado ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20') 
                                     : 'bg-red-500/10 text-red-400 border-red-500/20 animate-pulse'
                             }`}>
                                 <div className="flex items-center gap-1.5">
@@ -297,14 +311,38 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
                                         </>
                                     ) : monthlyStatus.hasPaid ? (
                                         <>
-                                            <span>ABONADO</span>
-                                            <CheckCircle2 size={14} />
+                                            <span>{monthlyStatus.isPerdonado ? 'PERDONADO' : 'ABONADO'}</span>
+                                            {monthlyStatus.isPerdonado ? <span className="text-sm">🤝</span> : <CheckCircle2 size={14} />}
                                         </>
                                     ) : (
-                                        <>
-                                            <span>PENDIENTE</span>
-                                            <AlertCircle size={14} />
-                                        </>
+                                            <div className="flex flex-col gap-1.5 w-full">
+                                                <div className="flex items-center justify-between text-red-500 font-black animate-pulse">
+                                                    <span className="text-[11px] uppercase tracking-tighter">⚠️ {monthlyStatus.monthName.toUpperCase()} SIN REGISTRO</span>
+                                                    <AlertCircle size={14} />
+                                                </div>
+                                                {/* ACTION BUTTON TO REMOVE THE RED ALERT */}
+                                                <button 
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        const today = new Date();
+                                                        const suggestion = {
+                                                            monthName: monthlyStatus.monthName,
+                                                            amount: calculateMonthlyInterest(activeLoan.remainingCapital, activeLoan.interestRate).interest,
+                                                            accrualDate: today.toISOString()
+                                                        };
+                                                        try {
+                                                            await handleConfirmOverdue(activeLoan.id, suggestion, 'anulado');
+                                                            showToast(`¡Mes de ${monthlyStatus.monthName} perdonado con éxito!`, 'success');
+                                                        } catch (err) {
+                                                            showToast('Error al procesar el perdón.', 'error');
+                                                        }
+                                                    }}
+                                                    className="w-full bg-white text-red-600 hover:bg-black hover:text-white text-[10px] font-extrabold py-2 rounded-lg shadow-xl active:scale-90 transition-all border-2 border-red-500"
+                                                    title="Hacer clic aquí para eliminar mensaje de Junio Pendiente"
+                                                >
+                                                    🤝 CLICK AQUÍ PARA PERDONAR MES
+                                                </button>
+                                            </div>
                                     )}
                                 </div>
                             </div>

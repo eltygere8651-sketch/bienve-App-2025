@@ -1,9 +1,10 @@
 
 import React, { useMemo } from 'react';
 import { Loan, OverdueMonth } from '../types';
-import { X, Clock, User, Calendar, Banknote } from 'lucide-react';
+import { X, Clock, User, Calendar, Banknote, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatCurrency } from '../services/utils';
+import { useDataContext } from '../contexts/DataContext';
 
 interface OverdueBreakdownModalProps {
     isOpen: boolean;
@@ -17,6 +18,8 @@ interface OverdueItem extends OverdueMonth {
 }
 
 const OverdueBreakdownModal: React.FC<OverdueBreakdownModalProps> = ({ isOpen, onClose, loans }) => {
+    const { handleToggleOverdueStatus } = useDataContext();
+    
     const overdueItems = useMemo(() => {
         const items: OverdueItem[] = [];
         loans.forEach(loan => {
@@ -109,10 +112,32 @@ const OverdueBreakdownModal: React.FC<OverdueBreakdownModalProps> = ({ isOpen, o
                                             </div>
                                         </div>
                                         
-                                        <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4">
+                                        <div className="flex flex-col sm:flex-row items-center justify-between sm:justify-end w-full sm:w-auto gap-4">
                                             <div className="text-right">
                                                 <p className="text-[10px] font-bold text-slate-500 uppercase mb-0.5">Monto Mora</p>
                                                 <p className="text-lg font-mono font-bold text-white">{formatCurrency(item.amount)}</p>
+                                            </div>
+                                            <div className="flex gap-2 w-full sm:w-auto">
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleToggleOverdueStatus(item.loanId, item.id, 'anulado');
+                                                    }}
+                                                    className="flex-1 sm:flex-none px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600 text-amber-500 hover:text-white text-[10px] font-bold rounded-lg border border-amber-500/30 transition-all flex items-center justify-center gap-1"
+                                                    title="Perdonar este interés"
+                                                >
+                                                    🤝 Perdonar
+                                                </button>
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleToggleOverdueStatus(item.loanId, item.id, 'reclamado');
+                                                    }}
+                                                    className="flex-1 sm:flex-none px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-500 hover:text-white text-[10px] font-bold rounded-lg border border-emerald-500/30 transition-all flex items-center justify-center gap-1"
+                                                    title="Marcar como cobrado"
+                                                >
+                                                    <Check size={12} /> Cobrado
+                                                </button>
                                             </div>
                                         </div>
                                     </div>

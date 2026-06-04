@@ -175,12 +175,24 @@ const Dashboard: React.FC = () => {
                                                     </div>
                                                     <p className="text-sm font-mono text-white font-bold">{formatCurrency(suggestion.amount)}</p>
                                                 </div>
-                                                <button 
-                                                    onClick={() => handleConfirmOverdue(suggestion.loanId, suggestion)}
-                                                    className="w-full mt-4 bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white text-[10px] font-bold py-2 rounded-lg transition-all border border-amber-500/30"
-                                                >
-                                                    Ingresar interés vencido
-                                                </button>
+                                                <div className="flex flex-col gap-2 mt-4">
+                                                    <button 
+                                                        onClick={() => handleConfirmOverdue(suggestion.loanId, suggestion, 'pendiente')}
+                                                        className="w-full bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white text-[10px] font-bold py-2 rounded-lg transition-all border border-amber-500/30"
+                                                    >
+                                                        Registrar como Deuda
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => {
+                                                            handleConfirmOverdue(suggestion.loanId, suggestion, 'anulado');
+                                                            showToast(`Registro de ${suggestion.monthName} perdonado correctamente.`, 'success');
+                                                        }}
+                                                        className="w-full bg-slate-100 hover:bg-white text-slate-900 text-[10px] font-black py-2 rounded-lg transition-all border border-white/20 active:scale-95 shadow-lg shadow-black/20"
+                                                        title="Eliminar esta alerta perdonando el mes"
+                                                    >
+                                                        👋 CLICK PARA PERDONAR ESTE MES
+                                                    </button>
+                                                </div>
                                             </div>
                                         );
                                     })}

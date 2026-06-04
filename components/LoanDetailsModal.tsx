@@ -939,7 +939,8 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                       </div>
                     )}
 
-                    {currentSuggestions.length > 0 && (
+                    {/* Suggestions Section */}
+                    {currentSuggestions.length > 0 ? (
                       <div className="mb-6 space-y-3">
                         <h4 className="text-xs font-extrabold text-amber-400 uppercase tracking-widest font-mono">
                           ⚠️ Moras Detectadas Pendientes de Registrar
@@ -959,17 +960,80 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                                 </p>
                               </div>
                             </div>
-                            <button
-                              onClick={() =>
-                                handleConfirmOverdue(loan.id, suggestion)
-                              }
-                              className="bg-amber-600 hover:bg-amber-500 text-stone-950 text-2xs font-extrabold py-2 px-3 rounded-lg transition-all shadow-md shadow-amber-900/10 flex items-center justify-center gap-1 cursor-pointer"
-                            >
-                              <Check size={12} /> Registrar Mora
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() =>
+                                  handleConfirmOverdue(loan.id, suggestion, 'pendiente')
+                                }
+                                className="bg-amber-600 hover:bg-amber-500 text-stone-950 text-[10px] font-extrabold py-1.5 px-3 rounded-lg transition-all shadow-md shadow-amber-900/10 flex items-center justify-center gap-1 cursor-pointer"
+                              >
+                                <Check size={12} /> Registrar
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleConfirmOverdue(loan.id, suggestion, 'anulado')
+                                }
+                                className="bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-extrabold py-1.5 px-3 rounded-lg transition-all border border-slate-600 flex items-center justify-center gap-1 cursor-pointer"
+                              >
+                                🤝 Perdonar
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
+                    ) : (
+                      // IF NOT SUGGESTED BUT PENDING IN UI (Current Month Fallback)
+                      (() => {
+                        const now = new Date();
+                        const currentMonthName = now.toLocaleDateString('es-ES', { month: 'long' });
+                        const currentYear = now.getFullYear();
+                        
+                        const hasPaidThisMonth = loan.paymentHistory?.some(p => {
+                          const d = new Date(p.date);
+                          return d.getMonth() === now.getMonth() && d.getFullYear() === currentYear;
+                        });
+                        
+                        const alreadyInHistory = loan.overdueHistory?.some(oh => 
+                          oh.monthName.toLowerCase() === currentMonthName.toLowerCase() && oh.year === currentYear
+                        );
+
+                        if (!hasPaidThisMonth && !alreadyInHistory) {
+                          const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
+                          return (
+                            <div className="mb-6 p-4 bg-slate-800/80 border border-slate-700/50 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-slate-700 rounded-lg text-slate-400">
+                                  <Calendar size={18} />
+                                </div>
+                                <div>
+                                  <h5 className="text-xs font-bold text-slate-200 uppercase tracking-tight">Estado de <span className="text-primary-400">{currentMonthName.toUpperCase()}</span></h5>
+                                  <p className="text-[10px] text-red-400 font-black uppercase">Pendiente de Registro o Cobro</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 w-full sm:w-auto">
+                                <button
+                                  onClick={async() => {
+                                      try {
+                                        await handleConfirmOverdue(loan.id, {
+                                            monthName: `${currentMonthName} ${currentYear}`,
+                                            amount: interest,
+                                            accrualDate: now.toISOString()
+                                        }, 'anulado');
+                                        showToast(`${currentMonthName} perdonado correctamente.`, 'success');
+                                      } catch (err) {
+                                        showToast('Error al perdonar.', 'error');
+                                      }
+                                  }}
+                                  className="flex-1 sm:flex-none bg-amber-600/20 hover:bg-amber-600 text-amber-500 hover:text-white text-[10px] font-bold px-4 py-2 rounded-lg border border-amber-500/30 transition-all flex items-center justify-center gap-1 active:scale-95"
+                                >
+                                  🤝 Perdonar Registro {currentMonthName.substring(0,3).toUpperCase()}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()
                     )}
 
                     {!loan.overdueHistory ||
