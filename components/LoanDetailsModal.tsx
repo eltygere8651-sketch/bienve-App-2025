@@ -160,9 +160,10 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
   const [manualOverdueAmount, setManualOverdueAmount] = useState("");
 
   // Message Type State
-  const [msgType, setMsgType] = useState<"recommended" | "direct" | "premium">(
-    "recommended",
+  const [msgType, setMsgType] = useState<"recommended" | "direct" | "premium" | "reminder_normal">(
+    "reminder_normal",
   );
+  const [reminderCapitalDiscount, setReminderCapitalDiscount] = useState("");
 
   // Balance Correction State
   const [showCorrectionInput, setShowCorrectionInput] = useState(false);
@@ -468,7 +469,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
   };
 
   const getShareMessage = (
-    type: "recommended" | "direct" | "premium" = "recommended",
+    type: "recommended" | "direct" | "premium" | "reminder_normal" = "recommended",
   ) => {
     if (!client || !loan) return "";
 
@@ -481,6 +482,25 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
     );
 
     const firstName = client.name.split(" ")[0];
+
+    if (type === "reminder_normal") {
+      const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
+      const currentMonthName = new Intl.DateTimeFormat("es-ES", { month: "long" }).format(new Date());
+      const capitalizedMonth = currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1);
+      
+      let msg = `¡Hola *${firstName}*! 👋 ¿Cómo estás? Espero que todo vaya excelente.\n\n`;
+      msg += `Te comparto el detalle de pago para este mes de *${capitalizedMonth}*:\n\n`;
+      msg += `📍 *Interés mensual:* ${formatCurrency(interest)}\n`;
+      if (loan.pendingInterest && loan.pendingInterest > 0) {
+        msg += `📍 *Interés anterior pendiente:* ${formatCurrency(loan.pendingInterest)}\n`;
+      }
+      msg += `📍 *Abono a Capital:* (importe abonar de capital) € (para reducir lo adeudado)\n`;
+      
+      const baseTotal = interest + (loan.pendingInterest || 0);
+      msg += `\n💰 *Total Neto a Abonar:* ${formatCurrency(baseTotal)} + Capital\n\n`;
+      msg += `Agradezco mucho tu puntualidad de siempre.\n¡Un fuerte abrazo!`;
+      return msg;
+    }
 
     if (overdueItems.length === 0) {
       return `¡Hola *${firstName}*! 👋\n\nPaso por aquí para saludarte y comentarte que tu cuenta está totalmente al día. ¡Muchas gracias por tu excelente puntualidad! Seguimos adelante. 🚀`;
@@ -785,78 +805,84 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
 
                   {/* Nueva Sección: Historial de Mora Informativo */}
                   <div className="bg-slate-800 p-5 rounded-xl border border-slate-700">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                       <div>
                         <h4 className="text-sm font-bold text-slate-300 flex items-center gap-2">
                           <Clock size={16} className="text-amber-400" />{" "}
                           Historial de Mora Informativo
                         </h4>
                         <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">
-                          Registro de meses no abonados (No afecta saldo
-                          contable)
+                          Registro de meses no abonados (No afecta saldo contable)
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                        <div className="flex flex-1 sm:flex-none items-center bg-slate-700/50 rounded-lg border border-slate-600 overflow-hidden shadow-lg">
+
+                      <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-stretch sm:items-center">
+                        <div className="flex items-center bg-slate-900/60 rounded-xl border border-slate-700 overflow-hidden shadow-lg p-0.5 w-full sm:w-auto">
                           <select
                             value={msgType}
                             onChange={(e) => setMsgType(e.target.value as any)}
-                            className="bg-transparent px-3 py-2 text-[10px] font-bold text-slate-300 outline-none border-r border-slate-600 cursor-pointer hover:bg-slate-700 transition-colors"
+                            className="bg-transparent pl-3 pr-2 py-2 text-[10px] font-black text-slate-300 outline-none border-r border-slate-700 cursor-pointer hover:bg-slate-700/50 transition-colors flex-1 sm:flex-initial"
                           >
-                            <option value="recommended">Recomendado</option>
-                            <option value="direct">Directo</option>
-                            <option value="premium">Premium</option>
+                            <option value="reminder_normal">📋 Recordatorio Pago</option>
+                            <option value="recommended">⚠️ Mora Recomendado</option>
+                            <option value="direct">⚠️ Mora Directo</option>
+                            <option value="premium">⚠️ Mora Premium</option>
                           </select>
                           <button
                             onClick={handleCopyReport}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 active:scale-95 rounded-lg ml-0.5 flex-1 sm:flex-initial cursor-pointer"
                             title="Copiar Recordatorio de Mora"
                           >
                             <Copy size={14} /> Copiar
                           </button>
                         </div>
-                        <button
-                          onClick={() => {
-                            const nextStatus =
+                        
+                        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:w-auto">
+                          <button
+                            onClick={() => {
+                              const nextStatus =
+                                loan.status === LoanStatus.OVERDUE
+                                  ? LoanStatus.PENDING
+                                  : LoanStatus.OVERDUE;
+                              handleUpdateLoan(loan.id, { status: nextStatus });
+                              showToast(
+                                `Estado del préstamo cambiado a ${nextStatus}`,
+                                "info",
+                              );
+                            }}
+                            className={`h-11 sm:h-auto px-3 py-2 rounded-xl text-[10px] font-extrabold uppercase transition-all flex items-center justify-center gap-1 border cursor-pointer active:scale-95 ${
                               loan.status === LoanStatus.OVERDUE
-                                ? LoanStatus.PENDING
-                                : LoanStatus.OVERDUE;
-                            handleUpdateLoan(loan.id, { status: nextStatus });
-                            showToast(
-                              `Estado del préstamo cambiado a ${nextStatus}`,
-                              "info",
-                            );
-                          }}
-                          className={`flex-1 sm:flex-none px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all border ${
-                            loan.status === LoanStatus.OVERDUE
-                              ? "bg-emerald-900/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-900/40"
-                              : "bg-amber-900/20 text-amber-400 border-amber-500/30 hover:bg-amber-900/40"
-                          }`}
-                        >
-                          {loan.status === LoanStatus.OVERDUE
-                            ? "Quitar Vencido"
-                            : "Marcar Vencido"}
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!showManualOverdue) {
-                              const today = new Date();
-                              const monthNameLong = new Intl.DateTimeFormat("es-ES", { month: "long" }).format(today);
-                              const capitalizedMonth = monthNameLong.charAt(0).toUpperCase() + monthNameLong.slice(1);
-                              setManualOverdueMonth(capitalizedMonth);
-                              setManualOverdueYear(today.getFullYear());
-                              
-                              if (loan) {
-                                const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
-                                setManualOverdueAmount(interest.toFixed(2));
+                                ? "bg-emerald-950/40 text-emerald-400 border-emerald-500/20 hover:bg-emerald-900/30"
+                                : "bg-amber-950/40 text-amber-400 border-amber-500/20 hover:bg-amber-900/30"
+                            }`}
+                          >
+                            {loan.status === LoanStatus.OVERDUE
+                              ? "Quitar Vencido"
+                              : "Marcar Vencido"}
+                          </button>
+                          
+                          <button
+                            onClick={() => {
+                              if (!showManualOverdue) {
+                                const today = new Date();
+                                const monthNameLong = new Intl.DateTimeFormat("es-ES", { month: "long" }).format(today);
+                                const capitalizedMonth = monthNameLong.charAt(0).toUpperCase() + monthNameLong.slice(1);
+                                setManualOverdueMonth(capitalizedMonth);
+                                setManualOverdueYear(today.getFullYear());
+                                
+                                if (loan) {
+                                  const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
+                                  setManualOverdueAmount(interest.toFixed(2));
+                                }
                               }
-                            }
-                            setShowManualOverdue(!showManualOverdue);
-                          }}
-                          className="flex-1 sm:flex-none px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold rounded uppercase border border-slate-600 transition-colors"
-                        >
-                          {showManualOverdue ? "Cerrar" : "+ Añadir Registro"}
-                        </button>
+                              setShowManualOverdue(!showManualOverdue);
+                            }}
+                            className="h-11 sm:h-auto px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold rounded-xl uppercase border border-slate-600 transition-colors flex items-center justify-center cursor-pointer"
+                          >
+                            {showManualOverdue ? "Cerrar" : "+ Registro"}
+                          </button>
+                        </div>
+
                         {loan.overdueHistory &&
                           loan.overdueHistory.length > 0 && (
                             <button
@@ -870,7 +896,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                                   type: "danger",
                                 });
                               }}
-                              className="flex-1 sm:flex-none px-3 py-1.5 bg-red-900/20 hover:bg-red-900/40 text-red-400 text-[10px] font-bold rounded uppercase border border-red-500/30 transition-colors"
+                              className="w-full sm:w-auto h-11 sm:h-auto px-3 py-2 bg-red-950/20 hover:bg-red-900/40 text-red-400 text-[10px] font-bold rounded-xl uppercase border border-red-500/30 transition-colors"
                             >
                               Limpiar Todo
                             </button>
@@ -1044,37 +1070,37 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                         </p>
                       </div>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-4">
                         {loan.overdueHistory.map((item) => (
                           <div
                             key={item.id}
-                            className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg border border-slate-700/50 hover:border-slate-600 transition-colors group"
+                            className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-all gap-4 group"
                           >
                             <div className="flex items-center gap-3">
                               <div
-                                className={`p-1.5 rounded-full ${
+                                className={`p-2 rounded-xl flex-shrink-0 ${
                                   item.status === "pendiente"
-                                    ? "bg-red-500/10 text-red-500"
+                                    ? "bg-red-500/10 text-red-400 border border-red-500/25"
                                     : item.status === "reclamado"
-                                      ? "bg-emerald-500/10 text-emerald-500"
-                                      : "bg-slate-700 text-slate-400"
+                                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/25"
+                                      : "bg-slate-800 text-slate-400 border border-slate-700"
                                 }`}
                               >
                                 {item.status === "pendiente" ? (
-                                  <AlertTriangle size={14} />
+                                  <AlertTriangle size={16} />
                                 ) : item.status === "reclamado" ? (
-                                  <Check size={14} />
+                                  <Check size={16} />
                                 ) : (
-                                  <X size={14} />
+                                  <X size={16} />
                                 )}
                               </div>
                               <div>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="text-sm font-bold text-slate-200">
+                                  <p className="text-sm font-black text-slate-100">
                                     {item.monthName} {item.year}
                                   </p>
                                   <span
-                                    className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                                    className={`text-[8px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                                       item.status === "pendiente"
                                         ? "bg-red-500/20 text-red-400 border border-red-500/30"
                                         : item.status === "reclamado"
@@ -1089,15 +1115,17 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                                         : "Mora Perdonada / Anulada"}
                                   </span>
                                 </div>
-                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                <p className="text-[11px] text-slate-400 mt-0.5">
                                   Importe:{" "}
-                                  <span className="font-extrabold text-slate-300">
+                                  <span className="font-extrabold text-slate-200">
                                     {formatCurrency(item.amount)}
                                   </span>
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                            
+                            {/* Segmented active/toggle state bar styled perfectly for touch/mobile */}
+                            <div className="grid grid-cols-4 sm:flex items-center gap-1.5 w-full sm:w-auto mt-1 sm:mt-0 pt-3 sm:pt-0 border-t border-slate-800/60 sm:border-0">
                               <button
                                 onClick={() =>
                                   handleToggleOverdueStatus(
@@ -1107,10 +1135,10 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                                   )
                                 }
                                 title="Marcar este mes como Mora Pendiente"
-                                className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors ${
+                                className={`h-10 sm:h-auto px-2 sm:px-2.5 py-2 sm:py-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1 active:scale-95 border cursor-pointer ${
                                   item.status === "pendiente"
-                                    ? "bg-red-500 text-white font-extrabold"
-                                    : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                                    ? "bg-red-500 text-white border-red-400 shadow-lg shadow-red-900/30"
+                                    : "bg-slate-800 text-slate-400 border-slate-700/85 hover:bg-slate-700 hover:text-slate-200"
                                 }`}
                               >
                                 Mora
@@ -1124,13 +1152,13 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                                   )
                                 }
                                 title="Marcar este interés como cobrado con éxito"
-                                className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-colors ${
+                                className={`h-10 sm:h-auto px-2 sm:px-2.5 py-2 sm:py-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1 active:scale-95 border cursor-pointer ${
                                   item.status === "reclamado"
-                                    ? "bg-emerald-600 text-white font-extrabold"
-                                    : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                                    ? "bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-950/30"
+                                    : "bg-slate-800 text-slate-400 border-slate-700/85 hover:bg-slate-700 hover:text-slate-200"
                                 }`}
                               >
-                                Cobrado
+                                Cobro
                               </button>
                               <button
                                 onClick={() =>
@@ -1140,14 +1168,14 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                                     "anulado",
                                   )
                                 }
-                                title="Perdonar mora al deudor inmediatamente (se resta de su saldo de interés de forma transparente sin generar registros contables ni alterar fondos)"
-                                className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${
+                                title="Perdonar mora al deudor inmediatamente"
+                                className={`h-10 sm:h-auto px-2 sm:px-2.5 py-2 sm:py-1 rounded-lg text-[9px] sm:text-[10px] font-black uppercase transition-all flex items-center justify-center gap-1 active:scale-95 border cursor-pointer ${
                                   item.status === "anulado"
-                                    ? "bg-amber-600 hover:bg-amber-500 text-stone-950 font-extrabold shadow-sm"
-                                    : "bg-amber-950/45 text-amber-400 hover:bg-amber-900/40 border border-amber-500/20"
+                                    ? "bg-amber-600 text-stone-950 border-amber-500 font-extrabold shadow-lg shadow-amber-950/30"
+                                    : "bg-amber-950/40 text-amber-400 border-amber-500/20 hover:bg-amber-900/30"
                                 }`}
                               >
-                                🤝 Perdonar Mora
+                                Perdón
                               </button>
                               <button
                                 onClick={() => {
@@ -1163,9 +1191,9 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                                   });
                                 }}
                                 title="Eliminar registro"
-                                className="p-1 rounded bg-red-900/20 text-red-400 hover:bg-red-900/30 transition-colors"
+                                className="h-10 sm:h-8 px-2 sm:px-2.5 py-2 sm:py-1 rounded-lg bg-red-900/20 hover:bg-red-900/30 text-red-400 hover:text-red-300 transition-all flex items-center justify-center border border-red-500/10 active:scale-95 cursor-pointer"
                               >
-                                <Trash2 size={13} />
+                                <Trash2 size={14} />
                               </button>
                             </div>
                           </div>
