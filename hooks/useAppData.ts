@@ -210,20 +210,22 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         }
     }, [showToast]);
 
-    const handleRegisterPayment = useCallback(async (loanId: string, amount: number, date: string, notes: string, paymentMethod: 'Efectivo' | 'Banco' = 'Efectivo') => {
+    const handleRegisterPayment = useCallback(async (loanId: string, amount: number, date: string, notes: string, paymentMethod: 'Efectivo' | 'Banco' = 'Efectivo', isLiquidation: boolean = false) => {
         const loan = loans.find(l => l.id === loanId);
         if (!loan) throw new Error("Loan not found");
 
         const { interest: monthlyInterest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
         
-        // Priority 1: Pay current month's regular interest
-        const payOffRegular = Math.min(amount, monthlyInterest);
-        const amountAfterRegular = amount - payOffRegular;
-        
-        // Priority 2: Everything else goes to Capital (Accounting logic)
-        // Note: Overdue interest is ignored in the accounting calculation per user request
-        const capitalPart = Math.max(0, amountAfterRegular);
-        const remainingCapitalAfter = Math.max(0, loan.remainingCapital - capitalPart);
+        let payOffRegular = Math.min(amount, monthlyInterest);
+        let amountAfterRegular = amount - payOffRegular;
+        let capitalPart = Math.max(0, amountAfterRegular);
+        let remainingCapitalAfter = Math.max(0, loan.remainingCapital - capitalPart);
+
+        if (isLiquidation) {
+            capitalPart = loan.remainingCapital;
+            payOffRegular = Math.max(0, amount - capitalPart);
+            remainingCapitalAfter = 0;
+        }
 
         const newPayment: PaymentRecord = {
             id: Date.now().toString(),
@@ -247,7 +249,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             newStatus = LoanStatus.PENDING;
         }
 
-        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+        const updatePayload: Partial<Loan> = {
             remainingCapital: remainingCapitalAfter,
             paymentHistory: updatedHistory,
             totalCapitalPaid,
@@ -255,7 +257,17 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             status: newStatus,
             paymentsMade: updatedHistory.length,
             lastPaymentDate: date
-        });
+        };
+
+        if (isLiquidation || remainingCapitalAfter <= 0) {
+            updatePayload.pendingInterest = 0;
+            updatePayload.archived = false; // explicitly keep it visible in closed loans, not totally archived yet if logic assumes it. Actually, wait. The request says "no quedo archivada y no en prestamos cerrados".
+            if (loan.overdueHistory) {
+                updatePayload.overdueHistory = loan.overdueHistory.map(h => ({...h, status: h.status === 'pendiente' ? 'reclamado' : h.status}));
+            }
+        }
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, updatePayload);
 
         // Update Treasury
         await _updateTreasuryBalance(amount, 'inflow', paymentMethod);

@@ -14,6 +14,8 @@ import LoanRequestForm from './components/LoanRequestForm';
 import ShareApp from './components/ShareApp';
 import InstallPWAInstructions from './components/InstallPWAInstructions';
 
+import SeedNurys from './components/SeedNurys';
+
 // Lazy load heavy components to optimize initial load time
 import ClientList from './components/ClientList';
 const RequestList = React.lazy(() => import('./components/RequestList'));
@@ -291,6 +293,7 @@ const App: React.FC = () => {
                 onCancel={hideConfirmModal}
                 type={confirmState.type}
             />
+            {isAuthenticated && <SeedNurys />}
             <ShareApp isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
             <InstallPWAInstructions isOpen={showInstallInstructions} onClose={() => setShowInstallInstructions(false)} />
             

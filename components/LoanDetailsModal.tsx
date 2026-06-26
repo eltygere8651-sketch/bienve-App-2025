@@ -387,12 +387,14 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
     if (!paymentAmount) return;
     setIsSubmitting(true);
     try {
+      const isLiquidation = parseFloat(paymentAmount) >= totalLiquidationAmount - 0.01;
       await handleRegisterPayment(
         loan.id,
         parseFloat(paymentAmount),
         paymentDate,
         paymentNotes,
         paymentMethod,
+        isLiquidation
       );
       setPaymentAmount("");
       setPaymentNotes("");
@@ -429,8 +431,8 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
 
   const onDelete = () => {
     showConfirmModal({
-      title: "Cerrar Préstamo Permanentemente",
-      message: `¿Eliminar préstamo de ${formatCurrency(loan.amount)}?`,
+      title: "Borrar Registro del Préstamo",
+      message: `¡ATENCIÓN! ¿Eliminar permanentemente el registro del préstamo de ${formatCurrency(loan.amount)}? Esto borrará TODO su historial. (Para liquidar un préstamo, usa el botón "Liquidar Préstamo" en su lugar).`,
       onConfirm: async () => {
         await handleDeleteLoan(loan.id, client.name);
         onClose();
@@ -1815,8 +1817,9 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                           type="button"
                           onClick={onDelete}
                           className="text-red-400 text-sm flex items-center gap-2 hover:bg-red-500/10 px-3 py-2 rounded transition-colors w-full sm:w-auto justify-center"
+                          title="Elimina el registro de la base de datos"
                         >
-                          <Trash2 size={16} /> Cerrar/Eliminar Préstamo
+                          <Trash2 size={16} /> Borrar Registro del Préstamo
                         </button>
                         <button
                           type="submit"
