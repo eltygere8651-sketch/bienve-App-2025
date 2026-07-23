@@ -166,9 +166,10 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
         const isReclamado = overdueMonthRecord?.status === 'reclamado';
         const isPendienteMora = overdueMonthRecord?.status === 'pendiente';
 
-        // Check if loan STARTED this month
+        // Check if loan STARTED this month or in the future
         const loanStartDate = new Date(activeLoan.startDate);
         const isLoanNewThisMonth = loanStartDate.getMonth() === currentMonth && loanStartDate.getFullYear() === currentYear;
+        const isLoanInFuture = loanStartDate.getTime() > now.getTime();
         
         return {
             hasPaid: hasPaidThisMonth || isPerdonado || isReclamado,
@@ -176,6 +177,7 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
             isPendienteMora,
             monthName: currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1),
             isLoanNewThisMonth,
+            isLoanInFuture,
             nextMonthName: nextMonthName.charAt(0).toUpperCase() + nextMonthName.slice(1)
         };
     }, [activeLoan]);
@@ -304,7 +306,12 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
                                     <span>{monthlyStatus.isLoanNewThisMonth ? 'INICIO' : monthlyStatus.monthName}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5">
-                                    {monthlyStatus.isLoanNewThisMonth ? (
+                                    {monthlyStatus.isLoanInFuture ? (
+                                        <div className="flex items-center gap-1.5 font-bold text-blue-400">
+                                            <span>EMPIEZA EN {activeLoan.startDate ? new Date(activeLoan.startDate).toLocaleDateString('es-ES', { month: 'long' }).toUpperCase() : 'FUTURO'}</span>
+                                            <Calendar size={14} />
+                                        </div>
+                                    ) : monthlyStatus.isLoanNewThisMonth ? (
                                         <>
                                             <span className="text-[10px]">1º PAGO: {monthlyStatus.nextMonthName.toUpperCase()}</span>
                                             <Clock size={14} />
@@ -371,13 +378,13 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
                             <button 
                                 onClick={(e) => handleActionClick(e, () => onQuickPay(activeLoan))}
                                 className={`w-full group/btn relative flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-white font-bold text-sm transition-all shadow-lg border-t border-white/10 active:scale-95 ${
-                                    monthlyStatus?.hasPaid || monthlyStatus?.isLoanNewThisMonth
+                                    monthlyStatus?.hasPaid || monthlyStatus?.isLoanNewThisMonth || monthlyStatus?.isLoanInFuture
                                     ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 shadow-emerald-900/20'
                                     : 'bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 shadow-red-900/20 animate-pulse-slow'
                                 }`}
                             >
                                 <Wallet size={16} /> 
-                                {monthlyStatus?.hasPaid || monthlyStatus?.isLoanNewThisMonth ? 'Registrar Adelanto / Pago' : 'Registrar Cobro Mes'}
+                                {monthlyStatus?.hasPaid || monthlyStatus?.isLoanNewThisMonth || monthlyStatus?.isLoanInFuture ? 'Registrar Adelanto / Pago' : 'Registrar Cobro Mes'}
                             </button>
                         </div>
                     </div>

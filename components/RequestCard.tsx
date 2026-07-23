@@ -48,7 +48,7 @@ const RequestCard: React.FC<RequestCardProps> = ({ request, forceExpand = false 
     const [isExpanded, setIsExpanded] = useState(forceExpand);
     const [amount, setAmount] = useState(request.loanAmount || 500);
     const [term, setTerm] = useState(12);
-    const [fundingSource, setFundingSource] = useState<'Banco' | 'Efectivo'>('Banco');
+    const [fundingSource, setFundingSource] = useState<'Banco' | 'Efectivo' | 'Fondo Personal'>('Banco');
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
     const [isDownloadingDniPdf, setIsDownloadingDniPdf] = useState(false);
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
@@ -276,6 +276,13 @@ const RequestCard: React.FC<RequestCardProps> = ({ request, forceExpand = false 
                                                         className={`flex-1 py-1 px-2 rounded text-[10px] font-bold transition-all ${fundingSource === 'Banco' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
                                                     >
                                                         Banco
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFundingSource('Fondo Personal')}
+                                                        className={`flex-1 py-1 px-2 rounded text-[10px] font-bold transition-all ${fundingSource === 'Fondo Personal' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                                                    >
+                                                        Personal
                                                     </button>
                                                 </div>
                                             </div>

@@ -15,6 +15,7 @@ import ShareApp from './components/ShareApp';
 import InstallPWAInstructions from './components/InstallPWAInstructions';
 
 import SeedNurys from './components/SeedNurys';
+import CleanFutureLoans from './components/CleanFutureLoans';
 
 // Lazy load heavy components to optimize initial load time
 import ClientList from './components/ClientList';
@@ -294,6 +295,7 @@ const App: React.FC = () => {
                 type={confirmState.type}
             />
             {isAuthenticated && <SeedNurys />}
+            {isAuthenticated && <CleanFutureLoans />}
             <ShareApp isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} />
             <InstallPWAInstructions isOpen={showInstallInstructions} onClose={() => setShowInstallInstructions(false)} />
             

@@ -1025,7 +1025,11 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                           oh.monthName.toLowerCase() === currentMonthName.toLowerCase() && oh.year === currentYear
                         );
 
-                        if (!hasPaidThisMonth && !alreadyInHistory) {
+                        const loanStartDate = new Date(loan.startDate);
+                        // Hide current month block if the loan start date is completely in the future
+                        const isLoanInFuture = loanStartDate.getTime() > now.getTime();
+
+                        if (!hasPaidThisMonth && !alreadyInHistory && !isLoanInFuture) {
                           const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
                           return (
                             <div className="mb-6 p-4 bg-slate-800/80 border border-slate-700/50 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">

@@ -97,14 +97,14 @@ export interface Loan {
     totalCapitalPaid: number;
     paymentHistory: PaymentRecord[];
     signature?: string;
-    fundingSource?: 'Banco' | 'Efectivo';
+    fundingSource?: 'Banco' | 'Efectivo' | 'Fondo Personal';
     contractPdfUrl?: string;
     notes?: string;
     archived?: boolean; // Nuevo: Flag para historial
     pendingInterest?: number; // Informativo: Intereses acumulados no pagados
     pendingInterestDetails?: string; // Informativo: Detalle de los meses/periodos vencidos
     overdueHistory?: OverdueMonth[]; // Nuevo: Historial detallado e informativo
-    source?: 'Banco' | 'Efectivo'; // Alias for fundingSource used in some components
+    source?: 'Banco' | 'Efectivo' | 'Fondo Personal'; // Alias for fundingSource used in some components
 }
 
 export interface Client {

@@ -92,7 +92,7 @@ const NewClientForm: React.FC = () => {
         amount: '1000',
         term: '12',
     });
-    const [fundingSource, setFundingSource] = useState<'Banco' | 'Efectivo'>('Efectivo');
+    const [fundingSource, setFundingSource] = useState<'Banco' | 'Efectivo' | 'Fondo Personal'>('Efectivo');
 
     const loanCalculations = useMemo(() => {
         const amount = parseFloat(loanData.amount);
@@ -327,6 +327,13 @@ const NewClientForm: React.FC = () => {
                                             className={`flex-1 py-2 px-3 rounded-lg border text-sm font-bold transition-all ${fundingSource === 'Banco' ? 'bg-primary-600 border-primary-500 text-white shadow-lg' : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700'}`}
                                         >
                                             Banco
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFundingSource('Fondo Personal')}
+                                            className={`flex-1 py-2 px-3 rounded-lg border text-sm font-bold transition-all ${fundingSource === 'Fondo Personal' ? 'bg-primary-600 border-primary-500 text-white shadow-lg' : 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700'}`}
+                                        >
+                                            Personal
                                         </button>
                                     </div>
                                 </div>

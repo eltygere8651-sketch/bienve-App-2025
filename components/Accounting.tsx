@@ -1484,25 +1484,33 @@ const Accounting: React.FC = () => {
 
         // 1. Snapshot Metrics (Always Total Active)
         allLoans.forEach(loan => {
+            const isFondoPersonal = loan.fundingSource === 'Fondo Personal' || loan.source === 'Fondo Personal';
+
             if (!loan.archived) {
                 // If active or overdue, it contributes to current portfolio risk/value
                 if (loan.status !== 'Pagado') {
-                    currentOutstanding += (Number(loan.remainingCapital) || 0);
-                    forecastedMonthlyIncome += (Number(loan.remainingCapital) || 0) * 0.08;
-                    if (loan.status === 'Vencido') {
-                        overdueAmount += (Number(loan.remainingCapital) || 0);
+                    if (!isFondoPersonal) {
+                        currentOutstanding += (Number(loan.remainingCapital) || 0);
+                        if (loan.status === 'Vencido') {
+                            overdueAmount += (Number(loan.remainingCapital) || 0);
+                        }
                     }
+                    forecastedMonthlyIncome += (Number(loan.remainingCapital) || 0) * 0.08;
                     totalOverdueInterest += (Number(loan.pendingInterest) || 0);
                 }
             }
             // Invested is always total historical for context
-            totalInvested += (Number(loan.initialCapital || loan.amount) || 0);
-            totalRemainingCapital += (Number(loan.remainingCapital) || 0);
+            if (!isFondoPersonal) {
+                totalInvested += (Number(loan.initialCapital || loan.amount) || 0);
+                totalRemainingCapital += (Number(loan.remainingCapital) || 0);
+            }
             
             // Calculate Historical Totals for Ratio
             if (loan.paymentHistory) {
                 loan.paymentHistory.forEach(payment => {
-                    historicalTotalCapitalRecovered += Number(payment.capitalPaid || 0);
+                    if (!isFondoPersonal) {
+                        historicalTotalCapitalRecovered += Number(payment.capitalPaid || 0);
+                    }
                     historicalTotalInterestEarned += Number(payment.interestPaid || 0);
                 });
             }
@@ -1510,6 +1518,7 @@ const Accounting: React.FC = () => {
 
         // 2. Flow Metrics (Filtered by Date)
         allLoans.forEach(loan => {
+            const isFondoPersonal = loan.fundingSource === 'Fondo Personal' || loan.source === 'Fondo Personal';
             if (loan.paymentHistory) {
                 loan.paymentHistory.forEach(payment => {
                     const payDate = new Date(payment.date);
@@ -1520,7 +1529,9 @@ const Accounting: React.FC = () => {
                     else if (timeRange === 'month') include = payDate.getMonth() === currentMonth && payDate.getFullYear() === currentYear;
 
                     if (include) {
-                        periodRecoveredCapital += Number(payment.capitalPaid || 0);
+                        if (!isFondoPersonal) {
+                            periodRecoveredCapital += Number(payment.capitalPaid || 0);
+                        }
                         periodInterestEarned += Number(payment.interestPaid || 0);
                     }
                 });

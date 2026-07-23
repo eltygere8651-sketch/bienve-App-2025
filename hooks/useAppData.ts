@@ -270,7 +270,15 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         await updateDocument(TABLE_NAMES.LOANS, loanId, updatePayload);
 
         // Update Treasury
-        await _updateTreasuryBalance(amount, 'inflow', paymentMethod);
+        let treasuryInflow = amount;
+        const fundingSrc = loan.fundingSource || loan.source;
+        if (fundingSrc === 'Fondo Personal') {
+            treasuryInflow = payOffRegular; // Only interest goes to treasury
+        }
+        
+        if (treasuryInflow > 0) {
+            await _updateTreasuryBalance(treasuryInflow, 'inflow', paymentMethod);
+        }
     }, [loans, _updateTreasuryBalance]);
 
     // Background check for overdue loans (Runs when app loads or loans update)
@@ -497,7 +505,15 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
 
         // Revert the treasury balance
-        await _updateTreasuryBalance(paymentToDelete.amount, 'outflow', paymentToDelete.paymentMethod || 'Efectivo');
+        let treasuryOutflow = paymentToDelete.amount;
+        const fundingSrc = loan.fundingSource || loan.source;
+        if (fundingSrc === 'Fondo Personal') {
+            treasuryOutflow = paymentToDelete.payOffRegular || 0;
+        }
+
+        if (treasuryOutflow > 0) {
+            await _updateTreasuryBalance(treasuryOutflow, 'outflow', paymentToDelete.paymentMethod || 'Efectivo');
+        }
 
         showToast('Pago eliminado y saldo del tesoro revertido.', 'success');
     }, [loans, showToast, _updateTreasuryBalance]);
@@ -534,7 +550,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         showToast('Saldo corregido exitosamente.', 'success');
     }, [loans, showToast]);
 
-    const handleAddClientAndLoan = useCallback(async (clientData: NewClientData, loanData: NewLoanData & { source?: 'Banco' | 'Efectivo' }) => {
+    const handleAddClientAndLoan = useCallback(async (clientData: NewClientData, loanData: NewLoanData & { source?: 'Banco' | 'Efectivo' | 'Fondo Personal' }) => {
         // 1. Client
         const newClient = await addDocument(TABLE_NAMES.CLIENTS, {
             ...clientData,
@@ -564,13 +580,15 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             fundingSource: source
         });
 
-        // 3. Treasury Deduction
-        await _updateTreasuryBalance(loanData.amount, 'outflow', source);
+        // 3. Treasury Deduction (Only if not Fondo Personal)
+        if (source !== 'Fondo Personal') {
+            await _updateTreasuryBalance(loanData.amount, 'outflow', source);
+        }
 
         showToast('Cliente y préstamo registrados.', 'success');
     }, [showToast, _updateTreasuryBalance]);
 
-    const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; source?: 'Banco' | 'Efectivo' }) => {
+    const handleAddLoan = useCallback(async (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; source?: 'Banco' | 'Efectivo' | 'Fondo Personal' }) => {
         const { amount, term, interestRate, startDate, notes, source = 'Efectivo' } = loanData;
         const { monthlyPayment, totalRepayment } = calculateLoanParameters(amount, term, interestRate);
 
@@ -594,8 +612,10 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             fundingSource: source
         });
 
-        // Treasury Deduction
-        await _updateTreasuryBalance(amount, 'outflow', source);
+        // Treasury Deduction (Only if not Fondo Personal)
+        if (source !== 'Fondo Personal') {
+            await _updateTreasuryBalance(amount, 'outflow', source as 'Banco' | 'Efectivo');
+        }
 
         showToast('Nuevo préstamo añadido.', 'success');
     }, [showToast, _updateTreasuryBalance]);
@@ -608,15 +628,23 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             for (const loan of clientLoans) {
                 // 2. Revert Initial Capital Outflow
                 // If we lent 1000, we must put it back into the treasury
-                const fundingSource = (loan as any).fundingSource || 'Efectivo';
-                await _updateTreasuryBalance(loan.initialCapital, 'inflow', fundingSource);
+                const fundingSource = (loan as any).fundingSource || loan.source || 'Efectivo';
+                if (fundingSource !== 'Fondo Personal') {
+                    await _updateTreasuryBalance(loan.initialCapital || loan.amount, 'inflow', fundingSource);
+                }
 
                 // 3. Revert all payments (Inflow Reversal)
                 // If the client paid us money, we must take it out of the treasury to leave it as it was
                 if (loan.paymentHistory && loan.paymentHistory.length > 0) {
                     for (const payment of loan.paymentHistory) {
                         const method = payment.paymentMethod || 'Efectivo';
-                        await _updateTreasuryBalance(payment.amount, 'outflow', method);
+                        let treasuryOutflow = payment.amount;
+                        if (fundingSource === 'Fondo Personal') {
+                             treasuryOutflow = payment.payOffRegular || 0;
+                        }
+                        if (treasuryOutflow > 0) {
+                            await _updateTreasuryBalance(treasuryOutflow, 'outflow', method);
+                        }
                     }
                 }
 
