@@ -2,7 +2,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { AppView } from '../types';
 import { DEFAULT_ANNUAL_INTEREST_RATE } from '../config';
-import { initializeFirebase, onAuthStateChanged, signOut, signIn, signUp } from '../services/firebaseService';
+import { initializeFirebase, onAuthStateChanged, signOut, signIn, signUp, resetPassword } from '../services/firebaseService';
 import AppNotConfigured from '../components/AppNotConfigured';
 
 type InitializationStatus = 'pending' | 'success' | 'failed' | 'not_configured';
@@ -35,6 +35,7 @@ interface AppContextType {
     isAuthenticated: boolean;
     login: (email: string, password: string) => Promise<LoginResult>;
     registerAdmin: (email: string, password: string) => Promise<boolean>;
+    sendPasswordReset: (email: string) => Promise<boolean>;
     logout: () => void;
     hasAdminAccount: boolean;
     isSidebarOpen: boolean,
@@ -179,6 +180,24 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
     }, [showToast]);
 
+    const sendPasswordReset = useCallback(async (email: string) => {
+        try {
+            await resetPassword(email);
+            showToast('Enlace de recuperación enviado a tu correo.', 'success');
+            return true;
+        } catch (error: any) {
+            console.error("Password reset failed", error);
+            if (error.code === 'auth/user-not-found') {
+                showToast('No existe ninguna cuenta asociada a este correo.', 'error');
+            } else if (error.code === 'auth/invalid-email') {
+                showToast('El correo ingresado no es válido.', 'error');
+            } else {
+                showToast('Error al enviar recuperación: ' + (error.message || error.code), 'error');
+            }
+            return false;
+        }
+    }, [showToast]);
+
     const logout = useCallback(async () => {
         await signOut();
         setUser(null);
@@ -208,6 +227,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isAuthenticated,
         login,
         registerAdmin,
+        sendPasswordReset,
         logout,
         hasAdminAccount,
         isSidebarOpen,
@@ -220,7 +240,7 @@ export const AppContextProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         annualInterestRate,
         isOnline,
     }), [
-        toast, showToast, currentView, user, isAuthenticated, login, registerAdmin, logout, hasAdminAccount,
+        toast, showToast, currentView, user, isAuthenticated, login, registerAdmin, sendPasswordReset, logout, hasAdminAccount,
         isSidebarOpen, confirmState, showConfirmModal, hideConfirmModal,
         initializationStatus, annualInterestRate, isOnline
     ]);

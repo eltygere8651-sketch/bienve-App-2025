@@ -6,6 +6,7 @@ import {
     createUserWithEmailAndPassword,
     signOut as firebaseSignOut, 
     onAuthStateChanged as firebaseOnAuthStateChanged,
+    sendPasswordResetEmail,
     signInAnonymously,
     setPersistence,
     browserLocalPersistence,
@@ -80,6 +81,10 @@ export const signIn = (email: string, password: string) => {
 
 export const signUp = (email: string, password: string) => {
     return createUserWithEmailAndPassword(auth, email, password);
+};
+
+export const resetPassword = (email: string) => {
+    return sendPasswordResetEmail(auth, email);
 };
 
 export const signOut = () => {

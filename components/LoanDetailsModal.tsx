@@ -489,18 +489,19 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
       const { interest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
       const currentMonthName = new Intl.DateTimeFormat("es-ES", { month: "long" }).format(new Date());
       const capitalizedMonth = currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1);
-      
-      let msg = `¡Hola *${firstName}*! 👋 ¿Cómo estás? Espero que todo vaya excelente.\n\n`;
-      msg += `Te comparto el detalle de pago para este mes de *${capitalizedMonth}*:\n\n`;
-      msg += `📍 *Interés mensual:* ${formatCurrency(interest)}\n`;
-      if (loan.pendingInterest && loan.pendingInterest > 0) {
-        msg += `📍 *Interés anterior pendiente:* ${formatCurrency(loan.pendingInterest)}\n`;
-      }
-      msg += `📍 *Abono a Capital:* (importe abonar de capital) € (para reducir lo adeudado)\n`;
-      
       const baseTotal = interest + (loan.pendingInterest || 0);
-      msg += `\n💰 *Total Neto a Abonar:* ${formatCurrency(baseTotal)} + Capital\n\n`;
-      msg += `Agradezco mucho tu puntualidad de siempre.\n¡Un fuerte abrazo!`;
+      
+      let msg = `¡Hola *${firstName}*! 👋 ¿Cómo estás? Espero que todo se encuentre excelente.\n\n`;
+      msg += `Te comparto el detalle de pago correspondiente al mes de *${capitalizedMonth}*:\n\n`;
+      msg += `📊 *Resumen del Préstamo:*\n`;
+      msg += `• *Capital Pendiente:* ${formatCurrency(loan.remainingCapital)}\n`;
+      if (loan.pendingInterest && loan.pendingInterest > 0) {
+        msg += `• *Intereses Acumulados:* ${formatCurrency(baseTotal)} _(Mes actual: ${formatCurrency(interest)} + Anterior pendiente: ${formatCurrency(loan.pendingInterest)})_\n\n`;
+      } else {
+        msg += `• *Interés a Abonar:* ${formatCurrency(interest)}\n\n`;
+      }
+      msg += `⚠️ *Importante:* Recuerda mantener al día tus intereses y, en lo posible, abonar al capital. Todo pago adicional reduce directamente tu deuda y baja tus futuros intereses.\n\n`;
+      msg += `Agradezco tu puntualidad de siempre.`;
       return msg;
     }
 

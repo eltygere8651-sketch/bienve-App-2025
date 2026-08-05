@@ -4,11 +4,13 @@ import { Handshake, LogIn, Key, Loader2, ShieldCheck, Mail } from 'lucide-react'
 import { useAppContext } from '../contexts/AppContext';
 
 const Auth: React.FC = () => {
-    const { login, isAuthenticated, setCurrentView } = useAppContext();
+    const { login, sendPasswordReset, isAuthenticated, setCurrentView } = useAppContext();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [resetSuccess, setResetSuccess] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
 
     // Si ya estamos autenticados, ir al dashboard inmediatamente
     useEffect(() => {
@@ -105,7 +107,30 @@ const Auth: React.FC = () => {
                         </div>
 
                         <div>
-                             <label htmlFor="auth-password"className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5 ml-1">Contraseña</label>
+                            <div className="flex items-center justify-between mb-1.5 ml-1">
+                                <label htmlFor="auth-password" className="block text-xs font-bold uppercase tracking-wider text-slate-500">Contraseña</label>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        if (!email) {
+                                            setError('Por favor ingresa tu correo para enviarte el enlace de recuperación.');
+                                            return;
+                                        }
+                                        setError('');
+                                        setResetSuccess('');
+                                        setIsResetting(true);
+                                        const ok = await sendPasswordReset(email);
+                                        setIsResetting(false);
+                                        if (ok) {
+                                            setResetSuccess(`Se ha enviado un enlace de restablecimiento a ${email}. Revisa tu bandeja de entrada o carpeta de spam.`);
+                                        }
+                                    }}
+                                    disabled={isResetting}
+                                    className="text-xs text-primary-400 hover:text-primary-300 transition-colors underline font-medium cursor-pointer"
+                                >
+                                    {isResetting ? 'Enviando...' : '¿Olvidaste tu contraseña?'}
+                                </button>
+                            </div>
                             <div className="relative">
                                 <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                                 <input 
@@ -121,6 +146,13 @@ const Auth: React.FC = () => {
                                 />
                             </div>
                         </div>
+
+                        {resetSuccess && (
+                            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-center animate-fade-in flex items-start gap-2 justify-center">
+                                <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+                                <p className="text-emerald-300 text-xs font-medium text-left">{resetSuccess}</p>
+                            </div>
+                        )}
                        
                         {error && (
                             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-center animate-fade-in flex items-start gap-2 justify-center">
