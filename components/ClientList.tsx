@@ -3,11 +3,12 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Loan, LoanStatus, Client } from '../types';
 import { useDataContext } from '../contexts/DataContext';
 import { useAppContext } from '../contexts/AppContext';
-import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2, Clock, Trash2, Activity, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Users, Search, PlusCircle, Sparkles, RefreshCw, Banknote, TrendingUp, Phone, FileDown, Wallet, ArrowRight, Archive, Calendar, AlertCircle, CheckCircle2, Clock, Trash2, Activity, ShieldCheck, ShieldAlert, Layers } from 'lucide-react';
 import { formatCurrency, calculateLoanProgress, formatPhone } from '../services/utils';
 import { calculateMonthlyInterest } from '../config';
 import LoanDetailsModal from './LoanDetailsModal';
 import NewLoanModal from './NewLoanModal';
+import ReunifyDebtModal from './ReunifyDebtModal';
 import { generateClientReport, generateFullClientListPDF } from '../services/pdfService';
 
 interface ClientWithData extends Client {
@@ -434,6 +435,7 @@ const ClientList: React.FC = () => {
     const [selectedLoanForDetails, setSelectedLoanForDetails] = useState<Loan | null>(null);
     const [detailsModalTab, setDetailsModalTab] = useState<'details' | 'payment'>('details'); 
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isReunifyModalOpen, setIsReunifyModalOpen] = useState(false);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
@@ -582,6 +584,11 @@ const ClientList: React.FC = () => {
                 client={activeClient}
                 initialTab={detailsModalTab} 
             />
+
+            <ReunifyDebtModal
+                isOpen={isReunifyModalOpen}
+                onClose={() => setIsReunifyModalOpen(false)}
+            />
             
             <div className="space-y-8 animate-fade-in max-w-[1600px] mx-auto pb-10">
                 
@@ -602,6 +609,13 @@ const ClientList: React.FC = () => {
                      </div>
                      
                      <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+                        <button
+                            onClick={() => setIsReunifyModalOpen(true)}
+                            className="flex-1 lg:flex-none flex items-center justify-center px-5 py-3 bg-amber-500/10 text-amber-300 font-bold rounded-xl border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-sm active:scale-95"
+                        >
+                            <Layers size={18} className="mr-2 text-amber-400" />
+                            Reunificar Deuda
+                        </button>
                         <button
                             onClick={handleGlobalPDF}
                             className="flex-1 lg:flex-none flex items-center justify-center px-5 py-3 bg-slate-800 text-slate-200 font-bold rounded-xl border border-slate-700 hover:bg-slate-700 hover:border-slate-600 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 text-sm active:scale-95"

@@ -1715,19 +1715,34 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                           </div>
                         )}
 
-                        <InputField
-                          label="Tasa Interés Anual (%)"
-                          name="interestRate"
-                          type="number"
-                          value={String(loanFormData.interestRate || "")}
-                          onChange={(e) =>
-                            setLoanFormData({
-                              ...loanFormData,
-                              interestRate: Number(e.target.value),
-                            })
-                          }
-                          step="0.01"
-                        />
+                        <div className="grid grid-cols-2 gap-3">
+                          <InputField
+                            label="Tasa Interés Mensual (%)"
+                            name="monthlyInterestRate"
+                            type="number"
+                            value={String(((loanFormData.interestRate || 0) / 12).toFixed(2).replace(/\.00$/, ''))}
+                            onChange={(e) =>
+                              setLoanFormData({
+                                ...loanFormData,
+                                interestRate: Number(e.target.value) * 12,
+                              })
+                            }
+                            step="0.1"
+                          />
+                          <InputField
+                            label="Tasa Interés Anual (%)"
+                            name="interestRate"
+                            type="number"
+                            value={String(loanFormData.interestRate || "")}
+                            onChange={(e) =>
+                              setLoanFormData({
+                                ...loanFormData,
+                                interestRate: Number(e.target.value),
+                              })
+                            }
+                            step="0.01"
+                          />
+                        </div>
                         <InputField
                           label="Plazo (Meses)"
                           name="term"

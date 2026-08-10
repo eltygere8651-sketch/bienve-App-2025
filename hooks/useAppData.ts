@@ -18,7 +18,8 @@ import {
 import { generateMasterBackupPDF } from '../services/pdfService';
 import { LOCAL_STORAGE_KEYS, TABLE_NAMES } from '../constants';
 import { Client, Loan, LoanRequest, RequestStatus, NewClientData, NewLoanData, ReinvestmentRecord, LoanStatus, PaymentRecord, PersonalFund, WithdrawalRecord } from '../types';
-import { calculateMonthlyInterest, calculateLoanParameters } from '../config';
+import { calculateMonthlyInterest, calculateLoanParameters, DEFAULT_ANNUAL_INTEREST_RATE } from '../config';
+import { formatCurrency } from '../services/utils';
 
 import { useDataSubscriptions } from './useDataSubscriptions';
 
@@ -558,7 +559,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
 
         // 2. Loan
-        const { monthlyPayment, totalRepayment, monthlyRatePercentage } = calculateLoanParameters(loanData.amount, loanData.term);
+        const annualRate = loanData.interestRate ?? DEFAULT_ANNUAL_INTEREST_RATE;
+        const { monthlyPayment, totalRepayment } = calculateLoanParameters(loanData.amount, loanData.term, annualRate);
         const source = loanData.source || 'Efectivo';
 
         await addDocument(TABLE_NAMES.LOANS, {
@@ -567,7 +569,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             amount: loanData.amount,
             initialCapital: loanData.amount,
             remainingCapital: loanData.amount,
-            interestRate: monthlyRatePercentage * 12,
+            interestRate: annualRate,
             term: loanData.term,
             startDate: new Date().toISOString(),
             status: LoanStatus.PENDING,
@@ -619,6 +621,152 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
 
         showToast('Nuevo préstamo añadido.', 'success');
     }, [showToast, _updateTreasuryBalance]);
+
+    // Combine active and archived loans deduplicated by ID
+    const allLoans = useMemo(() => {
+        const map = new Map<string, Loan>();
+        loans.forEach(l => map.set(l.id, l));
+        archivedLoans.forEach(l => map.set(l.id, l));
+        return Array.from(map.values());
+    }, [loans, archivedLoans]);
+
+    // Automatic restoration migration for reunified loans & payment histories
+    useEffect(() => {
+        if (!user || isLoading) return;
+
+        const restoreReunifiedHistories = async () => {
+            const all = [...loans, ...archivedLoans];
+            
+            // 1. Ensure reunified source loans are not archived (so they show in history)
+            for (const l of all) {
+                if (l.notes && l.notes.includes('[DEUDA REUNIFICADA') && l.archived) {
+                    try {
+                        await updateDocument(TABLE_NAMES.LOANS, l.id, { archived: false });
+                    } catch (e) {
+                        console.error("Error restoring archived state for reunified loan", l.id, e);
+                    }
+                }
+            }
+
+            // 2. Consolidate missing payment histories into target reunified loans
+            const targetReunifiedLoans = all.filter(l => l.notes && (l.notes.includes('Reunificación de deudas') || l.notes.includes('unificados')));
+            for (const targetLoan of targetReunifiedLoans) {
+                const sourceLoans = all.filter(s => 
+                    s.id !== targetLoan.id && 
+                    ((s.notes && s.notes.includes(`unificación en préstamo #${targetLoan.id}`)) ||
+                     (targetLoan.notes.includes(s.id)))
+                );
+
+                if (sourceLoans.length > 0) {
+                    const existingHistoryIds = new Set((targetLoan.paymentHistory || []).map(p => p.id));
+                    const missingPayments: PaymentRecord[] = [];
+
+                    for (const sLoan of sourceLoans) {
+                        if (sLoan.paymentHistory && sLoan.paymentHistory.length > 0) {
+                            for (const p of sLoan.paymentHistory) {
+                                if (!existingHistoryIds.has(p.id)) {
+                                    missingPayments.push({
+                                        ...p,
+                                        notes: `[Historial Reunificado de ${sLoan.clientName}] ${p.notes || ''}`.trim()
+                                    });
+                                    existingHistoryIds.add(p.id);
+                                }
+                            }
+                        }
+                    }
+
+                    if (missingPayments.length > 0) {
+                        const mergedHistory = [...(targetLoan.paymentHistory || []), ...missingPayments].sort(
+                            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+                        );
+                        try {
+                            await updateDocument(TABLE_NAMES.LOANS, targetLoan.id, {
+                                paymentHistory: mergedHistory,
+                                paymentsMade: mergedHistory.length,
+                                totalInterestPaid: mergedHistory.reduce((sum, p) => sum + (p.interestPaid || 0), 0),
+                                totalCapitalPaid: mergedHistory.reduce((sum, p) => sum + (p.capitalPaid || 0), 0)
+                            });
+                        } catch (e) {
+                            console.error("Error restoring merged payment history into target loan", targetLoan.id, e);
+                        }
+                    }
+                }
+            }
+        };
+
+        restoreReunifiedHistories();
+    }, [user, isLoading, loans, archivedLoans]);
+
+    const handleReunifyLoans = useCallback(async (
+        sourceLoanIds: string[],
+        targetClientId: string,
+        targetClientName: string,
+        unifiedAmount: number,
+        monthlyInterestRate: number,
+        term: number,
+        notes: string,
+        startDate: string = new Date().toISOString().split('T')[0]
+    ) => {
+        try {
+            const annualRate = monthlyInterestRate * 12;
+            const { monthlyPayment, totalRepayment } = calculateLoanParameters(unifiedAmount, term, annualRate);
+
+            const allCurrentLoans = [...loans, ...archivedLoans];
+
+            // 1. Gather payment histories from source loans
+            const consolidatedPaymentHistory: PaymentRecord[] = [];
+            for (const loanId of sourceLoanIds) {
+                const sourceLoan = allCurrentLoans.find(l => l.id === loanId);
+                if (sourceLoan && sourceLoan.paymentHistory && sourceLoan.paymentHistory.length > 0) {
+                    sourceLoan.paymentHistory.forEach(ph => {
+                        consolidatedPaymentHistory.push({
+                            ...ph,
+                            notes: `[Reunificado de ${sourceLoan.clientName}] ${ph.notes || ''}`.trim()
+                        });
+                    });
+                }
+            }
+
+            // 2. Create unified loan with consolidated payment history
+            const newLoan = await addDocument(TABLE_NAMES.LOANS, {
+                clientId: targetClientId,
+                clientName: targetClientName,
+                amount: unifiedAmount,
+                initialCapital: unifiedAmount,
+                remainingCapital: unifiedAmount,
+                interestRate: annualRate,
+                term,
+                startDate,
+                notes: notes || `Reunificación de deudas. (${sourceLoanIds.length} préstamos unificados)`,
+                status: LoanStatus.PENDING,
+                monthlyPayment,
+                totalRepayment,
+                paymentsMade: consolidatedPaymentHistory.length,
+                totalInterestPaid: consolidatedPaymentHistory.reduce((sum, p) => sum + (p.interestPaid || 0), 0),
+                totalCapitalPaid: consolidatedPaymentHistory.reduce((sum, p) => sum + (p.capitalPaid || 0), 0),
+                paymentHistory: consolidatedPaymentHistory,
+                fundingSource: 'Efectivo'
+            });
+
+            // 3. Mark source loans as paid / reunified WITHOUT archiving them completely
+            for (const loanId of sourceLoanIds) {
+                const sourceLoan = allCurrentLoans.find(l => l.id === loanId);
+                const prevNotes = sourceLoan?.notes || '';
+                await updateDocument(TABLE_NAMES.LOANS, loanId, {
+                    remainingCapital: 0,
+                    status: LoanStatus.PAID,
+                    archived: false,
+                    notes: `${prevNotes} [DEUDA REUNIFICADA: Saldado por unificación en préstamo #${newLoan.id}]`.trim()
+                });
+            }
+
+            showToast(`Deuda reunificada exitosamente (${formatCurrency(unifiedAmount)}).`, 'success');
+        } catch (err: any) {
+            console.error("Error reunifying loans:", err);
+            showToast('Error al reunificar deudas.', 'error');
+            throw err;
+        }
+    }, [loans, archivedLoans, showToast]);
 
     const handleCleanDeleteClient = useCallback(async (clientId: string) => {
         try {
@@ -1032,19 +1180,20 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         }
     }, [isLoading, clients.length, triggerMasterBackup, showToast, user]);
 
-    // Computed clientLoanData
+    // Computed clientLoanData including all active and historical loans for each client
     const clientLoanData = useMemo(() => {
         return clients.map(c => ({
             ...c,
-            loans: loans.filter(l => l.clientId === c.id)
+            loans: allLoans.filter(l => l.clientId === c.id)
         }));
-    }, [clients, loans]);
+    }, [clients, allLoans]);
 
     return {
         clients,
         archivedClients,
         loans,
         archivedLoans,
+        allLoans,
         requests,
         reinvestments,
         funds,
@@ -1067,6 +1216,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         handleBalanceCorrection,
         handleAddClientAndLoan,
         handleAddLoan,
+        handleReunifyLoans,
         handleCleanDeleteClient,
         handleToggleOverdueStatus,
         handleConfirmOverdue,

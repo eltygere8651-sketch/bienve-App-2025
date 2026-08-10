@@ -13,18 +13,21 @@ interface EditLoanModalProps {
 const EditLoanModal: React.FC<EditLoanModalProps> = ({ isOpen, onClose, loan }) => {
     const { handleUpdateLoan } = useDataContext();
     const [formData, setFormData] = useState<Partial<Loan>>({});
+    const [monthlyRate, setMonthlyRate] = useState<string>('8');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (loan) {
+            const annual = loan.interestRate || 96;
             setFormData({
                 amount: loan.amount,
                 term: loan.term,
-                interestRate: loan.interestRate,
+                interestRate: annual,
                 startDate: new Date(loan.startDate).toISOString().split('T')[0],
                 status: loan.status,
                 paymentsMade: loan.paymentsMade,
             });
+            setMonthlyRate((annual / 12).toFixed(2).replace(/\.00$/, ''));
         }
     }, [loan]);
 
@@ -36,6 +39,13 @@ const EditLoanModal: React.FC<EditLoanModalProps> = ({ isOpen, onClose, loan }) 
         const { name, value } = e.target;
         const numericFields = ['amount', 'term', 'interestRate', 'paymentsMade'];
         setFormData(prev => ({ ...prev, [name]: numericFields.includes(name) ? Number(value) : value }));
+    };
+
+    const handleMonthlyRateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const mVal = e.target.value;
+        setMonthlyRate(mVal);
+        const numMVal = parseFloat(mVal) || 0;
+        setFormData(prev => ({ ...prev, interestRate: numMVal * 12 }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -72,7 +82,14 @@ const EditLoanModal: React.FC<EditLoanModalProps> = ({ isOpen, onClose, loan }) 
                     <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                         <InputField label="Monto Principal (€)" name="amount" type="number" value={String(formData.amount || '')} onChange={handleInputChange} required />
                         <InputField label="Plazo (meses)" name="term" type="number" value={String(formData.term || '')} onChange={handleInputChange} required />
-                        <InputField label="Interés Anual (%)" name="interestRate" type="number" value={String(formData.interestRate || '')} onChange={handleInputChange} required />
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <InputField label="Interés Mensual (%)" name="monthlyRate" type="number" value={monthlyRate} onChange={handleMonthlyRateChange} required step="0.1" />
+                            </div>
+                            <div>
+                                <InputField label="Interés Anual (%)" name="interestRate" type="number" value={String(formData.interestRate || '')} onChange={handleInputChange} required step="0.01" />
+                            </div>
+                        </div>
                         <InputField label="Fecha de Inicio" name="startDate" type="date" value={String(formData.startDate || '')} onChange={handleInputChange} required />
                         <InputField label="Pagos Realizados" name="paymentsMade" type="number" value={String(formData.paymentsMade || '')} onChange={handleInputChange} required />
 

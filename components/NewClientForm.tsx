@@ -15,7 +15,7 @@ const NewClientForm: React.FC = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
-    const [isIndefinite, setIsIndefinite] = useState(false);
+    const [isIndefinite, setIsIndefinite] = useState(true);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [clientData, setClientData] = useState({
@@ -91,14 +91,20 @@ const NewClientForm: React.FC = () => {
     const [loanData, setLoanData] = useState({
         amount: '1000',
         term: '12',
+        monthlyInterestRate: '8',
     });
     const [fundingSource, setFundingSource] = useState<'Banco' | 'Efectivo' | 'Fondo Personal'>('Efectivo');
 
+    const annualRate = useMemo(() => {
+        const rate = parseFloat(loanData.monthlyInterestRate) || 0;
+        return rate * 12;
+    }, [loanData.monthlyInterestRate]);
+
     const loanCalculations = useMemo(() => {
-        const amount = parseFloat(loanData.amount);
-        const term = isIndefinite ? 0 : parseInt(loanData.term, 10);
-        return calculateLoanParameters(amount, term, DEFAULT_ANNUAL_INTEREST_RATE);
-    }, [loanData.amount, loanData.term, isIndefinite]);
+        const amount = parseFloat(loanData.amount) || 0;
+        const term = isIndefinite ? 0 : (parseInt(loanData.term, 10) || 0);
+        return calculateLoanParameters(amount, term, annualRate);
+    }, [loanData.amount, loanData.term, isIndefinite, annualRate]);
 
     const handleClientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -160,6 +166,7 @@ const NewClientForm: React.FC = () => {
                 {
                     amount: parseFloat(loanData.amount),
                     term: isIndefinite ? 0 : parseInt(loanData.term, 10),
+                    interestRate: annualRate,
                     source: fundingSource
                 }
             );

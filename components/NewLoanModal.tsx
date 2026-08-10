@@ -16,26 +16,30 @@ interface NewLoanModalProps {
 const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) => {
     const { handleAddLoan } = useDataContext();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isIndefinite, setIsIndefinite] = useState(false);
+    const [isIndefinite, setIsIndefinite] = useState(true);
     
-    // Default values - Interest locked to 96 (8% monthly)
+    // Default values - Interest editable (defaults to 8% monthly = 96% annual)
+    const [monthlyInterestRate, setMonthlyInterestRate] = useState('8');
     const [loanData, setLoanData] = useState({
         amount: '500',
         term: '12',
-        interestRate: '96', 
         startDate: new Date().toISOString().split('T')[0],
         notes: ''
     });
     const [fundingSource, setFundingSource] = useState<'Banco' | 'Efectivo' | 'Fondo Personal'>('Efectivo');
 
+    const annualInterestRate = useMemo(() => {
+        const mRate = parseFloat(monthlyInterestRate) || 0;
+        return mRate * 12;
+    }, [monthlyInterestRate]);
+
     const calculations = useMemo(() => {
-        const amount = parseFloat(loanData.amount);
-        const term = isIndefinite ? 0 : parseInt(loanData.term);
-        const rate = parseFloat(loanData.interestRate);
+        const amount = parseFloat(loanData.amount) || 0;
+        const term = isIndefinite ? 0 : (parseInt(loanData.term) || 0);
 
-        return calculateLoanParameters(amount, term, rate);
+        return calculateLoanParameters(amount, term, annualInterestRate);
 
-    }, [loanData.amount, loanData.term, loanData.interestRate, isIndefinite]);
+    }, [loanData.amount, loanData.term, annualInterestRate, isIndefinite]);
 
     if (!isOpen || !client) return null;
 
@@ -51,21 +55,21 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
             await handleAddLoan(client.id, client.name, {
                 amount: parseFloat(loanData.amount),
                 term: isIndefinite ? 0 : parseInt(loanData.term),
-                interestRate: parseFloat(loanData.interestRate),
+                interestRate: annualInterestRate,
                 startDate: loanData.startDate,
                 notes: loanData.notes,
                 source: fundingSource
             });
             onClose();
             // Reset form for next time
+            setMonthlyInterestRate('8');
             setLoanData({
                 amount: '500',
                 term: '12',
-                interestRate: '96',
                 startDate: new Date().toISOString().split('T')[0],
                 notes: ''
             });
-            setIsIndefinite(false);
+            setIsIndefinite(true);
         } catch (error) {
             console.error(error);
         } finally {
@@ -120,12 +124,21 @@ const NewLoanModal: React.FC<NewLoanModalProps> = ({ isOpen, onClose, client }) 
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="relative opacity-75">
-                            <InputField label="Interés Anual (%)" name="interestRate" type="number" value={loanData.interestRate} onChange={() => {}} required min="0" step="0.01" />
-                            <div className="absolute inset-0 bg-slate-900/10 cursor-not-allowed flex items-center justify-end pr-8 pb-3 pointer-events-none">
-                                <Lock size={16} className="text-slate-400" />
-                            </div>
-                            <p className="text-[10px] text-primary-400 mt-1 absolute bottom-[-18px]">Fijo: 8% Mensual</p>
+                        <div>
+                            <InputField 
+                                label="Interés Mensual (%)" 
+                                name="monthlyInterestRate" 
+                                type="number" 
+                                value={monthlyInterestRate} 
+                                onChange={(e) => setMonthlyInterestRate(e.target.value)} 
+                                required 
+                                min="0" 
+                                step="0.1" 
+                                placeholder="8"
+                            />
+                            <p className="text-[10px] text-slate-400 mt-1">
+                                Anual: <span className="text-primary-300 font-bold">{annualInterestRate.toFixed(2)}%</span>
+                            </p>
                         </div>
                         <InputField label="Fecha Inicio" name="startDate" type="date" value={loanData.startDate} onChange={handleInputChange as any} required />
                     </div>

@@ -13,6 +13,7 @@ interface DataContextType {
     archivedClients: Client[]; 
     loans: Loan[]; 
     archivedLoans: Loan[]; 
+    allLoans: Loan[]; 
     requests: LoanRequest[];
     reinvestments: ReinvestmentRecord[]; // New
     funds: PersonalFund[];
@@ -35,6 +36,7 @@ interface DataContextType {
     handleBalanceCorrection: (loanId: string, newBalance: number, notes: string) => Promise<void>; 
     handleAddClientAndLoan: (clientData: NewClientData, loanData: NewLoanData) => Promise<void>;
     handleAddLoan: (clientId: string, clientName: string, loanData: { amount: number; term: number; interestRate: number; startDate: string; notes: string; source?: 'Banco' | 'Efectivo' }) => Promise<void>;
+    handleReunifyLoans: (sourceLoanIds: string[], targetClientId: string, targetClientName: string, unifiedAmount: number, monthlyInterestRate: number, term: number, notes: string, startDate?: string) => Promise<void>;
     handleCleanDeleteClient: (clientId: string) => Promise<void>;
     handleConfirmOverdue: (loanId: string, suggestion: { monthName: string, amount: number, accrualDate: string }, initialStatus?: 'pendiente' | 'anulado') => Promise<void>;
     suggestedOverdues: { loanId: string, monthName: string, amount: number, accrualDate: string }[];

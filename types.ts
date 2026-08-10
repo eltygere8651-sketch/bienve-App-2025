@@ -142,7 +142,7 @@ export type AppView = 'welcome' | 'dashboard' | 'clients' | 'loanRequest' | 'req
 export type FilterStatus = LoanStatus | 'Todos';
 
 export type NewClientData = Omit<Client, 'id' | 'joinDate' | 'archived'>;
-export type NewLoanData = { amount: number; term: number };
+export type NewLoanData = { amount: number; term: number; interestRate?: number; source?: 'Banco' | 'Efectivo' | 'Fondo Personal' };
 
 export interface DashboardStats {
     totalLoaned: number;
