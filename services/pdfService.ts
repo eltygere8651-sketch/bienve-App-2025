@@ -293,27 +293,66 @@ export const triggerDownload = (pdfBlob: Blob, filename: string) => {
     }, 100);
 };
 
+let isSharingInProgress = false;
+
 export const downloadPdf = (pdfBlob: Blob, filename: string) => {
     triggerDownload(pdfBlob, filename);
 };
 
-export const sharePdf = async (pdfBlob: Blob, filename: string) => {
-    if (navigator.share) {
-        const file = new File([pdfBlob], filename, { type: 'application/pdf' });
-        try {
-            await navigator.share({
-                files: [file],
-                title: 'Recibo Oficial - B.M CONTIGO',
-                text: 'Adjunto envío el recibo de pago oficial.'
-            });
-        } catch (error) {
-            console.error('Error al compartir:', error);
-            // Fallback to download if shared failed or cancelled
-            downloadPdf(pdfBlob, filename);
-        }
-    } else {
-        downloadPdf(pdfBlob, filename);
+export const sharePdf = async (pdfBlob: Blob, filename: string): Promise<boolean> => {
+    if (isSharingInProgress) {
+        return false;
     }
+    isSharingInProgress = true;
+
+    try {
+        const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+        
+        // Check if Web Share API with files is supported
+        if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                // Share ONLY the single PDF file to prevent duplicate messages or double receipts on WhatsApp
+                await navigator.share({
+                    files: [file],
+                    title: filename
+                });
+                return true;
+            } catch (error: any) {
+                // User explicitly aborted or closed share sheet - DO NOT trigger duplicate download
+                if (error && (error.name === 'AbortError' || error.message?.includes('abort'))) {
+                    return false;
+                }
+                console.warn('Native share failed, downloading as fallback:', error);
+                downloadPdf(pdfBlob, filename);
+                return true;
+            }
+        } else {
+            // Fallback for desktop or environments without Web Share API file support: single download
+            downloadPdf(pdfBlob, filename);
+            return true;
+        }
+    } finally {
+        setTimeout(() => {
+            isSharingInProgress = false;
+        }, 600);
+    }
+};
+
+export const sharePaymentReceipt = async (
+    data: ReceiptData,
+    signatureImage?: string,
+    mode: 'share' | 'download' = 'share'
+): Promise<boolean> => {
+    const doc = generatePaymentReceiptPdf(data, signatureImage);
+    const filename = `Recibo_${data.clientName.replace(/\s+/g, '_')}_${new Date(data.paymentDate).toISOString().split('T')[0]}.pdf`;
+    const blob = doc.output('blob');
+
+    if (mode === 'download') {
+        downloadPdf(blob, filename);
+        return true;
+    }
+
+    return await sharePdf(blob, filename);
 };
 
 // --- CLIENT REPORTS ---
@@ -505,6 +544,9 @@ interface ReceiptData {
     interestPaid?: number; // Optional: Desglose explícito de interés
     capitalPaid?: number;  // Optional: Desglose explícito de capital
     showInterestCovered?: boolean;
+    interestRate?: number; // Tasa de interés mensual (ej: 8%)
+    nextPeriodInterest?: number; // Interés calculado para el período (8%)
+    totalLiquidation?: number; // Monto para cancelar préstamo (Capital + 8%)
 }
 
 export const generatePaymentReceiptPdf = (data: ReceiptData, signatureImage?: string): jsPDF => {
@@ -526,77 +568,114 @@ export const generatePaymentReceiptPdf = (data: ReceiptData, signatureImage?: st
         .replace(/Saldó.*?vencido/gi, '')
         .trim();
 
-    // --- background ---
-    doc.setFillColor(252, 251, 255); 
+    // --- Background Base ---
+    doc.setFillColor(253, 252, 255); 
     doc.rect(0, 0, 210, 148, 'F');
 
-    // --- 1. HEADER (Indigo Premium) ---
-    doc.setFillColor(79, 70, 229); 
-    doc.rect(0, 0, 210, 32, 'F');
-    doc.setFillColor(67, 56, 202); 
-    doc.rect(0, 30, 210, 2, 'F');
+    // --- 1. COMPACT PREMIUM HEADER (18mm) ---
+    doc.setFillColor(49, 46, 129); // Rich Dark Indigo (#312e81)
+    doc.rect(0, 0, 210, 18, 'F');
     
+    // Bottom Gold Accent Line on header
+    doc.setFillColor(245, 158, 11); // Amber/Gold (#f59e0b)
+    doc.rect(0, 17.2, 210, 0.8, 'F');
+    
+    // Brand Name
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
+    doc.setFontSize(15);
     doc.setFont('helvetica', 'bold');
-    doc.text('B.M CONTIGO', 15, 20);
+    doc.text('B.M CONTIGO', 15, 11.5);
     
-    doc.setFontSize(9);
+    // Subtitle
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(199, 210, 254);
-    doc.text('Garantía de Confianza y Transparencia', 15, 26);
+    doc.text('Garantía de Confianza y Transparencia', 15, 15.5);
 
+    // Receipt Badge (Right)
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('RECIBO DE PAGO', 195, 22, { align: 'right' });
-    
-    // --- 2. INFO AREA ---
-    doc.setTextColor(99, 102, 241);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.text('FECHA DE EMISIÓN', 15, 42);
-    doc.setTextColor(15, 23, 42);
     doc.setFontSize(11);
-    doc.text(generationDate, 15, 48);
-
-    doc.setDrawColor(224, 231, 255);
-    doc.setLineWidth(0.2);
-    doc.line(15, 52, 195, 52);
-
-    // Client
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text('CLIENTE', 15, 62);
-    doc.setFontSize(18);
-    doc.setTextColor(79, 70, 229);
     doc.setFont('helvetica', 'bold');
-    doc.text(data.clientName.toUpperCase(), 15, 71);
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
+    doc.text('RECIBO DE PAGO', 195, 11, { align: 'right' });
+    
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(251, 191, 36); // Gold badge text
+    doc.text('COMPROBANTE OFICIAL & DIGITAL', 195, 15.5, { align: 'right' });
+    
+    // --- 2. COMPACT CLIENT & PAYMENT INFO (y: 22 to 43) ---
+    // Client Name
     doc.setTextColor(100, 116, 139);
-    doc.text('CONCEPTO DE PAGO', 15, 81);
-    doc.setFontSize(10);
-    doc.setTextColor(30, 41, 59);
-    doc.text(data.paymentType, 15, 87);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CLIENTE', 15, 24.5);
+    
+    doc.setFontSize(12);
+    doc.setTextColor(30, 27, 75); // Indigo 950
+    doc.setFont('helvetica', 'bold');
+    doc.text(data.clientName.toUpperCase(), 15, 30.5);
 
-    // --- 3. AMOUNT CARD ---
+    // Concept
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.setFont('helvetica', 'bold');
+    doc.text('CONCEPTO DE PAGO', 15, 36);
+    
+    doc.setFontSize(8);
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'normal');
+    doc.text(data.paymentType, 15, 40.5);
+
+    // Date & Loan ID (Middle column)
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FECHA DE EMISIÓN', 98, 24.5);
+    
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(generationDate, 98, 30.5);
+
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('REF. OPERACIÓN', 98, 36);
+    
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(data.loanId ? `#${data.loanId.slice(-8).toUpperCase()}` : '#DIRECTO', 98, 40.5);
+
+    // Compact Total Abonado Card (Right)
     doc.setFillColor(255, 255, 255);
     doc.setDrawColor(79, 70, 229);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(140, 58, 55, 28, 3, 3, 'FD');
+    doc.setLineWidth(0.4);
+    doc.roundedRect(150, 21.5, 45, 20.5, 2, 2, 'FD');
     
     doc.setTextColor(79, 70, 229);
-    doc.setFontSize(8);
+    doc.setFontSize(6.5);
     doc.setFont('helvetica', 'bold');
-    doc.text('TOTAL ABONADO', 167.5, 66, { align: 'center' });
+    doc.text('TOTAL ABONADO', 172.5, 27, { align: 'center' });
     
-    doc.setFontSize(20);
-    doc.text(amountString, 167.5, 78, { align: 'center' });
+    doc.setFontSize(14);
+    doc.setTextColor(30, 27, 75);
+    doc.text(amountString, 172.5, 36.5, { align: 'center' });
 
-    // --- 4. DETAILS TABLE ---
-    const tableBody = [
+    // Subtle divider
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.2);
+    doc.line(15, 44, 195, 44);
+
+    // --- 3. DETAILS TABLE & LIQUIDATION VALUES ---
+    const monthlyRate = data.interestRate 
+        ? (data.interestRate > 20 ? data.interestRate / 12 : data.interestRate) 
+        : 8;
+    const nextInterest = data.nextPeriodInterest !== undefined 
+        ? data.nextPeriodInterest 
+        : (data.newBalance > 0 ? (data.newBalance * (monthlyRate / 100)) : 0);
+    const liquidationTotal = data.totalLiquidation !== undefined 
+        ? data.totalLiquidation 
+        : (data.newBalance > 0 ? (data.newBalance + nextInterest) : 0);
+
+    const tableBody: any[] = [
         ['SALDO ANTERIOR', formatCurrency(data.previousBalance)],
     ];
 
@@ -605,65 +684,153 @@ export const generatePaymentReceiptPdf = (data: ReceiptData, signatureImage?: st
         tableBody.push(['AMORTIZACIÓN CAPITAL', formatCurrency(data.capitalPaid)]);
     }
 
-    tableBody.push(['SALDO PENDIENTE', formatCurrency(data.newBalance)]);
+    if (data.newBalance > 0) {
+        tableBody.push(['CAPITAL PENDIENTE', formatCurrency(data.newBalance)]);
+        tableBody.push([`INTERÉS PRÓX. PERÍODO (${monthlyRate}%)`, formatCurrency(nextInterest)]);
+        tableBody.push(['TOTAL PARA LIQUIDACIÓN', formatCurrency(liquidationTotal)]);
+    } else {
+        tableBody.push(['CAPITAL PENDIENTE', '0,00 €']);
+        tableBody.push(['ESTADO DEL PRÉSTAMO', 'TOTALMENTE LIQUIDADO']);
+    }
 
     (doc as any).autoTable({
-        startY: 92,
+        startY: 46.5,
         margin: { left: 15, right: 15 },
         body: tableBody,
         theme: 'plain',
-        tableWidth: 105, 
+        tableWidth: 110, 
         styles: { 
-            fontSize: 9, 
-            cellPadding: 2.5, 
+            fontSize: 7.5, 
+            cellPadding: 1.5, 
             textColor: [71, 85, 105],
             font: 'helvetica'
         },
         columnStyles: { 
-            0: { cellWidth: 45 },
+            0: { cellWidth: 54 },
             1: { fontStyle: 'bold', halign: 'right', textColor: [30, 41, 59] } 
         },
         didParseCell: (d: any) => {
-            if (d.row.cells[0].raw === 'SALDO PENDIENTE') {
-                d.cell.styles.fillColor = [240, 242, 255];
+            const raw = d.row.cells[0]?.raw;
+            if (raw === 'CAPITAL PENDIENTE') {
+                d.cell.styles.fillColor = [241, 245, 249];
+                d.cell.styles.textColor = [30, 41, 59];
+                d.cell.styles.fontStyle = 'bold';
+            } else if (raw && String(raw).startsWith('INTERÉS PRÓX.')) {
+                d.cell.styles.fillColor = [254, 243, 199];
+                d.cell.styles.textColor = [180, 83, 9];
+                d.cell.styles.fontStyle = 'bold';
+            } else if (raw === 'TOTAL PARA LIQUIDACIÓN') {
+                d.cell.styles.fillColor = [238, 242, 255];
                 d.cell.styles.textColor = [79, 70, 229];
                 d.cell.styles.fontStyle = 'bold';
-                d.cell.styles.fontSize = 10;
+                d.cell.styles.fontSize = 8.5;
+            } else if (raw === 'ESTADO DEL PRÉSTAMO') {
+                d.cell.styles.fillColor = [220, 252, 231];
+                d.cell.styles.textColor = [22, 101, 52];
+                d.cell.styles.fontStyle = 'bold';
+                d.cell.styles.fontSize = 8.5;
             }
         }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 5;
+    const finalY = (doc as any).lastAutoTable.finalY || 68;
 
-    // Signature Area
+    // --- 4. SIGNATURE OR CERTIFICATION BADGE (Right column, aligned with table) ---
     if (signatureImage) {
-        doc.addImage(signatureImage, 'PNG', 140, finalY - 5, 50, 20);
-        doc.setFontSize(7);
+        doc.addImage(signatureImage, 'PNG', 142, 47, 45, 15);
+        doc.setFontSize(6);
         doc.setTextColor(148, 163, 184);
-        doc.text('Firma Digital Autorizada', 165, finalY + 15, { align: 'center' });
+        doc.text('Firma Digital Autorizada', 164.5, 65, { align: 'center' });
+    } else {
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(138, 47, 57, 19, 1.5, 1.5, 'FD');
+
+        doc.setFontSize(6.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(22, 101, 52);
+        doc.text('✓ TRANSACCIÓN VERIFICADA', 166.5, 53.5, { align: 'center' });
+
+        doc.setFontSize(5.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 116, 139);
+        doc.text('Documento oficial registrado en', 166.5, 58, { align: 'center' });
+        doc.text('el sistema de gestión B.M Contigo', 166.5, 62, { align: 'center' });
     }
 
-    // --- 5. FOOTER & NOTES ---
+    // --- 5. INTEGRATED DISCLAIMER BOX (Same single sheet, compact & elegant) ---
+    const noticeY = Math.max(finalY + 2.5, 71);
+    
+    if (data.newBalance > 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(203, 213, 225); // Slate 300
+        doc.setLineWidth(0.3);
+        doc.roundedRect(15, noticeY, 180, 15, 1.5, 1.5, 'FD');
+
+        // Decorative indigo bar on the left of notice
+        doc.setFillColor(79, 70, 229);
+        doc.rect(15, noticeY, 1.5, 15, 'F');
+
+        doc.setFontSize(6.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(67, 56, 202);
+        doc.text('CONDICIONES OFICIALES DE CANCELACIÓN Y LIQUIDACIÓN:', 19, noticeY + 4.2);
+
+        doc.setFontSize(5.8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(71, 85, 105);
+        const noticeMsg = `El importe de "Capital Pendiente" refleja únicamente el capital principal adeudado. Para cancelar o liquidar en su totalidad el préstamo en cualquier momento, el cliente debe abonar dicho Capital Pendiente más el interés del ${monthlyRate}% correspondiente al período (${formatCurrency(nextInterest)}), siendo el Total Oficial para Liquidar de ${formatCurrency(liquidationTotal)}. Los pagos parciales se aplican prioritariamente a intereses devengados.`;
+        const splitMsg = doc.splitTextToSize(noticeMsg, 172);
+        doc.text(splitMsg, 19, noticeY + 8);
+    } else {
+        doc.setFillColor(240, 253, 244);
+        doc.setDrawColor(187, 247, 208);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(15, noticeY, 180, 14, 1.5, 1.5, 'FD');
+
+        doc.setFillColor(22, 101, 52);
+        doc.rect(15, noticeY, 1.5, 14, 'F');
+
+        doc.setFontSize(6.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(22, 101, 52);
+        doc.text('ESTADO DEL CRÉDITO: PRÉSTAMO CANCELADO EN SU TOTALIDAD', 19, noticeY + 5);
+
+        doc.setFontSize(5.8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(21, 128, 61);
+        doc.text('Este documento digital certifica formalmente que no existen importes ni intereses pendientes por este préstamo.', 19, noticeY + 9.5);
+    }
+
+    // Optional user note
     if (displayNotes) {
-        doc.setFontSize(8);
+        doc.setFontSize(6);
         doc.setFont('helvetica', 'italic');
         doc.setTextColor(148, 163, 184);
-        const sn = doc.splitTextToSize(`Nota: ${displayNotes}`, 80);
-        doc.text(sn, 15, finalY);
+        const sn = doc.splitTextToSize(`Nota: ${displayNotes}`, 180);
+        doc.text(sn, 15, noticeY + 19);
     }
 
-    doc.setFontSize(10);
-    doc.setTextColor(79, 70, 229);
+    // Bottom signatures & acknowledgments
+    doc.setFontSize(7.5);
+    doc.setTextColor(67, 56, 202);
     doc.setFont('helvetica', 'bold');
-    doc.text('Gracias por su confianza.', 195, 132, { align: 'right' });
+    doc.text('Gracias por su confianza y puntualidad.', 195, 102, { align: 'right' });
     
-    doc.setFontSize(8);
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(148, 163, 184);
-    doc.text('Este es un recibo generado por sistema.', 195, 137, { align: 'right' });
+    doc.text('Recibo digital oficial B.M CONTIGO - Emitido por sistema.', 15, 102);
 
+    // Bottom Decorative Bar
     doc.setFillColor(79, 70, 229);
     doc.rect(0, 145, 210, 3, 'F');
+
+    // STRICT GUARANTEE: Remove any accidentally created second page so it is ALWAYS exactly 1 single sheet
+    while (doc.getNumberOfPages() > 1) {
+        doc.deletePage(doc.getNumberOfPages());
+    }
 
     return doc;
 };

@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
     subscribeToCollection, 
     addDocument, 
@@ -36,20 +36,14 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         isLoading,
         error,
         setIsLoading,
+        setLoans,
         setArchivedLoans
     } = useDataSubscriptions(user, isConfigReady, showToast);
     
     // Pagination state for archived loans
     const [lastArchivedLoanDoc, setLastArchivedLoanDoc] = useState<any>(null);
-    const [hasMoreArchivedLoans, setHasMoreArchivedLoans] = useState(true);
-    const [allHistoryLoaded, setAllHistoryLoaded] = useState(false);
-
-    // Initial fetch for archived loans
-    useEffect(() => {
-        if (user && isConfigReady) {
-            loadMoreArchivedLoans(true);
-        }
-    }, [user, isConfigReady]);
+    const [hasMoreArchivedLoans, setHasMoreArchivedLoans] = useState(false);
+    const [allHistoryLoaded, setAllHistoryLoaded] = useState(true);
 
     const loadMoreArchivedLoans = useCallback(async (reset = false) => {
         if (!user) return;
@@ -57,8 +51,6 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             const currentLastDoc = reset ? null : lastArchivedLoanDoc;
             const pageSize = 20;
             
-            // NOTE: Removed orderBy('startDate', 'desc') to avoid "Requires Index" error.
-            // We only filter by 'archived' status. Pagination will follow default document order.
             const result = await getPaginatedCollection(
                 TABLE_NAMES.LOANS,
                 [where('archived', '==', true)],
@@ -66,35 +58,48 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
                 pageSize
             );
 
-            if (reset) {
-                setArchivedLoans(result.data as Loan[]);
-            } else {
-                setArchivedLoans(prev => [...prev, ...result.data as Loan[]]);
-            }
+            setArchivedLoans(prev => {
+                const map = new Map<string, Loan>();
+                prev.forEach(l => map.set(l.id, l));
+                (result.data as Loan[]).forEach(l => map.set(l.id, l));
+                return Array.from(map.values());
+            });
             
             setLastArchivedLoanDoc(result.lastVisible);
             setHasMoreArchivedLoans(result.hasMore);
         } catch (err) {
             console.error("Error loading archived loans:", err);
         }
-    }, [user, lastArchivedLoanDoc]);
+    }, [user, lastArchivedLoanDoc, setArchivedLoans]);
 
     const loadAllHistory = useCallback(async () => {
         if (!user) return;
         try {
-            // Removed orderBy to avoid index error. Sorting client-side.
             const allArchivedRaw = await getCollection(TABLE_NAMES.LOANS, [where('archived', '==', true)]);
             const allArchived = (allArchivedRaw as Loan[]).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
             
-            setArchivedLoans(allArchived);
+            setArchivedLoans(prev => {
+                const map = new Map<string, Loan>();
+                prev.forEach(l => map.set(l.id, l));
+                allArchived.forEach(l => map.set(l.id, l));
+                return Array.from(map.values());
+            });
             setAllHistoryLoaded(true);
             setHasMoreArchivedLoans(false);
-            showToast(`Historial completo cargado (${allArchived.length} registros).`, 'success');
+            showToast(`Historial completo sincronizado.`, 'success');
         } catch (err: any) {
             console.error(err);
-            showToast('Error cargando historial completo: ' + err.message, 'error');
+            showToast('Error cargando historial: ' + err.message, 'error');
         }
-    }, [user, showToast]);
+    }, [user, showToast, setArchivedLoans]);
+
+    // Combine active and archived loans deduplicated by ID - available to all handlers
+    const allLoans = useMemo(() => {
+        const map = new Map<string, Loan>();
+        loans.forEach(l => map.set(l.id, l));
+        archivedLoans.forEach(l => map.set(l.id, l));
+        return Array.from(map.values());
+    }, [loans, archivedLoans]);
 
     // --- HELPERS ---
     const _updateTreasuryBalance = useCallback(async (amount: number, type: 'inflow' | 'outflow', source: 'Banco' | 'Efectivo') => {
@@ -212,8 +217,8 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
     }, [showToast]);
 
     const handleRegisterPayment = useCallback(async (loanId: string, amount: number, date: string, notes: string, paymentMethod: 'Efectivo' | 'Banco' = 'Efectivo', isLiquidation: boolean = false) => {
-        const loan = loans.find(l => l.id === loanId);
-        if (!loan) throw new Error("Loan not found");
+        const loan = allLoans.find(l => l.id === loanId) || loans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
+        if (!loan) throw new Error("Préstamo no encontrado");
 
         const { interest: monthlyInterest } = calculateMonthlyInterest(loan.remainingCapital, loan.interestRate);
         
@@ -262,10 +267,25 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
 
         if (isLiquidation || remainingCapitalAfter <= 0) {
             updatePayload.pendingInterest = 0;
-            updatePayload.archived = false; // explicitly keep it visible in closed loans, not totally archived yet if logic assumes it. Actually, wait. The request says "no quedo archivada y no en prestamos cerrados".
+            updatePayload.archived = false; // explicitly keep it visible in closed loans
             if (loan.overdueHistory) {
                 updatePayload.overdueHistory = loan.overdueHistory.map(h => ({...h, status: h.status === 'pendiente' ? 'reclamado' : h.status}));
             }
+        }
+
+        // Optimistic UI state update so layout updates in 0ms without leaving/refreshing the app
+        const fullUpdatedLoan: Loan = { ...loan, ...updatePayload };
+        if (newStatus === LoanStatus.PAID) {
+            setLoans(prev => prev.filter(l => l.id !== loanId));
+            setArchivedLoans(prev => {
+                const map = new Map<string, Loan>();
+                map.set(loanId, fullUpdatedLoan);
+                prev.forEach(l => { if (l.id !== loanId) map.set(l.id, l); });
+                return Array.from(map.values());
+            });
+        } else {
+            setLoans(prev => prev.map(l => l.id === loanId ? fullUpdatedLoan : l));
+            setArchivedLoans(prev => prev.map(l => l.id === loanId ? fullUpdatedLoan : l));
         }
 
         await updateDocument(TABLE_NAMES.LOANS, loanId, updatePayload);
@@ -280,7 +300,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         if (treasuryInflow > 0) {
             await _updateTreasuryBalance(treasuryInflow, 'inflow', paymentMethod);
         }
-    }, [loans, _updateTreasuryBalance]);
+    }, [loans, allLoans, archivedLoans, setLoans, setArchivedLoans, _updateTreasuryBalance]);
 
     // Background check for overdue loans (Runs when app loads or loans update)
     // Background check for potential overdue loans (Informative only)
@@ -336,7 +356,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
     }, [loans, isLoading]);
 
     const handleConfirmOverdue = useCallback(async (loanId: string, suggestion: { monthName: string, amount: number, accrualDate: string }, initialStatus: 'pendiente' | 'anulado' = 'pendiente') => {
-        const loan = loans.find(l => l.id === loanId);
+        const loan = allLoans.find(l => l.id === loanId) || loans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan) return;
 
         const parts = suggestion.monthName.split(' ');
@@ -365,10 +385,10 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
 
         showToast(`Mora de ${suggestion.monthName} registrada${initialStatus === 'anulado' ? ' y perdonada' : ''} correctamente.`, 'success');
-    }, [loans, showToast]);
+    }, [loans, allLoans, archivedLoans, showToast]);
 
     const handleManualAddOverdue = useCallback(async (loanId: string, monthName: string, year: number, amount: number) => {
-        const loan = loans.find(l => l.id === loanId);
+        const loan = allLoans.find(l => l.id === loanId) || loans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan) return;
 
         const overdueHistory = [...(loan.overdueHistory || [])];
@@ -388,10 +408,10 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
 
         showToast(`Interés vencido de ${monthName} ${year} registrado manualmente.`, 'success');
-    }, [loans, showToast]);
+    }, [loans, allLoans, archivedLoans, showToast]);
 
     const handleDeleteOverdueMonth = useCallback(async (loanId: string, overdueId: string) => {
-        const loan = loans.find(l => l.id === loanId);
+        const loan = allLoans.find(l => l.id === loanId) || loans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan || !loan.overdueHistory) return;
 
         const itemToDelete = loan.overdueHistory.find(m => m.id === overdueId);
@@ -413,10 +433,10 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
 
         showToast(`Registro de mora eliminado.`, 'info');
-    }, [loans, showToast]);
+    }, [loans, allLoans, archivedLoans, showToast]);
 
     const handleClearOverdueHistory = useCallback(async (loanId: string) => {
-        const loan = loans.find(l => l.id === loanId);
+        const loan = allLoans.find(l => l.id === loanId) || loans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan) return;
 
         await updateDocument(TABLE_NAMES.LOANS, loanId, {
@@ -427,19 +447,15 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         });
 
         showToast(`Historial de mora de ${loan.clientName} limpiado por completo.`, 'success');
-    }, [loans, showToast]);
-
-    // Removed cleanupSpecificClients effect to prevent periodic data wipes for specific clients
-    // and allow manual management to persist correctly.
+    }, [loans, allLoans, archivedLoans, showToast]);
 
     const handleUpdatePayment = useCallback(async (loanId: string, paymentId: string, newInterest: number, newAmount: number, newDate: string, newNotes: string) => {
-        const loan = loans.find(l => l.id === loanId);
+        const loan = allLoans.find(l => l.id === loanId) || loans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan) return;
 
         // Find and update the specific payment
-        const updatedHistory = loan.paymentHistory.map(p => {
+        const updatedHistory = (loan.paymentHistory || []).map(p => {
             if (p.id === paymentId) {
-                // Recalculate capital part based on manual input of interest and total amount
                 const capitalPart = Math.max(0, newAmount - newInterest);
                 return {
                     ...p,
@@ -453,12 +469,6 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             return p;
         });
 
-        // Re-calculate the running balance for all payments subsequent to the edited one
-        // This is complex because each payment depends on the previous remaining capital.
-        // For simplicity, we will re-aggregate totals.
-        // A full replay of history to correct `remainingCapitalAfter` for each record would be ideal but complex.
-        // We will just update totals and the final remaining capital.
-        
         const totalCapitalPaid = updatedHistory.reduce((acc, p) => acc + p.capitalPaid, 0);
         const totalInterestPaid = updatedHistory.reduce((acc, p) => acc + p.interestPaid, 0);
         const initialCap = loan.initialCapital || loan.amount;
@@ -468,24 +478,29 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         if (remainingCapital <= 0) newStatus = LoanStatus.PAID;
         else if (newStatus === LoanStatus.PAID) newStatus = LoanStatus.PENDING;
 
-        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+        const updatedDoc = {
             paymentHistory: updatedHistory,
             totalCapitalPaid,
             totalInterestPaid,
             remainingCapital,
             status: newStatus
-        });
-        showToast('Pago actualizado y saldos recalculados.', 'success');
-    }, [loans, showToast]);
+        };
+
+        setLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedDoc } : l));
+        setArchivedLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedDoc } : l));
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, updatedDoc);
+        showToast('Pago actualizado y saldos recalculados al momento.', 'success');
+    }, [loans, allLoans, archivedLoans, setLoans, setArchivedLoans, showToast]);
 
     const handleDeletePayment = useCallback(async (loanId: string, paymentId: string) => {
-        const loan = loans.find(l => l.id === loanId);
+        const loan = allLoans.find(l => l.id === loanId) || loans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan) return;
 
-        const paymentToDelete = loan.paymentHistory.find(p => p.id === paymentId);
+        const paymentToDelete = (loan.paymentHistory || []).find(p => p.id === paymentId);
         if (!paymentToDelete) return;
 
-        const updatedHistory = loan.paymentHistory.filter(p => p.id !== paymentId);
+        const updatedHistory = (loan.paymentHistory || []).filter(p => p.id !== paymentId);
 
         const totalCapitalPaid = updatedHistory.reduce((acc, p) => acc + p.capitalPaid, 0);
         const totalInterestPaid = updatedHistory.reduce((acc, p) => acc + p.interestPaid, 0);
@@ -496,14 +511,19 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         if (remainingCapital <= 0) newStatus = LoanStatus.PAID;
         else if (newStatus === LoanStatus.PAID) newStatus = LoanStatus.PENDING;
 
-        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+        const updatedDoc = {
             paymentHistory: updatedHistory,
             totalCapitalPaid,
             totalInterestPaid,
             remainingCapital,
             status: newStatus,
             paymentsMade: updatedHistory.length
-        });
+        };
+
+        setLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedDoc } : l));
+        setArchivedLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedDoc } : l));
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, updatedDoc);
 
         // Revert the treasury balance
         let treasuryOutflow = paymentToDelete.amount;
@@ -516,40 +536,42 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
             await _updateTreasuryBalance(treasuryOutflow, 'outflow', paymentToDelete.paymentMethod || 'Efectivo');
         }
 
-        showToast('Pago eliminado y saldo del tesoro revertido.', 'success');
-    }, [loans, showToast, _updateTreasuryBalance]);
+        showToast('Pago eliminado y saldo actualizado al momento.', 'success');
+    }, [loans, allLoans, archivedLoans, setLoans, setArchivedLoans, showToast, _updateTreasuryBalance]);
 
     const handleBalanceCorrection = useCallback(async (loanId: string, newBalance: number, notes: string) => {
-        const loan = loans.find(l => l.id === loanId);
+        const loan = allLoans.find(l => l.id === loanId) || loans.find(l => l.id === loanId) || archivedLoans.find(l => l.id === loanId);
         if (!loan) return;
 
-        // We add a "correction" record to history so numbers add up
         const diff = loan.remainingCapital - newBalance;
-        // If diff > 0, we reduced debt (like a payment or forgiveness)
-        // If diff < 0, we increased debt (charge)
         
         const correctionRecord: PaymentRecord = {
             id: `CORR-${Date.now()}`,
             date: new Date().toISOString().split('T')[0],
             amount: 0,
             interestPaid: 0,
-            capitalPaid: diff, // treated as capital adjustment
+            capitalPaid: diff,
             remainingCapitalAfter: newBalance,
             notes: `CORRECCIÓN SALDO: ${notes}`,
-            paymentMethod: 'Efectivo' // Dummy
+            paymentMethod: 'Efectivo'
         };
 
         const updatedHistory = [...(loan.paymentHistory || []), correctionRecord];
         const totalCapitalPaid = updatedHistory.reduce((acc, p) => acc + p.capitalPaid, 0);
         
-        await updateDocument(TABLE_NAMES.LOANS, loanId, {
+        const updatedDoc = {
             remainingCapital: newBalance,
             paymentHistory: updatedHistory,
             totalCapitalPaid,
             status: newBalance <= 0 ? LoanStatus.PAID : LoanStatus.PENDING
-        });
+        };
+
+        setLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedDoc } : l));
+        setArchivedLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedDoc } : l));
+
+        await updateDocument(TABLE_NAMES.LOANS, loanId, updatedDoc);
         showToast('Saldo corregido exitosamente.', 'success');
-    }, [loans, showToast]);
+    }, [loans, allLoans, archivedLoans, setLoans, setArchivedLoans, showToast]);
 
     const handleAddClientAndLoan = useCallback(async (clientData: NewClientData, loanData: NewLoanData & { source?: 'Banco' | 'Efectivo' | 'Fondo Personal' }) => {
         // 1. Client
@@ -622,17 +644,12 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
         showToast('Nuevo préstamo añadido.', 'success');
     }, [showToast, _updateTreasuryBalance]);
 
-    // Combine active and archived loans deduplicated by ID
-    const allLoans = useMemo(() => {
-        const map = new Map<string, Loan>();
-        loans.forEach(l => map.set(l.id, l));
-        archivedLoans.forEach(l => map.set(l.id, l));
-        return Array.from(map.values());
-    }, [loans, archivedLoans]);
-
-    // Automatic restoration migration for reunified loans & payment histories
+    // Automatic restoration migration for reunified loans & payment histories (runs only once per session)
+    const restorationDoneRef = useRef(false);
     useEffect(() => {
-        if (!user || isLoading) return;
+        if (!user || isLoading || restorationDoneRef.current) return;
+        if (loans.length === 0 && archivedLoans.length === 0) return;
+        restorationDoneRef.current = true;
 
         const restoreReunifiedHistories = async () => {
             const all = [...loans, ...archivedLoans];
@@ -654,7 +671,7 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
                 const sourceLoans = all.filter(s => 
                     s.id !== targetLoan.id && 
                     ((s.notes && s.notes.includes(`unificación en préstamo #${targetLoan.id}`)) ||
-                     (targetLoan.notes.includes(s.id)))
+                     (targetLoan.notes && targetLoan.notes.includes(s.id)))
                 );
 
                 if (sourceLoans.length > 0) {
@@ -689,6 +706,32 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
                         } catch (e) {
                             console.error("Error restoring merged payment history into target loan", targetLoan.id, e);
                         }
+                    }
+                }
+            }
+
+            // 3. Ensure any completed loan without payment history has its history synthesized and preserved
+            for (const l of all) {
+                if (l.status === LoanStatus.PAID && (!l.paymentHistory || l.paymentHistory.length === 0)) {
+                    const syntheticPayment: PaymentRecord = {
+                        id: `LIQ-RESTORED-${l.id}`,
+                        date: l.lastPaymentDate || l.startDate || new Date().toISOString().split('T')[0],
+                        amount: (l.initialCapital || l.amount) + (l.totalInterestPaid || 0),
+                        interestPaid: l.totalInterestPaid || 0,
+                        capitalPaid: l.initialCapital || l.amount,
+                        remainingCapitalAfter: 0,
+                        notes: 'Liquidación total de deuda registrada',
+                        paymentMethod: 'Efectivo'
+                    };
+                    try {
+                        await updateDocument(TABLE_NAMES.LOANS, l.id, {
+                            paymentHistory: [syntheticPayment],
+                            paymentsMade: 1,
+                            totalCapitalPaid: l.initialCapital || l.amount,
+                            archived: false
+                        });
+                    } catch (e) {
+                        console.error("Error restoring payment record for loan", l.id, e);
                     }
                 }
             }
@@ -837,24 +880,21 @@ export const useAppData = (showToast: (msg: string, type: 'success' | 'error' | 
     }, [loans, showToast]);
 
     const handleUpdateLoan = useCallback(async (loanId: string, updatedData: Partial<Loan>) => {
-        await updateDocument(TABLE_NAMES.LOANS, loanId, updatedData);
-        
-        // Update local state for archived loans if present
+        setLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedData } : l));
         setArchivedLoans(prev => prev.map(l => l.id === loanId ? { ...l, ...updatedData } : l));
-    }, [setArchivedLoans]);
+        await updateDocument(TABLE_NAMES.LOANS, loanId, updatedData);
+    }, [setLoans, setArchivedLoans]);
 
     const handleUpdateClient = useCallback(async (clientId: string, updatedData: Partial<Client>) => {
         await updateDocument(TABLE_NAMES.CLIENTS, clientId, updatedData);
     }, []);
 
     const handleDeleteLoan = useCallback(async (loanId: string, clientName: string) => {
-        await deleteDocument(TABLE_NAMES.LOANS, loanId);
-        
-        // Remove from local state if present
+        setLoans(prev => prev.filter(l => l.id !== loanId));
         setArchivedLoans(prev => prev.filter(l => l.id !== loanId));
-        
+        await deleteDocument(TABLE_NAMES.LOANS, loanId);
         showToast(`Préstamo de ${clientName} eliminado.`, 'info');
-    }, [showToast, setArchivedLoans]);
+    }, [showToast, setLoans, setArchivedLoans]);
 
     const handleArchivePaidLoans = useCallback(async () => {
         // In this implementation with `archived` flag, we just set `archived: true` on PAID loans.

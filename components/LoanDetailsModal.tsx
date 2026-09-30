@@ -104,11 +104,15 @@ const InfoRow = ({
 const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
   isOpen,
   onClose,
-  loan,
-  client,
+  loan: propLoan,
+  client: propClient,
   initialTab = "details",
 }) => {
   const {
+    allLoans,
+    loans,
+    archivedLoans,
+    clients,
     handleUpdateLoan,
     handleUpdateClient,
     handleDeleteLoan,
@@ -123,9 +127,27 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
     handleCleanDeleteClient,
   } = useDataContext();
   const { showConfirmModal, showToast } = useAppContext();
+
+  // Always use the latest reactive loan from allLoans so updates show instantly without leaving/reopening
+  const loan = useMemo(() => {
+    if (!propLoan?.id) return propLoan;
+    return allLoans.find((l) => l.id === propLoan.id) || loans.find((l) => l.id === propLoan.id) || archivedLoans.find((l) => l.id === propLoan.id) || propLoan;
+  }, [allLoans, loans, archivedLoans, propLoan]);
+
+  const client = useMemo(() => {
+    if (!loan?.clientId) return propClient;
+    return clients.find((c) => c.id === loan.clientId) || propClient;
+  }, [clients, loan?.clientId, propClient]);
+
   const [activeTab, setActiveTab] = useState<
     "details" | "payment" | "history" | "edit" | "security"
   >(initialTab as any);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab as any);
+    }
+  }, [initialTab, isOpen]);
 
   const currentSuggestions = useMemo(() => {
     if (!loan) return [];
@@ -139,10 +161,20 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
       .reduce((acc, curr) => acc + curr.amount, 0);
   }, [loan?.overdueHistory]);
 
-  const totalLiquidationAmount =
-    (loan?.remainingCapital || 0) +
-    (loan?.pendingInterest || 0) +
-    totalOverdueInterest;
+  const currentMonthInterest = useMemo(() => {
+    if (!loan?.remainingCapital) return 0;
+    return calculateMonthlyInterest(loan.remainingCapital, loan.interestRate).interest;
+  }, [loan?.remainingCapital, loan?.interestRate]);
+
+  const totalLiquidationAmount = useMemo(() => {
+    if (!loan || loan.remainingCapital <= 0) return 0;
+    return (
+      loan.remainingCapital +
+      currentMonthInterest +
+      (loan.pendingInterest || 0) +
+      totalOverdueInterest
+    );
+  }, [loan, currentMonthInterest, totalOverdueInterest]);
 
   // States for Edit Forms
   const [loanFormData, setLoanFormData] = useState<Partial<Loan>>({});
@@ -384,13 +416,14 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
 
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentAmount) return;
+    if (!paymentAmount || !loan) return;
     setIsSubmitting(true);
     try {
-      const isLiquidation = parseFloat(paymentAmount) >= totalLiquidationAmount - 0.01;
+      const parsedAmount = parseFloat(paymentAmount);
+      const isLiquidation = parsedAmount >= totalLiquidationAmount - 0.01;
       await handleRegisterPayment(
         loan.id,
-        parseFloat(paymentAmount),
+        parsedAmount,
         paymentDate,
         paymentNotes,
         paymentMethod,
@@ -399,10 +432,18 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
       setPaymentAmount("");
       setPaymentNotes("");
       setPaymentMethod("Efectivo");
-      showToast("Pago registrado exitosamente", "success");
+      
+      if (isLiquidation) {
+        showToast("¡Préstamo liquidado por completo! Guardado en préstamos finalizados con historial preservado.", "success");
+      } else {
+        showToast("Pago registrado exitosamente. Historial actualizado al momento.", "success");
+      }
+
+      // Switch to history tab so user sees the newly created payment record and its single PDF receipt options immediately
+      setActiveTab("history");
 
       // MEJORA: Auto-detección de recuperación de mora
-      if (loan.status === LoanStatus.OVERDUE) {
+      if (loan.status === LoanStatus.OVERDUE && !isLiquidation) {
         setTimeout(() => {
           showConfirmModal({
             title: "¿Normalizar Estado?",
@@ -423,7 +464,9 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
           });
         }, 500);
       }
-    } catch (e) {
+    } catch (e: any) {
+      console.error("Error al registrar pago:", e);
+      showToast(e.message || "Error al procesar el pago", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -463,11 +506,14 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
   };
 
   const setQuickAmount = (type: "interest" | "full") => {
-    if (type === "interest")
-      setPaymentAmount(
-        (pendingInterestDisplay + totalOverdueInterest).toFixed(2),
-      );
-    if (type === "full") setPaymentAmount(totalLiquidationAmount.toFixed(2));
+    if (type === "interest") {
+      const pendingInt = pendingInterestDisplay + totalOverdueInterest;
+      const targetAmount = pendingInt > 0 ? pendingInt : currentMonthInterest;
+      setPaymentAmount(targetAmount.toFixed(2));
+    }
+    if (type === "full") {
+      setPaymentAmount(totalLiquidationAmount.toFixed(2));
+    }
   };
 
   const getShareMessage = (
@@ -496,10 +542,11 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
       msg += `📊 *Resumen del Préstamo:*\n`;
       msg += `• *Capital Pendiente:* ${formatCurrency(loan.remainingCapital)}\n`;
       if (loan.pendingInterest && loan.pendingInterest > 0) {
-        msg += `• *Intereses Acumulados:* ${formatCurrency(baseTotal)} _(Mes actual: ${formatCurrency(interest)} + Anterior pendiente: ${formatCurrency(loan.pendingInterest)})_\n\n`;
+        msg += `• *Intereses Acumulados:* ${formatCurrency(baseTotal)} _(Mes actual: ${formatCurrency(interest)} + Anterior pendiente: ${formatCurrency(loan.pendingInterest)})_\n`;
       } else {
-        msg += `• *Interés a Abonar:* ${formatCurrency(interest)}\n\n`;
+        msg += `• *Interés a Abonar (8%):* ${formatCurrency(interest)}\n`;
       }
+      msg += `• *Total para Liquidar Préstamo:* ${formatCurrency(totalLiquidationAmount)} _(Capital + Interés del período)_\n\n`;
       msg += `⚠️ *Importante:* Recuerda mantener al día tus intereses y, en lo posible, abonar al capital. Todo pago adicional reduce directamente tu deuda y baja tus futuros intereses.\n\n`;
       msg += `Agradezco tu puntualidad de siempre.`;
       return msg;
@@ -549,6 +596,14 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
     if (!message) return;
     navigator.clipboard.writeText(message);
     showToast("Reporte copiado al portapapeles", "success");
+  };
+
+  const handleShareReportWhatsApp = () => {
+    const message = getShareMessage(msgType);
+    if (!message) return;
+    const phone = client?.phone ? client.phone.replace(/[^0-9]/g, '') : '';
+    const url = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
   };
 
   const handleClose = () => {
@@ -783,8 +838,7 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                         <Check size={20} /> Liquidación Total
                       </h4>
                       <p className="text-sm text-slate-400 mt-1">
-                        Monto total para cancelar la deuda completa (Capital +
-                        Intereses).
+                        Monto total para cancelar la deuda completa: Capital ({formatCurrency(loan.remainingCapital)}) + Interés del período ({formatCurrency(currentMonthInterest)}){totalOverdueInterest > 0 || (loan.pendingInterest || 0) > 0 ? ` + Mora (${formatCurrency(totalOverdueInterest + (loan.pendingInterest || 0))})` : ''}.
                       </p>
                     </div>
                     <div className="text-left sm:text-right w-full sm:w-auto bg-slate-900/50 sm:bg-transparent p-3 sm:p-0 rounded-lg border border-slate-700/50 sm:border-none">
@@ -833,10 +887,17 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
                           </select>
                           <button
                             onClick={handleCopyReport}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 active:scale-95 rounded-lg ml-0.5 flex-1 sm:flex-initial cursor-pointer"
-                            title="Copiar Recordatorio de Mora"
+                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 active:scale-95 rounded-lg ml-0.5 flex-1 sm:flex-initial cursor-pointer border border-slate-700"
+                            title="Copiar Recordatorio"
                           >
                             <Copy size={14} /> Copiar
+                          </button>
+                          <button
+                            onClick={handleShareReportWhatsApp}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 active:scale-95 rounded-lg ml-0.5 flex-1 sm:flex-initial cursor-pointer shadow-md"
+                            title="Compartir por WhatsApp"
+                          >
+                            <Share2 size={14} /> WhatsApp
                           </button>
                         </div>
                         
@@ -1272,21 +1333,22 @@ const LoanDetailsModal: React.FC<LoanDetailsModalProps> = ({
 
                     <div className="flex gap-2 mb-6">
                       <button
+                        type="button"
                         onClick={() => setQuickAmount("interest")}
                         className="flex-1 py-3 px-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs font-bold text-slate-300 transition-colors border border-slate-600"
                       >
-                        Intereses Pendientes (
-                        {formatCurrency(
-                          pendingInterestDisplay + totalOverdueInterest,
-                        )}
-                        )
+                        Cuota Interés ({formatCurrency(
+                          (pendingInterestDisplay + totalOverdueInterest) > 0 
+                            ? (pendingInterestDisplay + totalOverdueInterest) 
+                            : currentMonthInterest
+                        )})
                       </button>
                       <button
+                        type="button"
                         onClick={() => setQuickAmount("full")}
-                        className="flex-1 py-3 px-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-[10px] sm:text-xs font-bold text-slate-300 transition-colors border border-slate-600"
+                        className="flex-1 py-3 px-2 bg-indigo-600/30 hover:bg-indigo-600/40 text-indigo-300 rounded-lg text-[10px] sm:text-xs font-bold transition-colors border border-indigo-500/40"
                       >
-                        Liquidar Total ({formatCurrency(totalLiquidationAmount)}
-                        )
+                        Liquidar Total ({formatCurrency(totalLiquidationAmount)})
                       </button>
                     </div>
 

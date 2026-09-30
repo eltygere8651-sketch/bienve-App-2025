@@ -14,6 +14,7 @@ import { StatCard, StatusBadge } from './DashboardComponents';
 const Dashboard: React.FC = () => {
     const { 
         loans, 
+        allLoans,
         clients, 
         clientLoanData, 
         suggestedOverdues, 
@@ -114,17 +115,22 @@ const Dashboard: React.FC = () => {
         setSelectedLoan(null);
     };
 
+    const liveSelectedLoan = useMemo(() => {
+        if (!selectedLoan) return null;
+        return allLoans.find(l => l.id === selectedLoan.id) || selectedLoan;
+    }, [selectedLoan, allLoans]);
+
     const selectedClient = useMemo(() => {
-        if (!selectedLoan || !clients) return null;
-        return clients.find(c => c.id === selectedLoan.clientId) || null;
-    }, [selectedLoan, clients]);
+        if (!liveSelectedLoan || !clients) return null;
+        return clients.find(c => c.id === liveSelectedLoan.clientId) || null;
+    }, [liveSelectedLoan, clients]);
 
     return (
         <>
             <LoanDetailsModal
                 isOpen={!!selectedLoan}
                 onClose={closeModal}
-                loan={selectedLoan}
+                loan={liveSelectedLoan}
                 client={selectedClient}
                 initialTab={initialTab}
             />

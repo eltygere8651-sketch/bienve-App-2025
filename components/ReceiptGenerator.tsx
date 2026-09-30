@@ -127,6 +127,12 @@ const ReceiptGenerator: React.FC = () => {
             }
 
             // Generar PDF para previsualización
+            const loanMonthlyRate = selectedLoan 
+                ? ((selectedLoan.interestRate && selectedLoan.interestRate > 20) ? selectedLoan.interestRate / 12 : (selectedLoan.interestRate || 8)) 
+                : 8;
+            const nextInterest = calculations.newBalance > 0 ? (calculations.newBalance * (loanMonthlyRate / 100)) : 0;
+            const liquidationTotal = calculations.newBalance > 0 ? (calculations.newBalance + nextInterest) : 0;
+
             const receiptPayload = {
                 clientName: clientName,
                 loanId: loanIdRef,
@@ -137,21 +143,20 @@ const ReceiptGenerator: React.FC = () => {
                 previousBalance: calculations.previousBalance,
                 newBalance: calculations.newBalance,
                 interestPaid: showBreakdown ? calculations.interestPart : undefined,
-                capitalPaid: showBreakdown ? calculations.capitalPart : undefined
+                capitalPaid: showBreakdown ? calculations.capitalPart : undefined,
+                interestRate: loanMonthlyRate,
+                nextPeriodInterest: nextInterest,
+                totalLiquidation: liquidationTotal
             };
 
             const doc = generatePaymentReceiptPdf(receiptPayload, signatureImage);
             const pdfBlob = doc.output('blob');
             const filename = `Recibo_${clientName.replace(/\s/g, '_')}_${new Date(paymentDate).toISOString().split('T')[0]}.pdf`;
 
-            // En móviles solemos preferir compartir, en desktop descargar es más estable
-            if (navigator.share) {
-                await sharePdf(pdfBlob, filename);
-            } else {
-                downloadPdf(pdfBlob, filename);
-            }
+            // Compartir recibo único en formato PDF oficial
+            await sharePdf(pdfBlob, filename);
             
-            showToast('Pago registrado y recibo generado.', 'success');
+            showToast('Pago registrado y recibo PDF generado.', 'success');
             resetForm();
         } catch (error) {
             console.error(error);
@@ -306,12 +311,23 @@ const ReceiptGenerator: React.FC = () => {
                              <ArrowRight className="hidden sm:block text-slate-600" />
 
                              <div className="text-center w-full">
-                                 <p className="text-slate-400 text-xs uppercase mb-1">Nuevo Saldo</p>
+                                 <p className="text-slate-400 text-xs uppercase mb-1">Capital Pendiente</p>
                                  <p className={`font-bold text-xl ${calculations.newBalance < calculations.previousBalance ? 'text-green-400' : 'text-slate-200'}`}>
                                      {formatCurrency(calculations.newBalance)}
                                  </p>
                              </div>
                         </div>
+
+                        {calculations.newBalance > 0 && (
+                            <div className="bg-indigo-950/40 border border-indigo-500/30 rounded-lg p-2.5 flex items-center justify-between text-xs">
+                                <span className="text-indigo-300 font-medium">
+                                    💡 Total para Cancelar Préstamo (Capital + 8% Interés):
+                                </span>
+                                <span className="font-bold font-mono text-white text-sm bg-indigo-900/50 px-2 py-0.5 rounded border border-indigo-500/40">
+                                    {formatCurrency(calculations.newBalance + (calculations.newBalance * 0.08))}
+                                </span>
+                            </div>
+                        )}
                         
                         {!showBreakdown && (
                             <div className="text-xs text-center text-slate-500 italic bg-slate-900/30 p-2 rounded border border-slate-700/50 flex flex-col items-center justify-center gap-1">

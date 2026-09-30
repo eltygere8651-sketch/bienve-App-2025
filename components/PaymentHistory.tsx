@@ -4,7 +4,7 @@ import { Loan, PaymentRecord } from '../types';
 import { formatCurrency } from '../services/utils';
 import { Calendar, Info, ArrowUp, Edit, Save, X, Loader2, FileText, CheckCircle2, TrendingDown, Clock, Trash2, Share2, Download } from 'lucide-react';
 import { useDataContext } from '../contexts/DataContext';
-import { generatePaymentReceiptPdf, sharePdf, downloadPdf } from '../services/pdfService';
+import { generatePaymentReceiptPdf, sharePdf, downloadPdf, sharePaymentReceipt } from '../services/pdfService';
 import { jsPDF } from 'jspdf';
 
 interface PaymentHistoryProps {
@@ -17,6 +17,7 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [showInterestCovered, setShowInterestCovered] = useState(false);
+    const [isExportingId, setIsExportingId] = useState<string | null>(null);
 
     // Edit Form State
     const [editForm, setEditForm] = useState({
@@ -94,31 +95,41 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
         }
     };
 
-    const handleExportReceipt = (record: PaymentRecord, method: 'download' | 'share') => {
-        const previousBalance = record.remainingCapitalAfter + record.capitalPaid;
-        
-        const receiptPayload = {
-            clientName: loan.clientName,
-            loanId: loan.id,
-            paymentAmount: record.amount,
-            paymentType: 'Pago de Cuota',
-            paymentDate: record.date,
-            notes: record.notes || '',
-            previousBalance: previousBalance,
-            newBalance: record.remainingCapitalAfter,
-            interestPaid: record.interestPaid,
-            capitalPaid: record.capitalPaid,
-            showInterestCovered: showInterestCovered
-        };
+    const handleExportReceipt = async (record: PaymentRecord, method: 'download' | 'share') => {
+        if (isExportingId) return;
+        setIsExportingId(record.id);
 
-        const doc = generatePaymentReceiptPdf(receiptPayload);
-        const fileName = `Recibo_${loan.clientName.replace(/\s/g, '_')}_${new Date(record.date).toISOString().split('T')[0]}.pdf`;
-        const blob = doc.output('blob');
+        try {
+            const previousBalance = record.remainingCapitalAfter + record.capitalPaid;
+            const paymentType = record.paymentMethod ? `Pago de Cuota (${record.paymentMethod})` : 'Pago de Cuota';
+            const loanMonthlyRate = (loan.interestRate && loan.interestRate > 20) ? loan.interestRate / 12 : (loan.interestRate || 8);
+            const nextInterest = record.remainingCapitalAfter > 0 ? (record.remainingCapitalAfter * (loanMonthlyRate / 100)) : 0;
+            const liquidationTotal = record.remainingCapitalAfter > 0 ? (record.remainingCapitalAfter + nextInterest) : 0;
+            
+            const receiptPayload = {
+                clientName: loan.clientName,
+                loanId: loan.id,
+                paymentAmount: record.amount,
+                paymentType: paymentType,
+                paymentDate: record.date,
+                notes: record.notes || '',
+                previousBalance: previousBalance,
+                newBalance: record.remainingCapitalAfter,
+                interestPaid: record.interestPaid,
+                capitalPaid: record.capitalPaid,
+                showInterestCovered: showInterestCovered,
+                interestRate: loanMonthlyRate,
+                nextPeriodInterest: nextInterest,
+                totalLiquidation: liquidationTotal
+            };
 
-        if (method === 'share') {
-            sharePdf(blob, fileName);
-        } else {
-            downloadPdf(blob, fileName);
+            await sharePaymentReceipt(receiptPayload, undefined, method);
+        } catch (err) {
+            console.error('Error al exportar recibo:', err);
+        } finally {
+            setTimeout(() => {
+                setIsExportingId(null);
+            }, 600);
         }
     };
 
@@ -192,7 +203,7 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
                             <th className="px-4 py-3">Total Pagado</th>
                             <th className="px-4 py-3 text-green-400">Interés</th>
                             <th className="px-4 py-3 text-blue-400">Capital</th>
-                            <th className="px-4 py-3 text-amber-400">Saldo</th>
+                            <th className="px-4 py-3 text-amber-400">Capital Restante</th>
                             <th className="px-4 py-3 text-right">Acción</th>
                         </tr>
                     </thead>
@@ -288,16 +299,24 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ loan }) => {
                                             <td className="px-4 py-3 font-mono text-amber-400">{formatCurrency(record.remainingCapitalAfter)}</td>
                                             <td className="px-4 py-3 text-right flex justify-end gap-2">
                                                 <button 
-                                                    onClick={() => handleExportReceipt(record, 'share')} 
-                                                    className="p-1.5 hover:bg-indigo-500/10 rounded text-indigo-400 transition-colors"
-                                                    title="Compartir Recibo"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleExportReceipt(record, 'share');
+                                                    }} 
+                                                    disabled={isExportingId === record.id}
+                                                    className="p-1.5 hover:bg-indigo-500/10 rounded text-indigo-400 transition-colors disabled:opacity-50"
+                                                    title="Compartir Recibo Único en PDF"
                                                 >
-                                                    <Share2 size={14} />
+                                                    {isExportingId === record.id ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
                                                 </button>
                                                 <button 
-                                                    onClick={() => handleExportReceipt(record, 'download')} 
-                                                    className="p-1.5 hover:bg-slate-700 rounded text-slate-500 hover:text-blue-400 transition-colors"
-                                                    title="Descargar Recibo"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleExportReceipt(record, 'download');
+                                                    }} 
+                                                    disabled={isExportingId === record.id}
+                                                    className="p-1.5 hover:bg-slate-700 rounded text-slate-500 hover:text-blue-400 transition-colors disabled:opacity-50"
+                                                    title="Descargar Recibo Único en PDF"
                                                 >
                                                     <Download size={14} />
                                                 </button>

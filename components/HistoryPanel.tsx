@@ -7,7 +7,7 @@ import LoanDetailsModal from './LoanDetailsModal';
 import { useAppContext } from '../contexts/AppContext';
 
 const HistoryPanel: React.FC = () => {
-    const { archivedLoans, handleArchivePaidLoans, clients, archivedClients, handleRestoreClient, handleBatchDeleteClients, loadMoreArchivedLoans, hasMoreArchivedLoans, handleDeleteLoan } = useDataContext();
+    const { archivedLoans, allLoans, handleArchivePaidLoans, clients, archivedClients, handleRestoreClient, handleBatchDeleteClients, loadMoreArchivedLoans, hasMoreArchivedLoans, handleDeleteLoan } = useDataContext();
     const { showConfirmModal } = useAppContext();
     const [activeTab, setActiveTab] = useState<'loans' | 'clients'>('loans');
     const [searchTerm, setSearchTerm] = useState('');
@@ -21,7 +21,10 @@ const HistoryPanel: React.FC = () => {
 
     // Calcular estadísticas generales
     const totalRecovered = useMemo(() => archivedLoans.reduce((acc, l) => acc + (l.initialCapital || l.amount), 0), [archivedLoans]);
-    const totalInterest = useMemo(() => archivedLoans.reduce((acc, l) => acc + l.totalInterestPaid, 0), [archivedLoans]);
+    const totalInterest = useMemo(() => archivedLoans.reduce((acc, l) => {
+        const interest = l.totalInterestPaid || l.paymentHistory?.reduce((sum, p) => sum + (p.interestPaid || 0), 0) || 0;
+        return acc + interest;
+    }, 0), [archivedLoans]);
 
     // Filtrar lista de préstamos
     const filteredLoans = useMemo(() => {
@@ -114,13 +117,18 @@ const HistoryPanel: React.FC = () => {
         });
     };
 
+    const liveSelectedLoan = useMemo(() => {
+        if (!selectedLoan) return null;
+        return allLoans.find(l => l.id === selectedLoan.id) || selectedLoan;
+    }, [selectedLoan, allLoans]);
+
     return (
         <>
              <LoanDetailsModal
                 isOpen={!!selectedLoan}
                 onClose={() => setSelectedLoan(null)}
-                loan={selectedLoan}
-                client={selectedLoan ? clients.find(c => c.id === selectedLoan.clientId) || null : null}
+                loan={liveSelectedLoan}
+                client={liveSelectedLoan ? clients.find(c => c.id === liveSelectedLoan.clientId) || null : null}
                 initialTab={initialModalTab}
             />
             
@@ -218,16 +226,27 @@ const HistoryPanel: React.FC = () => {
                                                 <thead className="bg-slate-900/50 text-slate-400 uppercase font-bold text-xs">
                                                     <tr>
                                                         <th className="px-6 py-3">Cliente</th>
-                                                        <th className="px-6 py-3">Monto Original</th>
+                                                        <th className="px-6 py-3">Capital</th>
+                                                        <th className="px-6 py-3">Réditos (Interés)</th>
+                                                        <th className="px-6 py-3">Total Cobrado</th>
                                                         <th className="px-6 py-3">Finalizado</th>
                                                         <th className="px-6 py-3 text-right">Acción</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-700">
-                                                    {filteredLoans.map(loan => (
+                                                    {filteredLoans.map(loan => {
+                                                        const interestPaid = loan.totalInterestPaid || loan.paymentHistory?.reduce((sum, p) => sum + (p.interestPaid || 0), 0) || 0;
+                                                        const capitalPaid = loan.totalCapitalPaid || loan.paymentHistory?.reduce((sum, p) => sum + (p.capitalPaid || 0), 0) || (loan.initialCapital || loan.amount);
+                                                        const totalCollected = capitalPaid + interestPaid;
+                                                        return (
                                                         <tr key={loan.id} className="hover:bg-slate-700/30 transition-colors group">
-                                                            <td className="px-6 py-4 font-medium text-white">{loan.clientName}</td>
+                                                            <td className="px-6 py-4 font-medium text-white">
+                                                                {loan.clientName}
+                                                                <div className="text-[10px] text-slate-400">{loan.paymentHistory?.length || 0} pago(s) registrados</div>
+                                                            </td>
                                                             <td className="px-6 py-4 text-slate-300 font-mono">{formatCurrency(loan.initialCapital || loan.amount)}</td>
+                                                            <td className="px-6 py-4 text-amber-400 font-mono font-bold">{formatCurrency(interestPaid)}</td>
+                                                            <td className="px-6 py-4 text-emerald-400 font-mono font-bold">{formatCurrency(totalCollected)}</td>
                                                             <td className="px-6 py-4 text-slate-400">
                                                                 <div className="flex items-center gap-1.5">
                                                                     <Calendar size={14} />
@@ -241,10 +260,11 @@ const HistoryPanel: React.FC = () => {
                                                                             setInitialModalTab('history');
                                                                             setSelectedLoan(loan);
                                                                         }}
-                                                                        className="text-primary-400 hover:text-primary-300 font-medium text-xs bg-primary-500/10 px-3 py-1.5 rounded-lg border border-primary-500/20 hover:bg-primary-500/20 transition-all"
-                                                                        title="Ver Detalles"
+                                                                        className="text-primary-400 hover:text-primary-300 font-medium text-xs bg-primary-500/10 px-3 py-1.5 rounded-lg border border-primary-500/20 hover:bg-primary-500/20 transition-all flex items-center gap-1"
+                                                                        title="Ver Historial Completo"
                                                                     >
                                                                         <FileText size={16} />
+                                                                        <span className="hidden sm:inline">Historial</span>
                                                                     </button>
                                                                     <button 
                                                                         onClick={() => {
@@ -266,7 +286,8 @@ const HistoryPanel: React.FC = () => {
                                                                 </div>
                                                             </td>
                                                         </tr>
-                                                    ))}
+                                                    );
+                                                    })}
                                                 </tbody>
                                             </table>
                                         </div>

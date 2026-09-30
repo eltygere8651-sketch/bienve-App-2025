@@ -416,6 +416,10 @@ const ClientPortal: React.FC = () => {
                                                 onClick={() => {
                                                     if (!activeClient) return;
                                                     const prevBal = lastPayment.remainingCapitalAfter + lastPayment.capitalPaid;
+                                                    const loanMonthlyRate = (loan.interestRate && loan.interestRate > 20) ? loan.interestRate / 12 : (loan.interestRate || 8);
+                                                    const nextInterest = lastPayment.remainingCapitalAfter > 0 ? (lastPayment.remainingCapitalAfter * (loanMonthlyRate / 100)) : 0;
+                                                    const liquidationTotal = lastPayment.remainingCapitalAfter > 0 ? (lastPayment.remainingCapitalAfter + nextInterest) : 0;
+                                                    
                                                     const receiptPayload = {
                                                         clientName: activeClient.name,
                                                         loanId: loan.id,
@@ -426,7 +430,10 @@ const ClientPortal: React.FC = () => {
                                                         previousBalance: prevBal,
                                                         newBalance: lastPayment.remainingCapitalAfter,
                                                         interestPaid: lastPayment.interestPaid,
-                                                        capitalPaid: lastPayment.capitalPaid
+                                                        capitalPaid: lastPayment.capitalPaid,
+                                                        interestRate: loanMonthlyRate,
+                                                        nextPeriodInterest: nextInterest,
+                                                        totalLiquidation: liquidationTotal
                                                     };
                                                     const doc = generatePaymentReceiptPdf(receiptPayload);
                                                     const fileName = `Recibo_${activeClient.name.replace(/\s/g, '_')}_${new Date(lastPayment.date).toISOString().split('T')[0]}.pdf`;

@@ -390,21 +390,47 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
                         </div>
                     </div>
                 ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center py-4 bg-slate-900/20 rounded-xl border border-dashed border-slate-700/50">
-                        <div className="p-2 rounded-full bg-slate-800/50 mb-2"><Banknote size={20} className="text-slate-600" /></div>
-                        <p className="text-xs text-slate-500 mb-3 font-medium">Sin deuda activa</p>
+                    <div className="flex-1 flex flex-col justify-between py-2">
+                        {loans.filter(l => l.status === LoanStatus.PAID).length > 0 ? (
+                            <div className="p-3.5 bg-emerald-950/20 rounded-xl border border-emerald-500/20 mb-3">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                        <CheckCircle2 size={13} /> Deuda Liquidada
+                                    </span>
+                                    <span className="text-[10px] font-mono text-emerald-300 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                        {loans.filter(l => l.status === LoanStatus.PAID).length} finalizado(s)
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-300 font-medium">
+                                    Historial y pagos registrados al día.
+                                </p>
+                                {loans.filter(l => l.status === LoanStatus.PAID)[0] && (
+                                    <button
+                                        onClick={(e) => handleActionClick(e, () => onViewDetails(loans.filter(l => l.status === LoanStatus.PAID)[0]))}
+                                        className="mt-2.5 w-full py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-lg border border-slate-700 hover:border-slate-600 flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                                    >
+                                        <Clock size={13} className="text-amber-400" /> Consultar Historial y Recibos
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="flex-1 flex flex-col items-center justify-center text-center py-4 bg-slate-900/20 rounded-xl border border-dashed border-slate-700/50 mb-3">
+                                <div className="p-2 rounded-full bg-slate-800/50 mb-2"><Banknote size={20} className="text-slate-600" /></div>
+                                <p className="text-xs text-slate-500 font-medium">Sin préstamos activos</p>
+                            </div>
+                        )}
                         
-                        <div className="flex gap-2 w-full">
+                        <div className="flex gap-2 w-full mt-auto">
                             <button 
                                 onClick={(e) => handleActionClick(e, () => onArchive(client))}
-                                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-xs border border-slate-700 hover:border-slate-600 transition-all"
+                                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-xs border border-slate-700 hover:border-slate-600 transition-all cursor-pointer"
                                 title="Archivar Cliente (Ocultar)"
                             >
                                 <Archive size={14} /> Archivar
                             </button>
                             <button 
                                 onClick={(e) => handleActionClick(e, () => onAddLoan(client))}
-                                className="flex-[2] flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white font-bold text-xs border border-indigo-500/20 hover:border-indigo-500 transition-all"
+                                className="flex-[2] flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white font-bold text-xs border border-indigo-500/20 hover:border-indigo-500 transition-all cursor-pointer"
                             >
                                 <PlusCircle size={14} /> Prestar
                             </button>
@@ -424,7 +450,7 @@ const ClientCard: React.FC<ClientCardProps> = React.memo(({ client, onAddLoan, o
 });
 
 const ClientList: React.FC = () => {
-    const { clientLoanData, refreshAllData, handleArchiveClient, handleCleanDeleteClient } = useDataContext(); 
+    const { clientLoanData, allLoans, refreshAllData, handleArchiveClient, handleCleanDeleteClient } = useDataContext(); 
     const { setCurrentView, showToast, showConfirmModal } = useAppContext();
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -553,10 +579,15 @@ const ClientList: React.FC = () => {
         });
     };
 
-    const activeClient = useMemo(() => {
+    const liveSelectedLoan = useMemo(() => {
         if (!selectedLoanForDetails) return null;
-        return clientLoanData.find(c => c.id === selectedLoanForDetails.clientId) || null;
-    }, [selectedLoanForDetails, clientLoanData]);
+        return allLoans.find(l => l.id === selectedLoanForDetails.id) || selectedLoanForDetails;
+    }, [selectedLoanForDetails, allLoans]);
+
+    const activeClient = useMemo(() => {
+        if (!liveSelectedLoan) return null;
+        return clientLoanData.find(c => c.id === liveSelectedLoan.clientId) || null;
+    }, [liveSelectedLoan, clientLoanData]);
 
     const handleGlobalPDF = () => {
         generateFullClientListPDF(clientLoanData);
@@ -580,7 +611,7 @@ const ClientList: React.FC = () => {
             <LoanDetailsModal
                 isOpen={!!selectedLoanForDetails}
                 onClose={() => setSelectedLoanForDetails(null)}
-                loan={selectedLoanForDetails}
+                loan={liveSelectedLoan}
                 client={activeClient}
                 initialTab={detailsModalTab} 
             />
